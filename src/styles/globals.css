@@ -1,0 +1,2699 @@
+@import "tailwindcss";
+
+body {
+     margin: 0;
+     padding: 0;
+     background-color: #f3f4f6;
+}
+
+/* When html has class 'dark', invert page background */
+html.dark body {
+     background-color: #111827;
+}
+
+/* Fix SweetAlert backdrop z-index issues */
+.swal-backdrop-custom {
+     z-index: 9999 !important;
+     background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+.swal-popup-custom {
+     z-index: 10000 !important;
+}
+
+/* ============================================
+   SWEETALERT2 DARK MODE STYLES
+   ============================================ */
+
+/* SweetAlert2 Main Popup */
+html.dark .swal2-popup {
+     background-color: #1f2937 !important;
+     color: #f3f4f6 !important;
+     border: 1px solid #4b5563 !important;
+}
+
+/* SweetAlert2 Title */
+html.dark .swal2-title {
+     color: #f3f4f6 !important;
+}
+
+/* SweetAlert2 Content/Text */
+html.dark .swal2-html-container {
+     color: #d1d5db !important;
+}
+
+/* SweetAlert2 Input Fields */
+html.dark .swal2-input,
+html.dark .swal2-textarea,
+html.dark .swal2-select {
+     background-color: #374151 !important;
+     color: #f3f4f6 !important;
+     border: 1px solid #4b5563 !important;
+}
+
+html.dark .swal2-input::placeholder,
+html.dark .swal2-textarea::placeholder {
+     color: #9ca3af !important;
+}
+
+/* SweetAlert2 Input Focus */
+html.dark .swal2-input:focus,
+html.dark .swal2-textarea:focus,
+html.dark .swal2-select:focus {
+     border-color: #60a5fa !important;
+     box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1) !important;
+}
+
+/* SweetAlert2 Validation Message */
+html.dark .swal2-validation-message {
+     background-color: #7f1d1d !important;
+     color: #fecaca !important;
+     border: 1px solid #991b1b !important;
+}
+
+/* SweetAlert2 Close Button */
+html.dark .swal2-close {
+     color: #9ca3af !important;
+}
+
+html.dark .swal2-close:hover {
+     color: #f3f4f6 !important;
+}
+
+/* SweetAlert2 Icon */
+html.dark .swal2-icon.swal2-warning {
+     border-color: #f59e0b !important;
+     color: #fbbf24 !important;
+}
+
+html.dark .swal2-icon.swal2-error {
+     border-color: #dc2626 !important;
+}
+
+html.dark .swal2-icon.swal2-error [class^='swal2-x-mark-line'] {
+     background-color: #ef4444 !important;
+}
+
+html.dark .swal2-icon.swal2-success {
+     border-color: #10b981 !important;
+}
+
+html.dark .swal2-icon.swal2-success [class^='swal2-success-line'] {
+     background-color: #34d399 !important;
+}
+
+html.dark .swal2-icon.swal2-success .swal2-success-ring {
+     border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+html.dark .swal2-icon.swal2-info {
+     border-color: #3b82f6 !important;
+     color: #60a5fa !important;
+}
+
+html.dark .swal2-icon.swal2-question {
+     border-color: #8b5cf6 !important;
+     color: #a78bfa !important;
+}
+
+/* SweetAlert2 Progress Steps */
+html.dark .swal2-progress-steps {
+     background-color: #1f2937 !important;
+}
+
+html.dark .swal2-progress-steps .swal2-progress-step {
+     background-color: #4b5563 !important;
+}
+
+html.dark .swal2-progress-steps .swal2-progress-step.swal2-active-progress-step {
+     background-color: #3b82f6 !important;
+}
+
+html.dark .swal2-progress-steps .swal2-progress-step-line {
+     background-color: #4b5563 !important;
+}
+
+/* SweetAlert2 Footer */
+html.dark .swal2-footer {
+     border-top: 1px solid #4b5563 !important;
+     color: #9ca3af !important;
+}
+
+/* SweetAlert2 Timer Progress Bar */
+html.dark .swal2-timer-progress-bar {
+     background: rgba(96, 165, 250, 0.6) !important;
+}
+
+/* SweetAlert2 Toast (if used) */
+html.dark .swal2-toast {
+     background-color: #1f2937 !important;
+     border: 1px solid #4b5563 !important;
+}
+
+html.dark .swal2-toast .swal2-title {
+     color: #f3f4f6 !important;
+}
+
+html.dark .swal2-toast .swal2-html-container {
+     color: #d1d5db !important;
+}
+
+/* ============================================
+   DARK LIGHT MODE THINGS HERE, DONT CHANGE AH UNLESS U DANIEL KHALEED
+   ============================================ */
+
+/* PAGE BACKGROUNDS */
+.page-bg {
+     background-color: #ffffff !important;
+}
+
+html.dark .page-bg {
+     background-color: #111827 !important;
+}
+
+.page-text {
+     color: #111827 !important;
+}
+
+html.dark .page-text {
+     color: #f3f4f6 !important;
+}
+
+/* MODAL/CARD BACKGROUNDS */
+.modal-bg {
+     background-color: #ffffff !important;
+}
+
+html.dark .modal-bg {
+     background-color: #1f2937 !important;
+}
+
+.card-bg {
+     background-color: #ffffff !important;
+}
+
+html.dark .card-bg {
+     background-color: #1f2937 !important;
+}
+
+/* TEXT COLORS */
+.text-primary {
+     color: #111827 !important;
+}
+
+html.dark .text-primary {
+     color: #f3f4f6 !important;
+}
+
+.text-secondary {
+     color: #374151 !important;
+}
+
+html.dark .text-secondary {
+     color: #d1d5db !important;
+}
+
+.text-muted {
+     color: #6b7280 !important;
+}
+
+html.dark .text-muted {
+     color: #9ca3af !important;
+}
+
+.search-btn {
+     /* w-full p-3 rounded-md bg-white border-gray-300 text-gray-900 placeholder-gray-500 border */
+     @apply px-4 py-3 rounded-md flex justify-center items-center sm:flex-none flex-1 cursor-not-allowed;
+     background-color: #9ca3af !important;
+     color: #ffffff !important;
+}
+
+.search-bar {
+     @apply w-full p-3 rounded-md border;
+     background-color: #ffffff !important;
+     border-color: #d1d5db !important;
+     color: #111827 !important;
+}
+
+html.dark .search-bar {
+     background-color: #1f2937 !important;
+     border-color: #4b5563 !important;
+     color: #f3f4f6 !important;
+}
+
+.search-bar::placeholder {
+     color: #6b7280 !important;
+}
+
+html.dark .search-bar::placeholder {
+     color: #9ca3af !important;
+}
+
+/* TITLES & HEADINGS */
+.title-text {
+     @apply text-4xl font-bold mb-6;
+     color: #111827 !important;
+}
+
+html.dark .title-text {
+     color: #f3f4f6 !important;
+}
+
+.heading-text {
+     color: #111827 !important;
+}
+
+html.dark .heading-text {
+     color: #f3f4f6 !important;
+}
+
+/* LABELS */
+.label-text {
+     color: #374151 !important;
+}
+
+html.dark .label-text {
+     color: #d1d5db !important;
+}
+
+/* Additional label variant for forms */
+.label-text-alt {
+     color: #111827 !important;
+}
+
+html.dark .label-text-alt {
+     color: #e5e7eb !important;
+}
+
+/* INPUT FIELDS */
+.input-field {
+     background-color: #ffffff !important;
+     border-color: #d1d5db !important;
+     color: #111827 !important;
+}
+
+html.dark .input-field {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+     color: #f3f4f6 !important;
+}
+
+.input-field::placeholder {
+     color: #6b7280 !important;
+}
+
+html.dark .input-field::placeholder {
+     color: #9ca3af !important;
+}
+
+/* Date input calendar icon */
+input[type="date"]::-webkit-calendar-picker-indicator {
+     cursor: pointer;
+     opacity: 0.7;
+}
+
+html.dark input[type="date"]::-webkit-calendar-picker-indicator {
+     filter: invert(1);
+     opacity: 0.8;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+     opacity: 1;
+}
+
+/* Alternative input style for search/filters */
+.input-field-alt {
+     background-color: #ffffff !important;
+     border-color: #d1d5db !important;
+     color: #111827 !important;
+}
+
+html.dark .input-field-alt {
+     background-color: #1f2937 !important;
+     border-color: #4b5563 !important;
+     color: #f3f4f6 !important;
+}
+
+.input-field-alt::placeholder {
+     color: #6b7280 !important;
+}
+
+html.dark .input-field-alt::placeholder {
+     color: #9ca3af !important;
+}
+
+/* Input for forms with light gray background in light mode */
+.input-field-form {
+     background-color: #f3f4f6 !important;
+     color: #111827 !important;
+}
+
+html.dark .input-field-form {
+     background-color: #374151 !important;
+     color: #f3f4f6 !important;
+}
+
+/* Universal form input/select field - for VED forms (Unit, Term, Course, Student) */
+.form-input {
+     @apply w-full px-2 py-1 rounded-sm shadow-md;
+     background-color: #f3f4f6 !important;
+     color: #111827 !important;
+}
+
+html.dark .form-input {
+     background-color: #374151 !important;
+     color: #f3f4f6 !important;
+}
+
+/* SELECT/DROPDOWN */
+.select-field {
+     background-color: #ffffff !important;
+     border-color: #d1d5db !important;
+     color: #111827 !important;
+}
+
+html.dark .select-field {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+     color: #f3f4f6 !important;
+}
+
+/* Select for forms with light gray background */
+.select-field-form {
+     @apply cursor-pointer;
+     background-color: #f3f4f6 !important;
+     color: #111827 !important;
+}
+
+html.dark .select-field-form {
+     background-color: #374151 !important;
+     color: #f3f4f6 !important;
+}
+
+/* BUTTONS - Primary (Red brand color) */
+.btn-primary {
+     @apply cursor-pointer;
+     background-color: #DC2D27 !important;
+     color: #ffffff !important;
+}
+
+.btn-primary:hover {
+     background-color: #b91c1c !important;
+}
+
+.btn-primary-disabled {
+     @apply cursor-not-allowed;
+     background-color: #9ca3af !important;
+     color: #ffffff !important;
+}
+
+/* BUTTONS - Secondary */
+.btn-secondary {
+     @apply cursor-pointer;
+     transition: 0.5s;
+     background-color: #d5d5d5 !important;
+     color: #374151 !important;
+}
+
+html.dark .btn-secondary {
+     background-color: #374151 !important;
+     color: #f3f4f6 !important;
+}
+
+.btn-secondary:hover {
+     background-color: #787878 !important;
+     color: white !important;
+}
+
+html.dark .btn-secondary:hover {
+     background-color: #4b5563 !important;
+}
+
+.btn-secondary-disabled {
+     @apply cursor-not-allowed;
+     background-color: #d1d5db !important;
+     color: #ffffff !important;
+}
+
+html.dark .btn-secondary-disabled {
+     background-color: #4b5563 !important;
+}
+
+/* BUTTONS - Cancel/Close */
+.btn-cancel {
+     @apply border;
+     border-color: #d1d5db !important;
+     color: #374151 !important;
+}
+
+html.dark .btn-cancel {
+     border-color: #4b5563 !important;
+     color: #d1d5db !important;
+}
+
+.btn-cancel:hover {
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .btn-cancel:hover {
+     background-color: #374151 !important;
+}
+
+/* BUTTONS - With Border (outlined) */
+.btn-outline {
+     @apply border-2 cursor-pointer;
+     background-color: #ffffff !important;
+     color: #DC2D27 !important;
+     border-color: #dc2626 !important;
+}
+
+html.dark .btn-outline {
+     background-color: #374151 !important;
+}
+
+.btn-outline:hover {
+     background-color: #f9fafb !important;
+}
+
+html.dark .btn-outline:hover {
+     background-color: #4b5563 !important;
+}
+
+/* BUTTONS - Delete (Red danger button) */
+.btn-delete {
+     @apply cursor-pointer;
+     background-color: #ef4444 !important;
+     color: #ffffff !important;
+}
+
+.btn-delete:hover {
+     background-color: #dc2626 !important;
+}
+
+/* CLOSE BUTTON (X icon) */
+.btn-close {
+     color: #6b7280 !important;
+}
+
+html.dark .btn-close {
+     color: #9ca3af !important;
+}
+
+.btn-close:hover {
+     color: #374151 !important;
+}
+
+html.dark .btn-close:hover {
+     color: #d1d5db !important;
+}
+
+/* TABLE STYLES */
+
+/* Table element (use on <table>) */
+.table-base {
+     @apply w-full table-auto text-sm text-left;
+     color: #374151 !important;
+}
+
+html.dark .table-base {
+     color: #e5e7eb !important;
+}
+
+/* Table header row (use on <tr> in <thead>) */
+.table-header-row {
+     @apply text-sm uppercase;
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .table-header-row {
+     background-color: #546E7A !important;
+}
+
+/* Table header (alternative - background only) */
+.table-header {
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .table-header {
+     background-color: #546E7A !important;
+}
+
+/* Table body - basic (background only) */
+.table-body {
+     background-color: #ffffff !important;
+}
+
+html.dark .table-body {
+     background-color: #1f2937 !important;
+}
+
+/* Table body with dividers (use on <tbody> - custom colors) */
+.table-body-divided {
+     @apply divide-y;
+     background-color: #ffffff !important;
+     border-color: #e5e7eb !important;
+
+}
+
+html.dark .table-body-divided {
+     background-color: #1f2937 !important;
+     border-color: #374151 !important;
+
+}
+
+/* Table text color */
+.table-text {
+     color: #374151 !important;
+}
+
+html.dark .table-text {
+     color: #e5e7eb !important;
+}
+
+/* Table row hover effect */
+.table-row-hover {
+     @apply transition-colors duration-150 ease-in-out;
+}
+
+.table-row-hover:hover {
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .table-row-hover:hover {
+     background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Table divider (alternative - divide only, no background) */
+.table-divider {
+     @apply divide-y;
+     border-color: #e5e7eb !important;
+}
+
+html.dark .table-divider {
+     border-color: #374151 !important;
+}
+
+/* STATUS BADGES */
+.badge-success {
+     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+     background-color: #d1fae5 !important;
+     color: #065f46 !important;
+}
+
+html.dark .badge-success {
+     background-color: rgba(6, 95, 70, 0.5) !important;
+     color: #6ee7b7 !important;
+}
+
+.badge-warning {
+     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+     background-color: #fef3c7 !important;
+     color: #92400e !important;
+}
+
+html.dark .badge-warning {
+     background-color: rgba(146, 64, 14, 0.5) !important;
+     color: #fcd34d !important;
+}
+
+.badge-error {
+     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+     background-color: #ffe4e6 !important;
+     color: #9f1239 !important;
+}
+
+html.dark .badge-error {
+     background-color: rgba(159, 18, 57, 0.5) !important;
+     color: #fda4af !important;
+}
+
+.badge-info {
+     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+     background-color: #d1fae5 !important;
+     color: #065f46 !important;
+}
+
+html.dark .badge-info {
+     background-color: rgba(6, 95, 70, 0.5) !important;
+     color: #6ee7b7 !important;
+}
+
+/* PAGINATION */
+.pagination-text {
+     color: #374151 !important;
+}
+
+html.dark .pagination-text {
+     color: #d1d5db !important;
+}
+
+.pagination-information {
+     @apply text-sm;
+     color: #374151 !important;
+}
+
+html.dark .pagination-information {
+     color: #d1d5db !important;
+}
+
+.pagination-btn {
+     @apply px-3 py-1 border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed;
+     border-color: #d1d5db !important;
+     background-color: #ffffff !important;
+     color: #374151 !important;
+}
+
+html.dark .pagination-btn {
+     border-color: #4b5563 !important;
+     background-color: #1f2937 !important;
+     color: #f3f4f6 !important;
+}
+
+.pagination-btn:hover:not(:disabled) {
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .pagination-btn:hover:not(:disabled) {
+     background-color: #374151 !important;
+}
+
+.pagination-btn-active {
+     @apply px-3 py-1 border rounded text-sm;
+     background-color: #DC2D27 !important;
+     color: #ffffff !important;
+     border-color: #DC2D27 !important;
+}
+
+/* TOGGLE BUTTONS */
+.toggle {
+     @apply px-3 py-1 border-dashed border-1 rounded-sm cursor-pointer m-1;
+     background-color: #e5e7eb !important;
+     color: #111827 !important;
+}
+
+html.dark .toggle {
+     background-color: #374151 !important;
+     color: #f3f4f6 !important;
+}
+
+.toggle:hover {
+     background-color: #d1d5db !important;
+}
+
+html.dark .toggle:hover {
+     background-color: #4b5563 !important;
+}
+
+.toggle-active {
+     @apply px-3 py-1 border-dashed border-1 rounded-sm cursor-pointer m-1;
+     background-color: #3b82f6 !important;
+     color: #ffffff !important;
+}
+
+.toggle-active:hover {
+     background-color: #2563eb !important;
+}
+
+/* BORDERS */
+.border-theme {
+     border-color: #d1d5db !important;
+}
+
+html.dark .border-theme {
+     border-color: #4b5563 !important;
+}
+
+.border-divider {
+     border-color: #e5e7eb !important;
+     border-width: 1px;
+     border-style: solid;
+}
+
+html.dark .border-divider {
+     border-color: #374151 !important;
+}
+
+/* Complete mobile/tablet cleanup - remove ALL visual separators */
+@media (max-width: 774px) {
+     .border-divider {
+          border: none !important;
+          margin: 0 !important;
+          padding-top: 1rem !important;
+     }
+
+     .flex-1 {
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+          margin-top: 0 !important;
+     }
+
+     /* Remove any shadows or borders that might appear */
+     .VED-container form>div>div {
+          border: none !important;
+          box-shadow: none !important;
+     }
+}
+
+/* MISC */
+.shadow-theme {
+     @apply shadow-md;
+}
+
+.rounded-theme {
+     @apply rounded-lg;
+}
+
+
+/* LISTING */
+.listing-body-overflow {
+     overflow-x: auto;
+     margin-top: -5px;
+     margin-bottom: shadow;
+}
+
+
+.listing-container-divide {
+     @apply divide-y;
+     background-color: #ffffff !important;
+     border-color: #EEEEEE !important;
+}
+
+html.dark .listing-body-divide {
+     background-color: #424242 !important;
+     border-color: #616161 !important;
+}
+
+
+/* This is the section for the view box, the View, Edit Delete box section. Hence the name VED box */
+.VED-box {
+     @apply min-h-screen;
+     background-color: #ffffff !important;
+     color: #212121 !important;
+     /*text*/
+
+}
+
+html.dark .VED-box {
+     background-color: #212121 !important;
+     color: #F5F5F5 !important;
+     /*text*/
+}
+
+.theBoxOfInformation {
+     @apply w-full px-4 sm:px-6 lg:px-8 py-6;
+     background-color: #ffffff !important;
+}
+
+html.dark .theBoxOfInformation {
+     background-color: transparent !important;
+}
+
+.theBoxOfInformationBackground {
+     @apply fixed inset-0 flex items-center justify-center z-50;
+     background-color: #00000080 !important;
+}
+
+.fileUploaderModal {
+     @apply fixed inset-0 flex items-center justify-center z-50;
+
+}
+
+html.dark .fileUploaderModal {
+     background-color: #00000080 !important;
+}
+
+.fileUploaderShow {
+     @apply p-6 rounded-lg shadow-xl w-[500px] max-h-[90vh] overflow-y-auto;
+     background-color: #ffffff !important;
+     color: #212121 !important;
+}
+
+html.dark .fileUploaderShow {
+     background-color: #424242 !important;
+     color: #F5F5F5 !important;
+}
+
+.fileUploaderModalClick {
+     @apply fixed inset-0 flex items-center justify-center z-50;
+     background-color: #00000080 !important;
+}
+
+.fileUploadClose {
+     color: #6b7280 !important;
+}
+
+html.dark .fileUploadClose {
+     color: #9ca3af !important;
+}
+
+.fileUploaderHover {
+     color: #374151 !important;
+}
+
+html.dark .fileUploadHover {
+     color: #d1d5db !important;
+}
+
+.importTitle {
+     @apply text-xl font-bold;
+     color: #263238 !important;
+}
+
+html.dark .importTitle {
+     color: #CFD8DC !important;
+}
+
+.downloadTemplateBox {
+     @apply mb-6 p-4 border rounded-lg;
+     background-color: #E3F2FD !important;
+     border-color: #90CAF9 !important;
+}
+
+html.dark .downloadTemplateBox {
+     background-color: #455A64 !important;
+     border-color: #546E7A !important;
+}
+
+.downloadTemplateWord {
+     @apply text-sm font-medium mb-3;
+     color: #0D47A1 !important;
+}
+
+html.dark .downloadTemplateWord {
+     color: #EEEEEE !important;
+}
+
+.importFormat {
+     @apply text-sm mr-2;
+     color: #1565c0 !important;
+}
+
+html.dark .importFormat {
+     color: #EEEEEE !important;
+}
+
+.importOptionDesc {
+     @apply p-2 border rounded-md text-sm;
+     background-color: #ffffff !important;
+     border-color: #64B5F6 !important;
+     color: #212121 !important;
+}
+
+html.dark .importOptionDesc {
+     background-color: #757575 !important;
+     border-color: #9E9E9E !important;
+     color: #F5F5F5 !important;
+}
+
+.downloadTemplateBttn {
+     @apply px-4 py-2 text-sm flex items-center gap-2 rounded-md;
+     background-color: #2563eb !important;
+     color: #ffffff !important;
+}
+
+.downloadTemplateBttn:hover {
+     background-color: #1d4ed8 !important;
+}
+
+.importInstruction {
+     @apply text-xs mt-2;
+     color: #1976D2 !important;
+}
+
+html.dark .importInstruction {
+     color: #E0E0E0 !important;
+}
+
+.importGuide {
+     @apply text-xs mt-1;
+     color: #1E88E5 !important;
+}
+
+html.dark .importGuide {
+     color: #BDBDBD !important;
+}
+
+.importText {
+     @apply block text-sm font-medium mb-2;
+     color: #263238 !important;
+}
+
+html.dark .importText {
+     color: #B0BEC5 !important;
+}
+
+/* When you upload a file it will be put in this section */
+.importFileHolder {
+     @apply w-full p-2 border rounded-md;
+     background-color: #F5F5F5 !important;
+     border-color: #90A4AE !important;
+     color: #263238 !important;
+}
+
+html.dark .importFileHolder {
+     background-color: #455A64 !important;
+     border-color: #546E7A !important;
+     color: #CFD8DC !important;
+}
+
+.importRequirement {
+     @apply text-xs mt-1;
+     color: #546E7A !important;
+}
+
+html.dark .importRequirement {
+     color: #78909C !important;
+}
+
+.importOptional {
+     @apply text-xs;
+     color: #546E7A !important;
+}
+
+html.dark .importOptional {
+     color: #78909C !important;
+}
+
+.importOptions {
+     @apply inline-flex items-center;
+     color: #263238 !important;
+}
+
+html.dark .importOptions {
+     color: #B0BEC5 !important;
+}
+
+.importPreview {
+     @apply font-medium text-sm mb-2;
+     color: #263238 !important;
+}
+
+html.dark .importPreview {
+     color: #B0BEC5 !important;
+}
+
+.coursesIDBox {
+     @apply rounded-xl shadow-lg p-6 mb-6 flex flex-col gap-2;
+     background-color: #FFFFFF !important;
+     color: #111827 !important;
+     border: 1px solid #e5e7eb !important;
+}
+
+html.dark .coursesIDBox {
+     background-color: #1f2937 !important;
+     color: #f3f4f6 !important;
+     border-color: #374151 !important;
+}
+
+.coursesCurrentMode {
+     @apply text-sm mb-1;
+     color: #607D8B;
+}
+
+html.dark .coursesCurrentMode {
+     color: #EEEEEE;
+}
+
+.majorNameCourse {
+     @apply text-lg mb-4;
+     color: #546E7A;
+}
+
+html.dark .majorNameCourse {
+     color: #EEEEEE;
+}
+
+.intakeTitle {
+     @apply text-2xl font-bold;
+     color: #424242 !important;
+}
+
+html.dark .intakeTitle {
+     color: #EEEEEE !important;
+}
+
+.intakeDesc {
+     @apply mt-1;
+     color: #757575 !important;
+}
+
+html.dark .intakeDesc {
+     color: #E0E0E0 !important;
+}
+
+.intakeStatus {
+     @apply px-6 py-4 border-b cursor-pointer transition-colors duration-200;
+     background-color: #fafafa !important;
+     border-color: #f3f4f6 !important;
+     color: #1f2937 !important;
+}
+
+html.dark .intakeStatus {
+     background-color: #1f2937 !important;
+     border-color: #374151 !important;
+     color: #f3f4f6 !important;
+}
+
+.intakeStatus:hover {
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .intakeStatus:hover {
+     background-color: #374151 !important;
+}
+
+.intakeContainer {
+     @apply rounded-lg shadow-sm border overflow-hidden;
+     background-color: #ffffff !important;
+     border-color: #9ca3af !important;
+}
+
+html.dark .intakeContainer {
+     background-color: #1f2937 !important;
+     border-color: #4b5563 !important;
+}
+
+.intakeTextStatus {
+     @apply text-lg font-semibold;
+     color: #37474F !important;
+}
+
+html.dark .intakeTextStatus {
+     color: #EEEEEE !important;
+}
+
+.intakeYear {
+     @apply text-base font-medium;
+     color: #455A64 !important;
+}
+
+html.dark .intakeYear {
+     color: #F5F5F5 !important;
+}
+
+.intakeYearContainer {
+     background-color: #f9fafb !important;
+}
+
+html.dark .intakeYearContainer {
+     background-color: #1f2937 !important;
+}
+
+.intakeInfo {
+     @apply px-4 sm:px-6 py-4 text-left text-sm sm:text-base border font-semibold whitespace-nowrap;
+     background-color: #e5e7eb !important;
+     border-color: #e5e7eb !important;
+     color: #4b5563 !important;
+}
+
+html.dark .intakeInfo {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+     color: #d1d5db !important;
+}
+
+.intakeInfoCenter {
+     @apply px-4 sm:px-6 py-4 text-center text-sm sm:text-base border font-semibold whitespace-nowrap;
+     background-color: #e5e7eb !important;
+     border-color: #e5e7eb !important;
+     color: #4b5563 !important;
+}
+
+html.dark .intakeInfoCenter {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+     color: #d1d5db !important;
+}
+
+.intakeInfoBase {
+     @apply px-4 sm:px-6 py-4;
+     background-color: transparent !important;
+     color: #111827 !important;
+}
+
+html.dark .intakeInfoBase {
+     background-color: transparent !important;
+     color: #f3f4f6 !important;
+}
+
+.intakeTableBody {
+     @apply divide-y;
+     border-color: #e5e7eb !important;
+     background-color: #e5e7eb !important;
+}
+
+html.dark .intakeTableBody {
+     border-color: #4b5563 !important;
+     background-color: #374151 !important;
+}
+
+.intakeTableRow {
+     @apply transition-colors duration-150;
+     background-color: transparent !important;
+}
+
+.intakeTableRow:hover {
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .intakeTableRow:hover {
+     background-color: #4b5563 !important;
+}
+
+.intakeNameText {
+     @apply font-medium text-sm sm:text-base;
+     color: #111827 !important;
+}
+
+html.dark .intakeNameText {
+     color: #EEEEEE !important;
+}
+
+.intakeMonthText {
+     @apply text-sm sm:text-base;
+     color: #6b7280 !important;
+}
+
+html.dark .intakeMonthText {
+     color: #9ca3af !important;
+}
+
+.intakeStatusBadge {
+     @apply px-3 py-1.5 text-sm sm:text-base rounded-full whitespace-nowrap;
+     background-color: #f3f4f6 !important;
+     color: #374151 !important;
+}
+
+html.dark .intakeStatusBadge {
+     background-color: #4b5563 !important;
+     color: #e5e7eb !important;
+}
+
+.intakePlannerText {
+     @apply text-sm sm:text-base whitespace-nowrap;
+     color: #4b5563 !important;
+}
+
+html.dark .intakePlannerText {
+     color: #9ca3af !important;
+}
+
+.intakeFlexContainer {
+     @apply flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3;
+     color: #111827 !important;
+}
+
+html.dark .intakeFlexContainer {
+     color: #f3f4f6 !important;
+}
+
+.intakeTableContainer {
+     @apply p-6 py-0;
+     background-color: #EEEEEE !important;
+}
+
+html.dark .intakeTableContainer {
+     background-color: #374151 !important;
+}
+
+.intakeYearHeader {
+     @apply px-6 py-3 cursor-pointer transition-colors duration-200 border-b;
+     background-color: #f9fafb !important;
+     border-color: #e5e7eb !important;
+}
+
+html.dark .intakeYearHeader {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+}
+
+.intakeYearHeader:hover {
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .intakeYearHeader:hover {
+     background-color: #4b5563 !important;
+}
+
+.intakeCountText {
+     color: #4b5563 !important;
+}
+
+html.dark .intakeCountText {
+     color: #f3f4f6 !important;
+}
+
+/* Master Study Planner Styles */
+.plannerModeText {
+     @apply text-sm px-2 py-1 rounded;
+     color: #6b7280 !important;
+}
+
+html.dark .plannerModeText {
+     color: #9ca3af !important;
+}
+
+.plannerTitle {
+     @apply text-4xl font-bold text-center;
+     color: #111827 !important;
+}
+
+html.dark .plannerTitle {
+     color: #f3f4f6 !important;
+}
+
+.plannerCourseTitle {
+     @apply text-3xl;
+     color: #111827 !important;
+}
+
+html.dark .plannerCourseTitle {
+     color: #f3f4f6 !important;
+}
+
+.plannerMajorTitle {
+     @apply text-xl;
+     color: #111827 !important;
+}
+
+html.dark .plannerMajorTitle {
+     color: #f3f4f6 !important;
+}
+
+.plannerIntakeText {
+     @apply text-lg mb-4;
+     color: #4b5563 !important;
+}
+
+html.dark .plannerIntakeText {
+     color: #9ca3af !important;
+}
+
+.plannerInfoCard {
+     @apply shadow-lg rounded-lg border mb-6 transition-shadow duration-300;
+     background-color: #ffffff !important;
+     border-color: #e5e7eb !important;
+}
+
+.plannerInfoCard:hover {
+     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.dark .plannerInfoCard {
+     background-color: #1f2937 !important;
+     border-color: #374151 !important;
+}
+
+.plannerInfoHeader {
+     @apply p-4 flex justify-between items-center cursor-pointer;
+     background-color: #242323 !important;
+}
+
+html.dark .plannerInfoHeader {
+     background-color: #111827 !important;
+}
+
+.plannerInfoTitle {
+     @apply text-xl font-semibold;
+     color: #ffffff !important;
+}
+
+.plannerDetailsCard {
+     @apply shadow-sm rounded-lg p-6 border transition-all duration-300;
+     background-color: #ffffff !important;
+     border-color: #f3f4f6 !important;
+}
+
+.plannerDetailsCard:hover {
+     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+html.dark .plannerDetailsCard {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+}
+
+.plannerDetailsTitle {
+     @apply text-xl font-semibold;
+     color: #1f2937 !important;
+}
+
+html.dark .plannerDetailsTitle {
+     color: #f3f4f6 !important;
+}
+
+.plannerDetailsSubtitle {
+     @apply text-sm;
+     color: #6b7280 !important;
+}
+
+html.dark .plannerDetailsSubtitle {
+     color: #9ca3af !important;
+}
+
+.plannerDetailLabel {
+     @apply font-medium w-1/3;
+     color: #4b5563 !important;
+}
+
+html.dark .plannerDetailLabel {
+     color: #d1d5db !important;
+}
+
+.plannerDetailValue {
+     color: #1f2937 !important;
+}
+
+html.dark .plannerDetailValue {
+     color: #f3f4f6 !important;
+}
+
+.plannerTable {
+     @apply min-w-full border shadow-sm rounded-lg overflow-hidden;
+     background-color: #ffffff !important;
+     border-color: #e5e7eb !important;
+}
+
+html.dark .plannerTable {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+}
+
+.plannerTableHeader {
+     @apply py-3 px-4 border-b text-left font-semibold;
+     background-color: #f3f4f6 !important;
+     color: #374151 !important;
+     border-color: #e5e7eb !important;
+}
+
+html.dark .plannerTableHeader {
+     background-color: #1f2937 !important;
+     color: #d1d5db !important;
+     border-color: #4b5563 !important;
+}
+
+.plannerTableRow {
+     @apply transition-colors duration-150;
+}
+
+.plannerTableRow:hover {
+     background-color: #f9fafb !important;
+}
+
+html.dark .plannerTableRow:hover {
+     background-color: #4b5563 !important;
+}
+
+.plannerTableCell {
+     @apply py-3 px-4;
+     border-bottom: 2px solid #e5e7eb !important;
+     color: #111827 !important;
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .plannerTableCell {
+     border-bottom: 2px solid #4b5563 !important;
+     color: #d1d5db !important;
+     background-color: #1f2937 !important;
+}
+
+.plannerTableFooter {
+     @apply py-3 px-4 border-t font-semibold;
+     background-color: #f3f4f6 !important;
+     border-color: #e5e7eb !important;
+     color: #111827 !important;
+}
+
+html.dark .plannerTableFooter {
+     background-color: #1f2937 !important;
+     border-color: #4b5563 !important;
+     color: #d1d5db !important;
+}
+
+.plannerSectionTitle {
+     @apply text-4xl font-bold;
+     color: #111827 !important;
+}
+
+html.dark .plannerSectionTitle {
+     color: #f3f4f6 !important;
+}
+
+.plannerYearCard {
+     @apply border rounded-lg p-4;
+     background-color: #ffffff !important;
+     border-color: #e5e7eb !important;
+}
+
+html.dark .plannerYearCard {
+     background-color: #1f2937 !important;
+     border-color: #374151 !important;
+}
+
+.plannerYearTitle {
+     @apply text-3xl font-bold mb-1;
+     color: #111827 !important;
+}
+
+html.dark .plannerYearTitle {
+     color: #f3f4f6 !important;
+}
+
+.plannerSemesterCard {
+     @apply border rounded-lg p-4;
+     background-color: #ffffff !important;
+     border-color: #e5e7eb !important;
+}
+
+html.dark .plannerSemesterCard {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+}
+
+.plannerDivider {
+     @apply border-gray-300;
+     border-color: #d1d5db !important;
+}
+
+html.dark .plannerDivider {
+     border-color: #4b5563 !important;
+}
+
+.listing-studyplanner {
+     @apply text-sm;
+     color: #9E9E9E;
+}
+
+.listing-units-studyplanner {
+     @apply p-4 rounded-lg w-[80%] max-h-[80vh] flex flex-col;
+     background-color: #ffffff !important;
+     color: #111827 !important;
+     z-index: 10001 !important;
+     position: relative;
+}
+
+html.dark .listing-units-studyplanner {
+     background-color: #1f2937 !important;
+     color: #f3f4f6 !important;
+}
+
+/* Title - NEEDS dark mode */
+.listing-modal-title {
+     @apply text-2xl font-bold;
+     color: #111827 !important;
+}
+
+html.dark .listing-modal-title {
+     color: #f3f4f6 !important;
+}
+
+/* Close button - optional */
+.listing-close-btn {
+     @apply text-xl cursor-pointer;
+     color: #ef4444 !important;
+}
+
+.listing-close-btn:hover {
+     color: #b91c1c !important;
+}
+
+/* Modal backdrop - optional, for reusability */
+.modal-backdrop {
+     @apply fixed inset-0 flex justify-center items-center;
+     background-color: rgba(0, 0, 0, 0.5) !important;
+     z-index: 10000 !important;
+}
+
+/* Unit Listing Search Input */
+.listing-search-input {
+     @apply w-full p-2 rounded-md border;
+     background-color: #ffffff !important;
+     border-color: #d1d5db !important;
+     color: #111827 !important;
+}
+
+html.dark .listing-search-input {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+     color: #f3f4f6 !important;
+}
+
+.listing-search-input::placeholder {
+     color: #6b7280 !important;
+}
+
+html.dark .listing-search-input::placeholder {
+     color: #9ca3af !important;
+}
+
+/* Unit Listing Table */
+.listing-table {
+     @apply w-full border-collapse;
+}
+
+.listing-table-header {
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .listing-table-header {
+     background-color: #374151 !important;
+}
+
+.listing-table-th {
+     @apply border p-2 text-left;
+     border-color: #e5e7eb !important;
+     color: #374151 !important;
+}
+
+html.dark .listing-table-th {
+     border-color: #4b5563 !important;
+     color: #d1d5db !important;
+}
+
+.listing-table-row {
+     @apply cursor-pointer;
+     background-color: #ffffff !important;
+}
+
+html.dark .listing-table-row {
+     background-color: #1f2937 !important;
+}
+
+.listing-table-row:hover {
+     background-color: #d1d5db !important;
+}
+
+html.dark .listing-table-row:hover {
+     background-color: #4b5563 !important;
+}
+
+/* Row variants for special states */
+.listing-table-row-not-offered {
+     color: #dc2626 !important;
+}
+
+html.dark .listing-table-row-not-offered {
+     color: #fca5a5 !important;
+}
+
+.listing-table-row-in-planner {
+     background-color: #d1fae5 !important;
+     color: #065f46 !important;
+}
+
+html.dark .listing-table-row-in-planner {
+     background-color: #064e3b !important;
+     color: #6ee7b7 !important;
+}
+
+.listing-table-row-suggested {
+     background-color: #fef3c7 !important;
+     color: #92400e !important;
+}
+
+html.dark .listing-table-row-suggested {
+     background-color: #78350f !important;
+     color: #fcd34d !important;
+}
+
+.listing-table-cell {
+     @apply border p-2;
+     border-color: #d1d5db !important;
+     color: inherit;
+}
+
+html.dark .listing-table-cell {
+     border-color: #4b5563 !important;
+}
+
+.listing-table-no-data {
+     @apply text-center border;
+     border-color: #e5e7eb !important;
+     color: #6b7280 !important;
+}
+
+html.dark .listing-table-no-data {
+     border-color: #4b5563 !important;
+     color: #9ca3af !important;
+}
+
+/* This is the section for the view box, the View, Edit Delete box section. Hence the name VED box */
+.VED-wrapper {
+     @apply fixed left-0 top-0 w-full h-full flex justify-center items-center;
+     background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Form Container - The modal box */
+.VED-container {
+     @apply relative mx-auto rounded-lg shadow-lg flex flex-col;
+     background-color: #ffffff !important;
+     color: #111827 !important;
+     max-width: 90%;
+     max-height: 85vh;
+     overflow-y: auto;
+     min-width: 50vw;
+     overflow-x: hidden;
+     scroll-behavior: smooth;
+     z-index: 1000;
+}
+
+html.dark .VED-container {
+     background-color: #1f2937 !important;
+     color: #f3f4f6 !important;
+}
+
+/* Custom scrollbar for VED container */
+.VED-container::-webkit-scrollbar {
+     width: 8px;
+}
+
+.VED-container::-webkit-scrollbar-track {
+     background: #f1f1f1;
+     border-radius: 4px;
+}
+
+.VED-container::-webkit-scrollbar-thumb {
+     background: #888;
+     border-radius: 4px;
+}
+
+.VED-container::-webkit-scrollbar-thumb:hover {
+     background: #555;
+}
+
+html.dark .VED-container::-webkit-scrollbar-track {
+     background: #374151;
+}
+
+html.dark .VED-container::-webkit-scrollbar-thumb {
+     background: #6b7280;
+}
+
+html.dark .VED-container::-webkit-scrollbar-thumb:hover {
+     background: #9ca3af;
+}
+
+/* Mobile adjustments for VED container */
+@media (max-width: 768px) {
+     .VED-container {
+          max-width: 95%;
+          max-height: 80vh;
+          margin: 0 2.5%;
+     }
+
+     .VED-header {
+          padding: 1rem !important;
+     }
+
+     .VED-title {
+          font-size: 1.5rem !important;
+     }
+
+     .VED-close-btn {
+          top: 1rem !important;
+          right: 1rem !important;
+     }
+}
+
+/* Requisite Scroll Container - Custom scrollbar for requisite relationship area */
+.requisite-scroll-container {
+     scroll-behavior: smooth;
+     overflow-y: scroll !important;
+     overflow-x: hidden;
+}
+
+/* Completely remove all visual separators on mobile/tablet */
+@media (max-width: 774px) {
+     .requisite-scroll-container {
+          border: none !important;
+          background-color: transparent !important;
+          border-radius: 0 !important;
+          padding: 0 !important;
+     }
+}
+
+/* Only show border and background on desktop (above 774px) */
+@media (min-width: 775px) {
+     .requisite-scroll-container {
+          border: 2px solid #e5e7eb;
+          background-color: #f9fafb;
+          border-radius: 0.5rem;
+     }
+
+     html.dark .requisite-scroll-container {
+          border-color: #4b5563;
+          background-color: #111827;
+     }
+}
+
+/* Always visible scrollbar */
+.requisite-scroll-container::-webkit-scrollbar {
+     width: 14px;
+     background-color: transparent;
+}
+
+.requisite-scroll-container::-webkit-scrollbar-track {
+     background: #d1d5db;
+     border-radius: 7px;
+     margin: 8px 4px;
+     border: 1px solid #9ca3af;
+}
+
+.requisite-scroll-container::-webkit-scrollbar-thumb {
+     background: #6b7280;
+     border-radius: 7px;
+     border: 2px solid #d1d5db;
+}
+
+.requisite-scroll-container::-webkit-scrollbar-thumb:hover {
+     background: #4b5563;
+}
+
+.requisite-scroll-container::-webkit-scrollbar-thumb:active {
+     background: #374151;
+}
+
+html.dark .requisite-scroll-container::-webkit-scrollbar-track {
+     background: #374151;
+     border-color: #4b5563;
+}
+
+html.dark .requisite-scroll-container::-webkit-scrollbar-thumb {
+     background: #6b7280;
+     border-color: #374151;
+}
+
+html.dark .requisite-scroll-container::-webkit-scrollbar-thumb:hover {
+     background: #9ca3af;
+}
+
+html.dark .requisite-scroll-container::-webkit-scrollbar-thumb:active {
+     background: #d1d5db;
+}
+
+/* Form Header - Red header with title */
+.VED-header {
+     @apply text-white p-6 rounded-t-lg;
+     background-color: #DC2D27 !important;
+}
+
+.VED-title {
+     @apply text-3xl font-semibold;
+     color: #ffffff !important;
+}
+
+/* Close Button in Header */
+.VED-close-btn {
+     @apply absolute top-6 right-6 text-white;
+     color: #ffffff !important;
+}
+
+.VED-close-btn:hover {
+     color: #d1d5db !important;
+}
+
+.unit-history-divider {
+     @apply min-w-full divide-y;
+     color: #B0BEC5;
+}
+
+html.dark .unit-history-divider {
+     color: #EEEEEE;
+}
+
+.listing-unit-table {
+     background-color: #E0E0E0;
+}
+
+html.dark .listing-unit-table {
+     background-color: #D4DCE7;
+}
+
+.listing-unit-info {
+     @apply px-6 py-3 text-left text-xs font-medium uppercase tracking-wider;
+     color: #4b5563 !important;
+}
+
+html.dark .listing-unit-info {
+     color: #728CB0 !important;
+}
+
+.listing-year {
+     @apply px-6 py-3 text-sm font-semibold;
+     color: #263238;
+     background-color: #CFD8DC;
+}
+
+html.dark .listing-year {
+     color: #445A78;
+     background-color: #90A4AE;
+}
+
+.listing-unit-history {
+     @apply px-6 py-4 whitespace-normal text-sm font-medium;
+     color: #263238 !important;
+     background-color: #ffffff !important;
+}
+
+html.dark .listing-unit-history {
+     color: #f3f4f6 !important;
+     background-color: #374151 !important;
+}
+
+.listing-unit-options {
+     @apply sticky top-0 border p-2 text-left;
+     background-color: #f3f4f6 !important;
+     color: #374151 !important;
+     border-color: #e5e7eb !important;
+}
+
+html.dark .listing-unit-options {
+     background-color: #374151 !important;
+     color: #d1d5db !important;
+     border-color: #4b5563 !important;
+}
+
+/* Unit History Form Modal */
+.unit-history-modal-wrapper {
+     @apply fixed inset-0 flex justify-center items-center z-50;
+     background-color: rgba(0, 0, 0, 0.7) !important;
+}
+
+.unit-history-modal-container {
+     @apply p-6 rounded-lg w-[90%] max-w-6xl max-h-[90vh] flex flex-col shadow-2xl;
+     background-color: #ffffff !important;
+     color: #111827 !important;
+}
+
+html.dark .unit-history-modal-container {
+     background-color: #1f2937 !important;
+     color: #f3f4f6 !important;
+}
+
+.unit-history-modal-header {
+     @apply flex justify-between items-center mb-5;
+}
+
+.unit-history-modal-title {
+     @apply text-2xl font-bold;
+     color: #111827 !important;
+}
+
+html.dark .unit-history-modal-title {
+     color: #f3f4f6 !important;
+}
+
+.unit-history-modal-close {
+     @apply text-xl cursor-pointer p-2 rounded-full;
+     color: #ef4444 !important;
+}
+
+.unit-history-modal-close:hover {
+     background-color: #f3f4f6 !important;
+     color: #dc2626 !important;
+}
+
+html.dark .unit-history-modal-close:hover {
+     background-color: #374151 !important;
+     color: #ef4444 !important;
+}
+
+.unit-history-search-input {
+     @apply w-full p-3 rounded-md border;
+     background-color: #ffffff !important;
+     border-color: #d1d5db !important;
+     color: #111827 !important;
+}
+
+html.dark .unit-history-search-input {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+     color: #f3f4f6 !important;
+}
+
+.unit-history-search-input:focus {
+     border-color: #3b82f6 !important;
+     outline: 2px solid #3b82f6 !important;
+     outline-offset: 0px;
+}
+
+.unit-history-search-input::placeholder {
+     color: #6b7280 !important;
+}
+
+html.dark .unit-history-search-input::placeholder {
+     color: #9ca3af !important;
+}
+
+.unit-history-table-container {
+     @apply overflow-y-auto flex-1;
+}
+
+.unit-history-table-wrapper {
+     @apply w-full border-collapse;
+}
+
+.unit-history-table-head {
+     @apply sticky top-0;
+     background-color: #f3f4f6 !important;
+}
+
+html.dark .unit-history-table-head {
+     background-color: #374151 !important;
+}
+
+.unit-history-table-row {
+     @apply cursor-pointer transition-colors;
+}
+
+.unit-history-table-row:hover {
+     background-color: #e5e7eb !important;
+}
+
+html.dark .unit-history-table-row:hover {
+     background-color: #4b5563 !important;
+}
+
+.unit-history-table-row-not-offered {
+     color: #dc2626 !important;
+}
+
+html.dark .unit-history-table-row-not-offered {
+     color: #fca5a5 !important;
+}
+
+.unit-history-table-row-selected {
+     @apply cursor-not-allowed;
+     background-color: #dbeafe !important;
+}
+
+html.dark .unit-history-table-row-selected {
+     background-color: #1e3a5f !important;
+}
+
+.unit-history-table-row-failed {
+     background-color: #fee2e2 !important;
+}
+
+.unit-history-table-row-failed:hover {
+     background-color: #fecaca !important;
+}
+
+html.dark .unit-history-table-row-failed {
+     background-color: #7f1d1d !important;
+}
+
+html.dark .unit-history-table-row-failed:hover {
+     background-color: #991b1b !important;
+}
+
+.unit-history-table-cell {
+     @apply border p-2;
+     border-color: #d1d5db !important;
+     color: #111827 !important;
+}
+
+html.dark .unit-history-table-cell {
+     border-color: #4b5563 !important;
+     color: #f3f4f6 !important;
+}
+
+/* Mobile responsive styles for unit history */
+@media (max-width: 768px) {
+     .unit-history-modal-container {
+          @apply w-[95%] max-h-[85vh] p-4;
+     }
+
+     .unit-history-modal-title {
+          @apply text-xl;
+     }
+
+     .unit-history-table-container {
+          @apply overflow-x-auto;
+     }
+
+     .unit-history-table-wrapper {
+          min-width: 800px;
+     }
+
+     .unit-history-table-cell {
+          @apply px-2 py-2 text-sm;
+     }
+
+     .listing-unit-info {
+          @apply px-2 py-2.5 text-sm;
+     }
+
+     .listing-unit-history {
+          @apply px-2 py-2.5 text-sm;
+     }
+}
+
+.unit-history-loading {
+     @apply flex justify-center items-center p-8;
+     color: #111827 !important;
+}
+
+html.dark .unit-history-loading {
+     color: #f3f4f6 !important;
+}
+
+.unit-history-spinner {
+     @apply animate-spin rounded-full h-10 w-10 border-b-2;
+     border-color: #111827 !important;
+}
+
+html.dark .unit-history-spinner {
+     border-color: #f3f4f6 !important;
+}
+
+.unit-history-badge-offered {
+     @apply px-2 py-1 rounded-full text-sm;
+     background-color: #d1fae5 !important;
+     color: #065f46 !important;
+}
+
+html.dark .unit-history-badge-offered {
+     background-color: #064e3b !important;
+     color: #6ee7b7 !important;
+}
+
+.unit-history-badge-not-offered {
+     @apply px-2 py-1 rounded-full text-sm;
+     background-color: #fee2e2 !important;
+     color: #991b1b !important;
+}
+
+html.dark .unit-history-badge-not-offered {
+     background-color: #7f1d1d !important;
+     color: #fca5a5 !important;
+}
+
+.unit-history-no-data {
+     @apply text-center border p-4;
+     border-color: #e5e7eb !important;
+     color: #6b7280 !important;
+}
+
+html.dark .unit-history-no-data {
+     border-color: #4b5563 !important;
+     color: #9ca3af !important;
+}
+
+.unit-history-status-selected {
+     color: #2563eb !important;
+}
+
+html.dark .unit-history-status-selected {
+     color: #60a5fa !important;
+}
+
+.unit-history-status-failed {
+     color: #dc2626 !important;
+}
+
+html.dark .unit-history-status-failed {
+     color: #fca5a5 !important;
+}
+
+.unit-history-status-available {
+     color: #16a34a !important;
+}
+
+html.dark .unit-history-status-available {
+     color: #86efac !important;
+}
+
+.unit-history-select {
+     @apply px-2 py-1 border rounded;
+     background-color: #ffffff !important;
+     border-color: #d1d5db !important;
+     color: #111827 !important;
+}
+
+html.dark .unit-history-select {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+     color: #f3f4f6 !important;
+}
+
+.unit-history-select:focus {
+     outline: 2px solid #3b82f6 !important;
+     outline-offset: 0px;
+     border-color: #3b82f6 !important;
+}
+
+.unit-history-select option {
+     background-color: #ffffff !important;
+     color: #111827 !important;
+}
+
+html.dark .unit-history-select option {
+     background-color: #374151 !important;
+     color: #f3f4f6 !important;
+}
+
+/* Status select - keeps colored backgrounds but with dark mode support */
+.unit-history-select-status {
+     @apply px-2 py-1 rounded;
+}
+
+.unit-history-select-status option {
+     background-color: #ffffff !important;
+     color: #111827 !important;
+}
+
+html.dark .unit-history-select-status option {
+     background-color: #374151 !important;
+     color: #f3f4f6 !important;
+}
+
+/* Table */
+.unit-type-table {
+     @apply w-full text-sm text-left;
+     color: #374151 !important;
+}
+
+html.dark .unit-type-table {
+     color: #e5e7eb !important;
+}
+
+/* Table header cell - base */
+.unit-type-table-header-cell {
+     @apply px-6 py-4;
+}
+
+/* Table header cell - with number column width (smaller spacing) */
+.unit-type-table-header-cell-number {
+     @apply px-4 py-4 w-16 text-center;
+}
+
+/* Base table cell with responsive padding */
+.unit-type-table-cell {
+     @apply px-6 py-4 whitespace-nowrap font-medium;
+}
+
+/* Number column cell */
+.unit-type-table-cell-number {
+     @apply px-2 py-8 whitespace-nowrap text-center;
+}
+
+/* Name column cell */
+.unit-type-table-cell-name {
+     @apply px-6 py-4 whitespace-nowrap font-medium;
+}
+
+/* Color column cell */
+.unit-type-table-cell-color {
+     @apply px-6 py-4;
+}
+
+/* Actions column cell */
+.unit-type-table-cell-actions {
+     @apply px-6 py-4 whitespace-nowrap text-sm font-medium;
+}
+
+/* Unit Table Specific Mobile-Friendly Styles */
+.unit-table-cell {
+     @apply px-4 py-3;
+     min-width: 100px;
+}
+
+.unit-table-cell-no {
+     @apply px-4 py-3;
+     min-width: 60px;
+}
+
+.unit-table-cell-code {
+     @apply px-4 py-3;
+     min-width: 120px;
+}
+
+.unit-table-cell-name {
+     @apply px-4 py-3;
+     min-width: 200px;
+}
+
+.unit-table-cell-offered {
+     @apply px-4 py-3;
+     min-width: 150px;
+}
+
+.unit-table-cell-availability {
+     @apply px-4 py-3;
+     min-width: 120px;
+}
+
+.unit-table-cell-requisites {
+     @apply px-4 py-3;
+     min-width: 150px;
+}
+
+.unit-table-cell-actions {
+     @apply px-4 py-3;
+     min-width: 120px;
+}
+
+/* Mobile-specific adjustments for better readability */
+@media (max-width: 768px) {
+
+     .unit-table-cell,
+     .unit-table-cell-no,
+     .unit-table-cell-code,
+     .unit-table-cell-name,
+     .unit-table-cell-offered,
+     .unit-table-cell-availability,
+     .unit-table-cell-requisites,
+     .unit-table-cell-actions {
+          @apply px-3 py-2.5;
+     }
+
+     /* Increase minimum widths on mobile for better spacing */
+     .unit-table-cell-name {
+          min-width: 220px;
+     }
+
+     .unit-table-cell-offered {
+          min-width: 170px;
+     }
+}
+
+/* Term Table Specific Mobile-Friendly Styles */
+.term-table-cell {
+     @apply px-4 py-3;
+     min-width: 100px;
+}
+
+.term-table-cell-no {
+     @apply px-4 py-3;
+     min-width: 60px;
+}
+
+.term-table-cell-name {
+     @apply px-4 py-3;
+     min-width: 150px;
+}
+
+.term-table-cell-year {
+     @apply px-4 py-3;
+     min-width: 100px;
+}
+
+.term-table-cell-month {
+     @apply px-4 py-3;
+     min-width: 120px;
+}
+
+.term-table-cell-semtype {
+     @apply px-4 py-3;
+     min-width: 140px;
+}
+
+.term-table-cell-status {
+     @apply px-4 py-3;
+     min-width: 120px;
+}
+
+.term-table-cell-actions {
+     @apply px-4 py-3;
+     min-width: 120px;
+}
+
+/* Mobile-specific adjustments for term table */
+@media (max-width: 768px) {
+
+     .term-table-cell,
+     .term-table-cell-no,
+     .term-table-cell-name,
+     .term-table-cell-year,
+     .term-table-cell-month,
+     .term-table-cell-semtype,
+     .term-table-cell-status,
+     .term-table-cell-actions {
+          @apply px-3 py-2.5;
+     }
+
+     /* Increase minimum widths on mobile for better spacing */
+     .term-table-cell-name {
+          min-width: 170px;
+     }
+
+     .term-table-cell-month {
+          min-width: 130px;
+     }
+
+     .term-table-cell-semtype {
+          min-width: 150px;
+     }
+}
+
+/* The STYLE used for the info button, so it can be used globally and function well*/
+
+
+.info-tooltip-button {
+     display: inline-flex;
+     align-items: center;
+     justify-content: center;
+     width: 20px;
+     height: 20px;
+     border-radius: 50%;
+     cursor: help;
+     transition: all 0.2s ease;
+     border: none;
+     padding: 0;
+     vertical-align: middle;
+     position: relative;
+     background: rgba(59, 130, 246, 0.1) !important;
+     color: #2563eb !important;
+}
+
+.info-tooltip-button:hover {
+     background: rgba(59, 130, 246, 0.2) !important;
+     color: #1d4ed8 !important;
+     transform: scale(1.1);
+}
+
+html.dark .info-tooltip-button {
+     background: rgba(96, 165, 250, 0.15) !important;
+     color: #60a5fa !important;
+}
+
+html.dark .info-tooltip-button:hover {
+     background: rgba(96, 165, 250, 0.25) !important;
+     color: #93c5fd !important;
+}
+
+.info-tooltip-button:active {
+     transform: scale(0.95);
+}
+
+.info-tooltip-button:focus {
+     outline: 2px solid #3b82f6;
+     outline-offset: 2px;
+}
+
+html.dark .info-tooltip-button:focus {
+     outline-color: #60a5fa;
+}
+
+/* Info icon animation */
+.info-icon {
+     transition: transform 0.2s ease;
+}
+
+.info-tooltip-button:hover .info-icon {
+     transform: rotate(15deg);
+}
+
+/* Modal Title Bar (for intake/term listings) */
+.modal-title-bar {
+     @apply flex items-center justify-between px-2 sm:px-6 py-4 border-b rounded-t-xl;
+     background-color: #f9fafb !important;
+     border-color: #e5e7eb !important;
+}
+
+html.dark .modal-title-bar {
+     background-color: #374151 !important;
+     border-color: #4b5563 !important;
+}
+
+.modal-title {
+     @apply text-2xl font-bold;
+     color: #111827 !important;
+}
+
+html.dark .modal-title {
+     color: #f3f4f6 !important;
+}
+
+/* Tooltip Container - Main wrapper */
+.tooltip-container {
+     animation: tooltipFadeIn 0.2s ease-out;
+     filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+}
+
+@keyframes tooltipFadeIn {
+     from {
+          opacity: 0;
+          transform: scale(0.95);
+     }
+
+     to {
+          opacity: 1;
+          transform: scale(1);
+     }
+}
+
+/* Tooltip Content Box */
+.tooltip-content {
+     padding: 12px 16px;
+     border-radius: 8px;
+     font-size: 14px;
+     line-height: 1.5;
+     font-weight: 400;
+}
+
+/* Light mode tooltip */
+.tooltip-light .tooltip-content {
+     background: #1f2937 !important;
+     color: #ffffff !important;
+     border: 1px solid #374151 !important;
+}
+
+/* Dark mode tooltip */
+.tooltip-dark .tooltip-content {
+     background: #374151 !important;
+     color: #f9fafb !important;
+     border: 1px solid #4b5563 !important;
+}
+
+/* Tooltip Arrow */
+.tooltip-arrow {
+     position: absolute;
+     width: 12px;
+     height: 12px;
+}
+
+.tooltip-light .tooltip-arrow {
+     background: #1f2937 !important;
+     border-right: 1px solid #374151 !important;
+     border-bottom: 1px solid #374151 !important;
+}
+
+.tooltip-dark .tooltip-arrow {
+     background: #374151 !important;
+     border-right: 1px solid #4b5563 !important;
+     border-bottom: 1px solid #4b5563 !important;
+}
+
+/* User Management Specific Classes */
+.user-manage-avatar {
+     @apply h-10 w-10 rounded-full flex items-center justify-center;
+     background-color: #d1d5db !important;
+     color: #4b5563 !important;
+}
+
+html.dark .user-manage-avatar {
+     background-color: #4b5563 !important;
+     color: #d1d5db !important;
+}
+
+.user-manage-name {
+     @apply text-sm font-medium;
+     color: #111827 !important;
+}
+
+html.dark .user-manage-name {
+     color: #f3f4f6 !important;
+}
+
+.user-manage-email {
+     @apply text-sm;
+     color: #6b7280 !important;
+}
+
+html.dark .user-manage-email {
+     color: #9ca3af !important;
+}
+
+.user-manage-action-btn {
+     @apply transition-colors;
+}
+
+.user-manage-action-edit {
+     color: #6b7280 !important;
+}
+
+.user-manage-action-edit:hover {
+     color: #111827 !important;
+}
+
+html.dark .user-manage-action-edit {
+     color: #9ca3af !important;
+}
+
+html.dark .user-manage-action-edit:hover {
+     color: #f3f4f6 !important;
+     background-color: #374151 !important;
+}
+
+.user-manage-action-assign {
+     color: #2563eb !important;
+}
+
+.user-manage-action-assign:hover {
+     color: #1e40af !important;
+}
+
+html.dark .user-manage-action-assign {
+     color: #60a5fa !important;
+}
+
+html.dark .user-manage-action-assign:hover {
+     color: #93c5fd !important;
+     background-color: #1e3a8a !important;
+}
+
+.user-manage-action-delete {
+     color: #dc2626 !important;
+}
+
+.user-manage-action-delete:hover {
+     color: #991b1b !important;
+}
+
+html.dark .user-manage-action-delete {
+     color: #ef4444 !important;
+}
+
+html.dark .user-manage-action-delete:hover {
+     color: #f87171 !important;
+     background-color: #7f1d1d !important;
+}
+
+/* Unit History Listing - Empty State */
+.unit-history-listing {
+     @apply px-6 py-4 text-center text-sm;
+     color: #6b7280 !important;
+     /* gray-500 for light mode */
+}
+
+html.dark .unit-history-listing {
+     color: #9ca3af !important;
+     /* gray-400 for dark mode */
+}
+
+/* Unit History Table - Scrollbar Styling */
+.listing-body-overflow {
+     overflow-x: auto;
+     -webkit-overflow-scrolling: touch;
+     /* Smooth scrolling on iOS */
+     position: relative;
+}
+
+/* Custom scrollbar for better UX */
+.listing-body-overflow::-webkit-scrollbar {
+     height: 8px;
+}
+
+.listing-body-overflow::-webkit-scrollbar-track {
+     background: #f1f1f1;
+     border-radius: 4px;
+}
+
+.listing-body-overflow::-webkit-scrollbar-thumb {
+     background: #DC2D27;
+     border-radius: 4px;
+}
+
+.listing-body-overflow::-webkit-scrollbar-thumb:hover {
+     background: #b91c1c;
+}
+
+/* Dark mode scrollbar */
+html.dark .listing-body-overflow::-webkit-scrollbar-track {
+     background: #374151;
+}
+
+html.dark .listing-body-overflow::-webkit-scrollbar-thumb {
+     background: #DC2D27;
+}
+
+html.dark .listing-body-overflow::-webkit-scrollbar-thumb:hover {
+     background: #b91c1c;
+}
+
+/* Import Unit History Modal Box */
+.Import-unit-History-box {
+     background: white;
+     border-radius: 0.5rem;
+     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+     width: 100%;
+     max-width: 80rem;
+     padding: 1.5rem;
+     max-height: 90vh;
+     overflow-y: auto;
+}
+
+html.dark .Import-unit-History-box {
+     background: #1f2937;
+     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* Custom scrollbar for Import-unit-History-box */
+.Import-unit-History-box::-webkit-scrollbar {
+     width: 8px;
+}
+
+.Import-unit-History-box::-webkit-scrollbar-track {
+     background: #f1f1f1;
+     border-radius: 4px;
+}
+
+.Import-unit-History-box::-webkit-scrollbar-thumb {
+     background: #DC2D27;
+     border-radius: 4px;
+}
+
+.Import-unit-History-box::-webkit-scrollbar-thumb:hover {
+     background: #b91c1c;
+}
+
+/* Dark mode scrollbar for Import-unit-History-box */
+html.dark .Import-unit-History-box::-webkit-scrollbar-track {
+     background: #374151;
+}
+
+html.dark .Import-unit-History-box::-webkit-scrollbar-thumb {
+     background: #DC2D27;
+}
+
+html.dark .Import-unit-History-box::-webkit-scrollbar-thumb:hover {
+     background: #b91c1c;
+}
+
+.swal2-confirm-custom {
+     background-color: #f3f4f6 !important;
+     color: #1f2937 !important;
+     border: 1px solid #d1d5db !important;
+   }
+   
+   .swal2-confirm-custom:hover {
+     background-color: #e5e7eb !important;
+   }
+   
+   .swal2-deny-custom {
+     background-color: #fee2e2 !important;
+     color: #dc2626 !important;
+     border: 1px solid #fecaca !important;
+   }
+   
+   .swal2-deny-custom:hover {
+     background-color: #fecaca !important;
+   }
+   
+   .swal2-cancel-custom {
+     background-color: #ffffff !important;
+     color: #6b7280 !important;
+     border: 1px solid #d1d5db !important;
+   }

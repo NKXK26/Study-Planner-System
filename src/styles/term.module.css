@@ -1,0 +1,79 @@
+.termFormWrapper {
+    background-color: rgba(23, 23, 23, 0.409);
+}
+
+/* Mobile-friendly table wrapper with horizontal scroll */
+.termWrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+/* Ensure table maintains proper spacing on all screen sizes */
+.termListingContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scrolling on iOS */
+    position: relative;
+}
+
+/* Custom scrollbar for better UX */
+.termListingContainer::-webkit-scrollbar {
+    height: 8px;
+}
+
+.termListingContainer::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.termListingContainer::-webkit-scrollbar-thumb {
+    background: #DC2D27;
+    border-radius: 4px;
+}
+
+.termListingContainer::-webkit-scrollbar-thumb:hover {
+    background: #b91c1c;
+}
+
+/* Dark mode scrollbar */
+html.dark .termListingContainer::-webkit-scrollbar-track {
+    background: #374151;
+}
+
+html.dark .termListingContainer::-webkit-scrollbar-thumb {
+    background: #DC2D27;
+}
+
+html.dark .termListingContainer::-webkit-scrollbar-thumb:hover {
+    background: #b91c1c;
+}
+
+/* Minimum width for table to ensure columns don't get too compact */
+.termListingContainer table {
+    min-width: 900px;
+    /* Ensures table scrolls on smaller screens */
+}
+
+/* Better spacing for table cells on mobile */
+@media (max-width: 768px) {
+    .termListingContainer table {
+        min-width: 1000px;
+        /* Even more space on mobile for readability */
+    }
+
+    /* Show scroll indicator on mobile */
+    .termListingContainer::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 30px;
+        background: linear-gradient(to left, rgba(0, 0, 0, 0.1), transparent);
+        pointer-events: none;
+    }
+
+    html.dark .termListingContainer::after {
+        background: linear-gradient(to left, rgba(255, 255, 255, 0.1), transparent);
+    }
+}

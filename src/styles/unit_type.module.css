@@ -1,0 +1,63 @@
+.unitFormWrapper {
+	background-color: rgba(23, 23, 23, 0.409);
+}
+
+/* Mobile-friendly table wrapper with horizontal scroll */
+.unitTypeWrapper {
+	width: 100%;
+	overflow-x: auto;
+}
+
+/* Ensure table maintains proper spacing on all screen sizes */
+.unitTypeListingContainer {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	/* Smooth scrolling on iOS */
+	position: relative;
+}
+
+/* Custom scrollbar for better UX */
+.unitTypeListingContainer::-webkit-scrollbar {
+	height: 8px;
+}
+
+.unitTypeListingContainer::-webkit-scrollbar-track {
+	background: #f1f1f1;
+	border-radius: 4px;
+}
+
+.unitTypeListingContainer::-webkit-scrollbar-thumb {
+	background: #DC2D27;
+	border-radius: 4px;
+}
+
+.unitTypeListingContainer::-webkit-scrollbar-thumb:hover {
+	background: #b91c1c;
+}
+
+/* Dark mode scrollbar */
+html.dark .unitTypeListingContainer::-webkit-scrollbar-track {
+	background: #374151;
+}
+
+html.dark .unitTypeListingContainer::-webkit-scrollbar-thumb {
+	background: #DC2D27;
+}
+
+html.dark .unitTypeListingContainer::-webkit-scrollbar-thumb:hover {
+	background: #b91c1c;
+}
+
+/* Minimum width for table to ensure columns don't get too compact */
+.unitTypeListingContainer table {
+	min-width: 900px;
+	/* Ensures table scrolls on smaller screens */
+}
+
+/* Better spacing for table cells on mobile */
+@media (max-width: 768px) {
+	.unitTypeListingContainer table {
+		min-width: 1000px;
+		/* Even more space on mobile for readability */
+	}
+}

@@ -1,0 +1,64 @@
+{
+  "appId": "com.studyplanner.app",
+  "productName": "Student Study Planner",
+
+  "directories": {
+    "output": "dist",
+    "buildResources": "build"
+  },
+
+  "files": [
+    "main.cjs",
+    "preload.js",
+    "package.json",
+
+    "out/**/*"
+  ],
+
+  "extraResources": [
+    {
+      "from": "prisma",
+      "to": "prisma"
+    },
+    {
+      "from": "app.db",
+      "to": "app.db"
+    }
+  ],
+
+  "asar": true,
+
+  "asarUnpack": [
+    "**/node_modules/.prisma/**/*",
+    "**/node_modules/@prisma/client/**/*",
+    "**/*.node"
+  ],
+
+  "mac": {
+    "category": "public.app-category.education",
+    "target": ["dmg", "zip"]
+  },
+
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "public/favicon.ico"
+  },
+
+  "linux": {
+    "target": ["AppImage", "deb"],
+    "category": "Education"
+  },
+
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Student Study Planner"
+  }
+}
