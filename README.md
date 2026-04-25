@@ -30,8 +30,8 @@ npm install -g supabase
 ```
 ## Clone the Repository:
  ```bash
-git clone https://github.com/hamm0208/student_study_planner
-cd student-study-planner-system
+git clone https://github.com/NKXK26/Study-Planner-System.git
+cd Study-Planner-System
 ```
 Install Dependencies:
  ```bash
@@ -152,3 +152,12 @@ npm run dev
 ```
 
 The application will be available at `http://localhost:3000`
+
+## Electron app building 
+📦 Building the app (Production)
+
+To generate the dist/ folder (packaged app):
+
+npm run electron:build
+
+A /dist folder will be created
