@@ -1,0 +1,56 @@
+appId: com.hamm0208.studyplanner
+productName: Student Study Planner
+copyright: Copyright © 2025
+
+publish:
+  provider: github
+  owner: NKXK26
+  repo: Study-Planner-System
+  releaseType: release
+
+files:
+  - "electron/**/*"
+  - ".next/standalone/**/*"
+  - ".next/static/**/*"
+  - "public/**/*"
+  - "prisma/**/*"
+  - "package.json"
+  - "next.config.*"
+  - "!.next/cache/**"
+  - "!.env*"
+  - "!*.md"
+  - "!src/**"
+
+directories:
+  output: dist
+  buildResources: build-resources
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build-resources/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  installerIcon: build-resources/icon.ico
+  uninstallerIcon: build-resources/icon.ico
+
+extraResources:
+  - from: build-resources/node
+    to: node
+  - from: .next/standalone
+    to: app
+  - from: .next/static
+    to: app/.next/static
+  - from: public
+    to: app/public
+  - from: prisma/app.db
+    to: app/prisma/app.db
+  - from: build-resources/ollama-installer
+    to: ollama-installer

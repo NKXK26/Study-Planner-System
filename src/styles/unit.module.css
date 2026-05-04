@@ -1,0 +1,70 @@
+.unitFormWrapper {
+	background-color: rgba(23, 23, 23, 0.589);
+}
+
+.unitFormContainer {
+	max-height: 75%;
+	overflow-y: auto;
+}
+
+/* Mobile-friendly table wrapper with horizontal scroll */
+.unitWrapper {
+	width: 100%;
+	overflow-x: auto;
+}
+
+/* Ensure table maintains proper spacing on all screen sizes */
+.unitListingContainer {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	/* Smooth scrolling on iOS */
+	position: relative;
+}
+
+/* Custom scrollbar for better UX */
+.unitListingContainer::-webkit-scrollbar {
+	height: 8px;
+}
+
+.unitListingContainer::-webkit-scrollbar-track {
+	background: #f1f1f1;
+	border-radius: 4px;
+}
+
+.unitListingContainer::-webkit-scrollbar-thumb {
+	background: #DC2D27;
+	border-radius: 4px;
+}
+
+.unitListingContainer::-webkit-scrollbar-thumb:hover {
+	background: #b91c1c;
+}
+
+/* Dark mode scrollbar */
+html.dark .unitListingContainer::-webkit-scrollbar-track {
+	background: #374151;
+}
+
+html.dark .unitListingContainer::-webkit-scrollbar-thumb {
+	background: #DC2D27;
+}
+
+html.dark .unitListingContainer::-webkit-scrollbar-thumb:hover {
+	background: #b91c1c;
+}
+
+/* Minimum width for table to ensure columns don't get too compact */
+.unitListingContainer table {
+	min-width: 900px;
+	/* Ensures table scrolls on smaller screens */
+}
+
+/* Better spacing for table cells on mobile */
+@media (max-width: 768px) {
+	.unitListingContainer table {
+		min-width: 1000px;
+		/* Even more space on mobile for readability */
+	}
+
+	/* Removed scroll indicator - was causing visible line at various dimensions */
+}

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'">
+  <title>Loading</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: -apple-system, 'Segoe UI', sans-serif;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+
+    .logo {
+      width: 64px;
+      height: 64px;
+      background: #4f46e5;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    p {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 36px;
+    }
+
+    .track {
+      width: 200px;
+      height: 3px;
+      background: #1e293b;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .bar {
+      height: 100%;
+      width: 35%;
+      background: linear-gradient(90deg, #6366f1, #818cf8);
+      border-radius: 2px;
+      animation: sweep 1.6s ease-in-out infinite alternate;
+    }
+
+    @keyframes sweep {
+      from {
+        margin-left: 0;
+      }
+
+      to {
+        margin-left: 65%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="logo">📚</div>
+  <h1>Student Study Planner</h1>
+  <h1>Loading...</h1>
+  <div class="track">
+    <div class="bar"></div>
+  </div>
+</body>
+
+</html>
