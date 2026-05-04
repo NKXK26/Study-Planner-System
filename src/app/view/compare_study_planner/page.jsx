@@ -5,8 +5,24 @@ import { useRole } from '@app/context/RoleContext';
 import AccessDenied from '@components/AccessDenied';
 import PageLoadingWrapper from '@components/PageLoadingWrapper';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
-import { MagnifyingGlassIcon, CheckCircleIcon, AcademicCapIcon, ChartBarIcon, DocumentArrowDownIcon, LightBulbIcon, ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { 
+  MagnifyingGlassIcon, 
+  CheckCircleIcon, 
+  AcademicCapIcon, 
+  ChartBarIcon, 
+  DocumentArrowDownIcon,
+  BookOpenIcon,
+  ClockIcon,
+  TrophyIcon,
+  ArrowPathIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  SparklesIcon,
+  CreditCardIcon,
+  LightBulbIcon
+} from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
+import UnitRecommendations from '../unit_suggestion/UnitRecommendations';
 
 export default function CompareStudyPlannerPage() {
 	const { can, isSuperadmin } = useRole();
@@ -18,11 +34,37 @@ export default function CompareStudyPlannerPage() {
 	const [searched, setSearched] = useState(false);
 	const [completedUnits, setCompletedUnits] = useState([]);
 	const [exporting, setExporting] = useState(false);
-	const [suggestedPath, setSuggestedPath] = useState({ orderedUnits: [], plan: [] });
+	const [expandedPlanners, setExpandedPlanners] = useState({});
+	const [hoveredPlanner, setHoveredPlanner] = useState(null);
+	
+	// State for Unit Recommendations Modal
+	const [showUnitRecommendations, setShowUnitRecommendations] = useState(false);
+	const [selectedPlanner, setSelectedPlanner] = useState(null);
 
 	// Check if user has permission to access this page
 	const hasAccess = isSuperadmin() || can('planner', 'read');
 
+	// Toggle expanded view for planner units
+	const toggleExpanded = (plannerId) => {
+		setExpandedPlanners(prev => ({
+			...prev,
+			[plannerId]: !prev[plannerId]
+		}));
+	};
+
+	// Open recommendations modal for a planner
+	const openUnitRecommendations = (planner) => {
+		setSelectedPlanner(planner);
+		setShowUnitRecommendations(true);
+	};
+
+	// Close recommendations modal
+	const closeUnitRecommendations = () => {
+		setShowUnitRecommendations(false);
+		setSelectedPlanner(null);
+	};
+
+	// Fetch student's completed units from UnitHistory
 	const fetchStudentCompletedUnits = async (studentId) => {
 		try {
 			const response = await SecureFrontendAuthHelper.authenticatedFetch(
@@ -34,7 +76,7 @@ export default function CompareStudyPlannerPage() {
 			}
 
 			const result = await response.json();
-
+			
 			const passedUnits = (result.units || [])
 				.filter(unit => unit.Status?.toLowerCase() === 'pass')
 				.map(unit => ({
@@ -44,8 +86,7 @@ export default function CompareStudyPlannerPage() {
 					status: unit.Status,
 					year: unit.Year,
 					termId: unit.TermID,
-					creditPoints: unit.Unit?.CreditPoints || 0,
-					prerequisites: unit.Unit?.Prerequisites || []
+					creditPoints: unit.Unit?.CreditPoints || 0
 				}));
 
 			return passedUnits;
@@ -55,6 +96,59 @@ export default function CompareStudyPlannerPage() {
 		}
 	};
 
+	// Fetch student enrollment information (Year, Semester, Course, Major)
+	const fetchStudentEnrollment = async (studentId) => {
+		try {
+			const response = await SecureFrontendAuthHelper.authenticatedFetch(
+				`${process.env.NEXT_PUBLIC_SERVER_URL}/api/students/${studentId}/enrollment`
+			);
+			
+			if (!response.ok) {
+				// If endpoint doesn't exist, return default values
+				console.warn('Enrollment API not available, using defaults');
+				return null;
+			}
+			
+			const result = await response.json();
+			if (result.success) {
+				return result.data;
+			}
+			return null;
+		} catch (err) {
+			console.error('Error fetching student enrollment:', err);
+			return null;
+		}
+	};
+
+	// Calculate year and semester based on completed credits (fallback method)
+	const calculateYearAndSemester = (totalCredits, completedUnitsList) => {
+		// Calculate year based on credits (100 CP per year approx)
+		let currentYear = 1;
+		let currentSemester = 1;
+		
+		if (totalCredits >= 200) {
+			currentYear = 3;
+		} else if (totalCredits >= 100) {
+			currentYear = 2;
+		} else {
+			currentYear = 1;
+		}
+		
+		// Check for milestone units to determine semester
+		const hasCOS20007 = completedUnitsList.some(u => u.code === 'COS20007');
+		const hasCOS30019 = completedUnitsList.some(u => u.code === 'COS30019');
+		const hasCOS40005 = completedUnitsList.some(u => u.code === 'COS40005');
+		
+		if (hasCOS40005) {
+			currentSemester = 1;
+		} else if (hasCOS30019 || hasCOS20007) {
+			currentSemester = 2;
+		}
+		
+		return { currentYear, currentSemester };
+	};
+
+	// Fetch all study planners
 	const fetchAllStudyPlanners = async () => {
 		try {
 			const response = await SecureFrontendAuthHelper.authenticatedFetch(
@@ -66,7 +160,7 @@ export default function CompareStudyPlannerPage() {
 			}
 
 			const result = await response.json();
-
+			
 			if (result.success) {
 				return result.data;
 			} else {
@@ -78,373 +172,31 @@ export default function CompareStudyPlannerPage() {
 		}
 	};
 
-	// Function to fetch prerequisites for a unit from the API
-	const fetchUnitPrerequisites = async (unitCode) => {
-		try {
-			// First, get the unit ID from the unit code
-			const unitResponse = await SecureFrontendAuthHelper.authenticatedFetch(
-				`${process.env.NEXT_PUBLIC_SERVER_URL}/api/unit?unit_code=${JSON.stringify([unitCode])}`
-			);
-
-			if (!unitResponse.ok) {
-				return [];
-			}
-
-			const unitResult = await unitResponse.json();
-			let unitId = null;
-
-			if (Array.isArray(unitResult) && unitResult.length > 0) {
-				unitId = unitResult[0].ID;
-			} else if (unitResult.data && unitResult.data.length > 0) {
-				unitId = unitResult.data[0].ID;
-			}
-
-			if (!unitId) {
-				return [];
-			}
-
-			// Now fetch prerequisites using unit_id
-			const response = await SecureFrontendAuthHelper.authenticatedFetch(
-				`${process.env.NEXT_PUBLIC_SERVER_URL}/api/unit/unit_requisite?unit_id=${unitId}&relationship=PREREQUISITE`
-			);
-
-			if (!response.ok) {
-				return [];
-			}
-
-			const result = await response.json();
-
-			// Extract prerequisite unit codes
-			let prerequisites = [];
-
-			if (Array.isArray(result)) {
-				prerequisites = result
-					.filter(item => item.UnitRelationship === 'PREREQUISITE')
-					.map(item => {
-						// The prerequisite unit is in RequisiteUnitID
-						const prereqUnit = item.Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit;
-						return prereqUnit?.UnitCode;
-					})
-					.filter(Boolean);
-			} else if (result.data && Array.isArray(result.data)) {
-				prerequisites = result.data
-					.filter(item => item.UnitRelationship === 'PREREQUISITE')
-					.map(item => {
-						const prereqUnit = item.Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit;
-						return prereqUnit?.UnitCode;
-					})
-					.filter(Boolean);
-			}
-
-			return [...new Set(prerequisites)];
-		} catch (err) {
-			console.error(`Error fetching prerequisites for ${unitCode}:`, err);
-			return [];
-		}
-	};
-
-	// Function to build prerequisite map for all units
-	const buildPrerequisiteMap = async (units) => {
-		const prereqMap = new Map();
-
-		for (const unit of units) {
-			const unitCode = unit.UnitCode || unit.code;
-			if (unitCode && !prereqMap.has(unitCode)) {
-				const prereqs = await fetchUnitPrerequisites(unitCode);
-				prereqMap.set(unitCode, prereqs);
-			}
-		}
-
-		return prereqMap;
-	};
-
-	// Function to suggest next units based on top planner with semester planning
-	const suggestNextUnits = async (topPlanner, completedUnitsMap, completedUnitsSet, studentCompletedCredits, studentCompletedCount) => {
-		const plannerUnits = topPlanner?.totalUnits || [];
-		const completedUnitIds = new Set(completedUnitsMap.keys());
-		const completedUnitCodes = new Set(completedUnitsSet);
-
-		// Find units not yet completed by the student
-		const missingUnits = plannerUnits.filter(unit => !completedUnitIds.has(unit.ID));
-
-		// Build prerequisite map using your API
-		const prereqMap = await buildPrerequisiteMap(missingUnits);
-
-		// Parse semester availability from unit data
-		const parseSemesterAvailability = (unit) => {
-			const offeredIn = unit.OfferedIn || unit.offeredIn || '';
-			const offeredText = offeredIn.toLowerCase();
-			if (offeredText.includes('semester 1 only')) return [1];
-			if (offeredText.includes('semester 2 only')) return [2];
-			if (offeredText.includes('semester 1 & 2')) return [1, 2];
-			return [1, 2];
-		};
-
-		// Get credit points for a unit
-		const getCreditPoints = (unit) => unit.CreditPoints || unit.creditPoints || 12.5;
-
-		// Check if prerequisites are met (including units planned in previous semesters)
-		const arePrereqsMet = (unit, completedCodesSet, plannedSemesterUnits, prereqMapData) => {
-			const unitCode = unit.UnitCode || unit.code;
-			const prerequisites = prereqMapData.get(unitCode) || [];
-
-			if (!prerequisites || prerequisites.length === 0) return true;
-
-			// Check if all prerequisites are either:
-			// 1. Already completed, OR
-			// 2. Planned in a PREVIOUS semester (not the same semester)
-			return prerequisites.every(preReq => {
-				// Check if completed
-				if (completedCodesSet.has(preReq)) return true;
-
-				// Check if planned in previous semesters
-				let foundInPrevious = false;
-				for (const semester of plannedSemesterUnits) {
-					const hasPrereq = semester.units.some(u => (u.UnitCode || u.code) === preReq);
-					if (hasPrereq) {
-						foundInPrevious = true;
-						break;
-					}
-				}
-				return foundInPrevious;
-			});
-		};
-
-		// Calculate remaining needed for goal (24 units or 300 credits)
-		const NEEDED_UNITS = 24;
-		const NEEDED_CREDITS = 300;
-		const remainingUnitsNeeded = Math.max(0, NEEDED_UNITS - studentCompletedCount);
-		const remainingCreditsNeeded = Math.max(0, NEEDED_CREDITS - studentCompletedCredits);
-
-		// Determine current semester (1 = Jan-June, 2 = July-Dec)
-		let currentSemester = 1;
-		const currentMonth = new Date().getMonth();
-		if (currentMonth >= 6) currentSemester = 2;
-
-		let plan = [];
-		let accumulatedCredits = 0;
-		let accumulatedUnits = 0;
-		let semesterCounter = 0;
-		let currentPlanSemester = currentSemester;
-		let currentPlanYear = new Date().getFullYear();
-
-		// Keep track of completed codes (including ones we schedule in previous semesters)
-		let plannedCompletedCodes = new Set(completedUnitCodes);
-
-		// Track all planned units by semester for prerequisite checking
-		let plannedSemesterUnits = [];
-
-		// Make a working copy of missing units
-		let remainingMissing = [...missingUnits];
-
-		// Build semester-by-semester plan
-		while ((accumulatedUnits < remainingUnitsNeeded || accumulatedCredits < remainingCreditsNeeded) &&
-			semesterCounter < 12 &&
-			remainingMissing.length > 0) {
-
-			const semesterKey = `${currentPlanYear} Semester ${currentPlanSemester}`;
-
-			// Find available units for this semester
-			// Unit can only be scheduled if:
-			// 1. It's offered in current semester
-			// 2. All prerequisites are already completed OR scheduled in PREVIOUS semesters (not same semester)
-			// 3. It hasn't been planned yet
-			const availableUnits = [];
-
-			for (const unit of remainingMissing) {
-				const semesters = parseSemesterAvailability(unit);
-				const isAvailableThisSemester = semesters.includes(currentPlanSemester);
-
-				// Check prerequisites (only against completed + previous semesters, NOT current semester)
-				const arePrereqsSatisfied = arePrereqsMet(unit, plannedCompletedCodes, plannedSemesterUnits, prereqMap);
-
-				if (isAvailableThisSemester && arePrereqsSatisfied) {
-					availableUnits.push({
-						...unit,
-						creditPoints: getCreditPoints(unit),
-						prereqsMet: true,
-						prerequisites: prereqMap.get(unit.UnitCode || unit.code) || []
-					});
-				}
-			}
-
-			// Sort by credit points (higher credits first to reach goal faster)
-			availableUnits.sort((a, b) => b.creditPoints - a.creditPoints);
-
-			let semesterUnits = [];
-			let semesterCredits = 0;
-			const MAX_SEMESTER_UNITS = 4;
-			const MAX_SEMESTER_CREDITS = 50;
-
-			// Also track prerequisite relationships WITHIN the same semester
-			// We need to ensure no unit depends on another in the same semester
-			const canAddUnitToSemester = (unit, currentSemesterUnits, allSemesterUnits, prereqMapData) => {
-				const unitCode = unit.UnitCode || unit.code;
-				const prerequisites = prereqMapData.get(unitCode) || [];
-
-				// Check if any prerequisite is in the SAME semester
-				for (const prereq of prerequisites) {
-					const isInSameSemester = currentSemesterUnits.some(u => (u.UnitCode || u.code) === prereq);
-					if (isInSameSemester) {
-						return false; // Can't add if prerequisite is in same semester
-					}
-				}
-				return true;
-			};
-
-			// Select units for this semester
-			for (const unit of availableUnits) {
-				const unitCredits = unit.creditPoints;
-
-				// Check limits AND intra-semester prerequisites
-				if (semesterUnits.length < MAX_SEMESTER_UNITS &&
-					semesterCredits + unitCredits <= MAX_SEMESTER_CREDITS &&
-					(accumulatedUnits + semesterUnits.length < remainingUnitsNeeded ||
-						accumulatedCredits + semesterCredits < remainingCreditsNeeded) &&
-					canAddUnitToSemester(unit, semesterUnits, plannedSemesterUnits, prereqMap)) {
-
-					semesterUnits.push(unit);
-					semesterCredits += unitCredits;
-
-					// Remove from remaining missing
-					const index = remainingMissing.findIndex(u => u.ID === unit.ID);
-					if (index !== -1) remainingMissing.splice(index, 1);
-				}
-			}
-
-			// Only add semester if it has units
-			if (semesterUnits.length > 0) {
-				plan.push({
-					year: currentPlanYear,
-					semester: currentPlanSemester,
-					semesterName: semesterKey,
-					units: semesterUnits,
-					totalCredits: semesterCredits,
-					unitCount: semesterUnits.length
-				});
-
-				// Add this semester's units to plannedCompletedCodes for future semesters
-				semesterUnits.forEach(unit => {
-					plannedCompletedCodes.add(unit.UnitCode || unit.code);
-				});
-
-				// Track planned units by semester
-				plannedSemesterUnits.push({
-					semester: semesterKey,
-					units: semesterUnits
-				});
-
-				accumulatedUnits += semesterUnits.length;
-				accumulatedCredits += semesterCredits;
-			}
-
-			// Move to next semester
-			semesterCounter++;
-			if (currentPlanSemester === 1) {
-				currentPlanSemester = 2;
-			} else {
-				currentPlanSemester = 1;
-				currentPlanYear++;
-			}
-		}
-
-		// Flatten the plan into ordered units
-		const orderedUnits = [];
-		plan.forEach(semester => {
-			semester.units.forEach((unit, idx) => {
-				orderedUnits.push({
-					...unit,
-					suggestedSemester: semester.semesterName,
-					suggestedYear: semester.year,
-					suggestedOrder: orderedUnits.length + 1,
-					creditPoints: unit.creditPoints,
-					prerequisites: unit.prerequisites
-				});
-			});
-		});
-
-		// Identify blocked units (prerequisites not met)
-		const blockedUnits = [];
-		const remainingUnscheduled = remainingMissing.filter(unit =>
-			!orderedUnits.some(u => u.ID === unit.ID)
-		);
-
-		for (const unit of remainingUnscheduled) {
-			const unitCode = unit.UnitCode || unit.code;
-			const prerequisites = prereqMap.get(unitCode) || [];
-			const missingPrereqs = prerequisites.filter(preReq => !completedUnitCodes.has(preReq));
-
-			orderedUnits.push({
-				...unit,
-				creditPoints: getCreditPoints(unit),
-				suggestedSemester: 'Prerequisites Required',
-				suggestedOrder: orderedUnits.length + 1,
-				blocked: true,
-				reason: `Missing prerequisites: ${missingPrereqs.join(', ')}`,
-				missingPrerequisites: missingPrereqs
-			});
-
-			blockedUnits.push({
-				...unit,
-				missingPrerequisites: missingPrereqs
-			});
-		}
-
-		// Calculate progress
-		const totalPlannedUnits = plan.reduce((sum, s) => sum + s.unitCount, 0);
-		const totalPlannedCredits = plan.reduce((sum, s) => sum + s.totalCredits, 0);
-
-		return {
-			orderedUnits,
-			plan,
-			blockedUnits,
-			remainingUnitsNeeded,
-			remainingCreditsNeeded,
-			accumulatedUnits: totalPlannedUnits,
-			accumulatedCredits: totalPlannedCredits,
-			neededUnits: NEEDED_UNITS,
-			neededCredits: NEEDED_CREDITS,
-			currentProgress: {
-				units: studentCompletedCount,
-				credits: studentCompletedCredits
-			},
-			plannedProgress: {
-				units: totalPlannedUnits,
-				credits: totalPlannedCredits
-			}
-		};
-	};
-
+	// Compare student's completed units with a study planner
 	const compareWithPlanner = (completedUnitsMap, planner) => {
 		const plannerUnits = planner.units || [];
-
+		
 		const plannerUnitsMap = new Map();
 		plannerUnits.forEach(unit => {
 			plannerUnitsMap.set(unit.ID, {
 				id: unit.ID,
 				code: unit.UnitCode,
-				name: unit.Name,
-				creditPoints: unit.CreditPoints || 0,
-				prerequisites: unit.Prerequisites || [],
-				offeredIn: unit.OfferedIn || unit.offeredIn || ''
+				name: unit.Name
 			});
 		});
 
 		const matchingUnits = [];
 		let overlapCount = 0;
-		let totalMatchedCredits = 0;
 
 		completedUnitsMap.forEach((completedUnit, unitId) => {
 			if (plannerUnitsMap.has(unitId)) {
 				overlapCount++;
-				const plannerUnit = plannerUnitsMap.get(unitId);
-				totalMatchedCredits += completedUnit.creditPoints || 0;
 				matchingUnits.push({
 					id: unitId,
 					code: completedUnit.code,
 					name: completedUnit.name,
-					plannerCode: plannerUnit.code,
-					plannerName: plannerUnit.name,
+					plannerCode: plannerUnitsMap.get(unitId).code,
+					plannerName: plannerUnitsMap.get(unitId).name,
 					creditPoints: completedUnit.creditPoints
 				});
 			}
@@ -452,17 +204,11 @@ export default function CompareStudyPlannerPage() {
 
 		const completedCount = completedUnitsMap.size;
 		const plannerUnitCount = plannerUnits.length;
-
-		const MAX_UNITS_FOR_100_PERCENT = 24;
-		const MAX_CREDITS_FOR_100_PERCENT = 300;
-
-		const unitPercentage = (overlapCount / MAX_UNITS_FOR_100_PERCENT) * 100;
-		const creditPercentage = (totalMatchedCredits / MAX_CREDITS_FOR_100_PERCENT) * 100;
-
-		let matchStudentPct = Math.max(unitPercentage, creditPercentage);
-		matchStudentPct = Math.min(matchStudentPct, 100);
-
+		
+		const matchStudentPct = completedCount > 0 ? (overlapCount / completedCount) * 100 : 0;
 		const matchPlannerPct = plannerUnitCount > 0 ? (overlapCount / plannerUnitCount) * 100 : 0;
+		const totalMatchedCredits = matchingUnits.reduce((sum, unit) => sum + (unit.creditPoints || 0), 0);
+		const remainingUnits = plannerUnitCount - overlapCount;
 
 		return {
 			plannerId: planner.id,
@@ -475,20 +221,36 @@ export default function CompareStudyPlannerPage() {
 			matchPlannerPct,
 			matchingUnits,
 			totalUnits: plannerUnits,
-			totalMatchedCredits
+			totalMatchedCredits,
+			remainingUnits
 		};
+	};
+
+	// Get rank badge color and icon
+	const getRankStyle = (index) => {
+		switch(index) {
+			case 0: return { bg: 'bg-gradient-to-r from-yellow-400 to-yellow-500', text: 'text-yellow-900', icon: '🥇', border: 'border-yellow-400' };
+			case 1: return { bg: 'bg-gradient-to-r from-gray-300 to-gray-400', text: 'text-gray-900', icon: '🥈', border: 'border-gray-400' };
+			case 2: return { bg: 'bg-gradient-to-r from-amber-600 to-amber-700', text: 'text-amber-100', icon: '🥉', border: 'border-amber-600' };
+			default: return { bg: 'bg-gradient-to-r from-blue-500 to-blue-600', text: 'text-white', icon: `#${index + 1}`, border: 'border-blue-500' };
+		}
 	};
 
 	// Export to Excel function
 	const exportToExcel = () => {
 		try {
 			setExporting(true);
+			
 			const workbook = XLSX.utils.book_new();
-
-			// Student Information Sheet
+			
+			// 1. Student Information Sheet
 			const studentInfoData = [
 				['Student Information'],
 				['Student ID', studentInfo?.studentId || ''],
+				['Current Year', studentInfo?.currentYear || ''],
+				['Current Semester', studentInfo?.currentSemester || ''],
+				['Course', studentInfo?.courseName || ''],
+				['Major', studentInfo?.majorName || ''],
 				['Total Completed Units', studentInfo?.completedUnitsCount || 0],
 				['Total Credits', studentInfo?.totalCredits || 0],
 				['Report Generated', new Date().toLocaleString()],
@@ -496,7 +258,7 @@ export default function CompareStudyPlannerPage() {
 				['Completed Units List'],
 				['Unit Code', 'Unit Name', 'Credit Points', 'Year', 'Term ID']
 			];
-
+			
 			studentInfo?.completedUnitsList?.forEach(unit => {
 				studentInfoData.push([
 					unit.code,
@@ -506,20 +268,20 @@ export default function CompareStudyPlannerPage() {
 					unit.termId || ''
 				]);
 			});
-
+			
 			const studentSheet = XLSX.utils.aoa_to_sheet(studentInfoData);
 			XLSX.utils.book_append_sheet(workbook, studentSheet, 'Student Information');
-
-			// Summary Sheet
+			
+			// 2. Summary Sheet
 			const summaryData = [
 				['Study Planner Comparison Summary'],
 				['Student ID:', studentInfo?.studentId || ''],
 				['Generated:', new Date().toLocaleString()],
 				[],
-				['Rank', 'Planner Name', 'Planner ID', 'Matching Units', 'Total Student Units', 'Total Planner Units',
-					'% of Student\'s Completed', '% of Planner\'s Units', 'Matched Credits', 'Created Date']
+				['Rank', 'Planner Name', 'Planner ID', 'Matching Units', 'Total Student Units', 'Total Planner Units', 
+				 '% of Student\'s Completed', '% of Planner\'s Units', 'Matched Credits', 'Remaining Units', 'Created Date']
 			];
-
+			
 			matchedPlanners.forEach((planner, index) => {
 				summaryData.push([
 					`#${index + 1}`,
@@ -531,38 +293,118 @@ export default function CompareStudyPlannerPage() {
 					`${planner.matchStudentPct.toFixed(1)}%`,
 					`${planner.matchPlannerPct.toFixed(1)}%`,
 					planner.totalMatchedCredits,
+					planner.remainingUnits,
 					new Date(planner.createdAt).toLocaleDateString()
 				]);
 			});
-
+			
 			const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
 			XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
-
-			// Suggested Study Path Sheet
-			if (suggestedPath.plan && suggestedPath.plan.length > 0) {
-				const pathData = [
-					['Suggested Study Path'],
-					['Based on Planner:', matchedPlanners[0]?.plannerName || ''],
-					['Generated:', new Date().toLocaleString()],
+			
+			// 3. Detailed Matching Units for each planner
+			matchedPlanners.forEach((planner, index) => {
+				const detailData = [
+					[`Planner #${index + 1}: ${planner.plannerName}`],
+					[`Planner ID: ${planner.plannerId}`],
+					[`Match Percentage: ${planner.matchStudentPct.toFixed(1)}% of student's completed units`],
+					[`Total Matched Credits: ${planner.totalMatchedCredits}`],
+					[`Remaining Units: ${planner.remainingUnits}`],
 					[],
-					['Semester Plan']
+					['Matched Units', 'Unit Name', 'Credit Points', 'Status']
 				];
-
-				suggestedPath.plan.forEach(semester => {
-					pathData.push([semester.semesterName]);
-					pathData.push(['Unit Code', 'Unit Name', 'Credit Points']);
-					semester.units.forEach(unit => {
-						pathData.push([unit.UnitCode, unit.Name || '', unit.creditPoints]);
-					});
-					pathData.push([]);
+				
+				planner.matchingUnits.forEach(unit => {
+					detailData.push([
+						unit.code,
+						unit.name || '',
+						unit.creditPoints || 0,
+						'✓ Matched'
+					]);
 				});
-
-				const pathSheet = XLSX.utils.aoa_to_sheet(pathData);
-				XLSX.utils.book_append_sheet(workbook, pathSheet, 'Suggested Study Path');
-			}
-
+				
+				detailData.push([], ['All Units in This Planner'], ['Unit Code', 'Unit Name', 'In Student\'s Completed']);
+				planner.totalUnits.forEach(unit => {
+					const isMatched = planner.matchingUnits.some(mu => mu.id === unit.ID);
+					detailData.push([
+						unit.UnitCode,
+						unit.Name || '',
+						isMatched ? 'Yes ✓' : 'No'
+					]);
+				});
+				
+				const detailSheet = XLSX.utils.aoa_to_sheet(detailData);
+				let sheetName = `Planner_${index + 1}_${planner.plannerName}`.substring(0, 31);
+				sheetName = sheetName.replace(/[\\/*?:[\]]/g, '');
+				XLSX.utils.book_append_sheet(workbook, detailSheet, sheetName);
+			});
+			
+			// 4. Comparison Matrix Sheet
+			const matrixData = [
+				['Comparison Matrix - All Units'],
+				['Unit Code', 'Student Completed', ...matchedPlanners.map(p => `${p.plannerName} (ID: ${p.plannerId})`)],
+			];
+			
+			const allUnitsMap = new Map();
+			matchedPlanners.forEach(planner => {
+				planner.totalUnits.forEach(unit => {
+					if (!allUnitsMap.has(unit.ID)) {
+						allUnitsMap.set(unit.ID, {
+							code: unit.UnitCode,
+							name: unit.Name
+						});
+					}
+				});
+			});
+			
+			studentInfo?.completedUnitsList?.forEach(unit => {
+				if (!allUnitsMap.has(unit.id)) {
+					allUnitsMap.set(unit.id, {
+						code: unit.code,
+						name: unit.name
+					});
+				}
+			});
+			
+			Array.from(allUnitsMap.entries()).forEach(([unitId, unitInfo]) => {
+				const row = [
+					unitInfo.code,
+					studentInfo?.completedUnitsList?.some(u => u.id === unitId) ? 'Yes' : 'No'
+				];
+				
+				matchedPlanners.forEach(planner => {
+					const hasUnit = planner.totalUnits.some(u => u.ID === unitId);
+					row.push(hasUnit ? 'Yes' : 'No');
+				});
+				
+				matrixData.push(row);
+			});
+			
+			const matrixSheet = XLSX.utils.aoa_to_sheet(matrixData);
+			XLSX.utils.book_append_sheet(workbook, matrixSheet, 'Comparison Matrix');
+			
+			// 5. Statistics Sheet
+			const statsData = [
+				['Statistics Summary'],
+				['Metric', 'Value'],
+				['Total Students Analyzed', '1'],
+				['Total Planners Compared', matchedPlanners.length],
+				['Average Match Percentage', `${(matchedPlanners.reduce((sum, p) => sum + p.matchStudentPct, 0) / matchedPlanners.length).toFixed(1)}%`],
+				['Highest Match Percentage', `${Math.max(...matchedPlanners.map(p => p.matchStudentPct)).toFixed(1)}%`],
+				['Total Matched Units Across All Planners', matchedPlanners.reduce((sum, p) => sum + p.overlapCount, 0)],
+				['Total Matched Credits', matchedPlanners.reduce((sum, p) => sum + p.totalMatchedCredits, 0)],
+				[],
+				['Recommendations'],
+				['Top Recommendation', matchedPlanners[0]?.plannerName || 'N/A'],
+				['Recommended Next Steps', `Student has completed ${matchedPlanners[0]?.overlapCount || 0} out of ${matchedPlanners[0]?.plannerUnitCount || 0} units in the top planner.`],
+				['Remaining Units to Graduate', matchedPlanners[0]?.remainingUnits || 'N/A']
+			];
+			
+			const statsSheet = XLSX.utils.aoa_to_sheet(statsData);
+			XLSX.utils.book_append_sheet(workbook, statsSheet, 'Statistics');
+			
 			const fileName = `Study_Planner_Comparison_${studentInfo?.studentId}_${new Date().toISOString().split('T')[0]}.xlsx`;
 			XLSX.writeFile(workbook, fileName);
+			
 			setExporting(false);
 		} catch (err) {
 			console.error('Error exporting to Excel:', err);
@@ -574,7 +416,6 @@ export default function CompareStudyPlannerPage() {
 	const handleSearch = async (e) => {
 		e.preventDefault();
 		setSearched(true);
-		setSuggestedPath({ orderedUnits: [], plan: [] });
 
 		if (!studentId.trim()) {
 			setError('Please enter a student ID');
@@ -589,17 +430,17 @@ export default function CompareStudyPlannerPage() {
 			setMatchedPlanners([]);
 			setCompletedUnits([]);
 
+			// Fetch student's completed units
 			const completedUnitsList = await fetchStudentCompletedUnits(studentId.trim());
-
+			
 			if (completedUnitsList.length === 0) {
-				setError(`No completed units (status: 'pass') found for student ID "${studentId}".`);
+				setError(`No completed units (status: 'pass') found for student ID "${studentId}". Please check if the student has any passed units.`);
 				setStudentInfo(null);
 				return;
 			}
 
+			// Create a map of completed units
 			const completedUnitsMap = new Map();
-			const completedUnitsSet = new Set();
-
 			completedUnitsList.forEach(unit => {
 				completedUnitsMap.set(unit.id, {
 					id: unit.id,
@@ -607,31 +448,56 @@ export default function CompareStudyPlannerPage() {
 					name: unit.name,
 					year: unit.year,
 					termId: unit.termId,
-					creditPoints: unit.creditPoints,
-					prerequisites: unit.prerequisites
+					creditPoints: unit.creditPoints
 				});
-				completedUnitsSet.add(unit.code);
 			});
 
 			setCompletedUnits(Array.from(completedUnitsMap.values()));
-
+			
 			const totalCredits = completedUnitsList.reduce((sum, unit) => sum + (unit.creditPoints || 0), 0);
-
+			
+			// Fetch student enrollment information
+			let enrollmentData = await fetchStudentEnrollment(studentId.trim());
+			let currentYear = 1;
+			let currentSemester = 1;
+			let courseName = '';
+			let majorName = '';
+			
+			if (enrollmentData) {
+				currentYear = enrollmentData.currentYear || 1;
+				currentSemester = enrollmentData.currentSemester || 1;
+				courseName = enrollmentData.courseName || '';
+				majorName = enrollmentData.majorName || '';
+			} else {
+				// Fallback: Calculate based on completed credits
+				const calculated = calculateYearAndSemester(totalCredits, completedUnitsList);
+				currentYear = calculated.currentYear;
+				currentSemester = calculated.currentSemester;
+			}
+			
+			// Set student info with all available data
 			setStudentInfo({
 				studentId: studentId.trim(),
 				completedUnitsCount: completedUnitsMap.size,
 				completedUnitsList: Array.from(completedUnitsMap.values()),
-				totalCredits: totalCredits
+				totalCredits: totalCredits,
+				currentYear: currentYear,
+				currentSemester: currentSemester,
+				courseName: courseName,
+				majorName: majorName,
+				enrollmentYear: enrollmentData?.enrollmentYear || null
 			});
 
+			// Fetch all study planners
 			const allPlanners = await fetchAllStudyPlanners();
-
+			
 			if (allPlanners.length === 0) {
 				setError('No study planners found in the system');
 				return;
 			}
 
-			const comparisons = allPlanners.map(planner =>
+			// Compare student with each planner
+			const comparisons = allPlanners.map(planner => 
 				compareWithPlanner(completedUnitsMap, planner)
 			);
 
@@ -639,29 +505,16 @@ export default function CompareStudyPlannerPage() {
 				.sort((a, b) => {
 					if (b.overlapCount !== a.overlapCount) return b.overlapCount - a.overlapCount;
 					if (b.matchStudentPct !== a.matchStudentPct) return b.matchStudentPct - a.matchStudentPct;
-					return 0;
+					return b.matchPlannerPct - a.matchPlannerPct;
 				})
 				.slice(0, 5)
 				.filter(planner => planner.overlapCount > 0);
 
 			if (top5Planners.length === 0) {
 				setError('No matching study planners found for this student\'s completed units');
-			} else {
-				setMatchedPlanners(top5Planners);
-
-				const needsSuggestions = completedUnitsMap.size < 24 || totalCredits < 300;
-
-				if (needsSuggestions && top5Planners[0]) {
-					const suggestions = await suggestNextUnits(
-						top5Planners[0],
-						completedUnitsMap,
-						completedUnitsSet,
-						totalCredits,
-						completedUnitsMap.size
-					);
-					setSuggestedPath(suggestions);
-				}
 			}
+
+			setMatchedPlanners(top5Planners);
 
 		} catch (err) {
 			console.error('Error searching student:', err);
@@ -674,319 +527,393 @@ export default function CompareStudyPlannerPage() {
 	};
 
 	const hasReadPermission = hasAccess;
-	const needsSuggestions = studentInfo && (studentInfo.completedUnitsCount < 24 || studentInfo.totalCredits < 300);
 
 	return (
-		<ConditionalRequireAuth>
-			{!hasReadPermission ? (
-				<AccessDenied requiredPermission="planner:read or system:superadmin" resourceName="study planner comparison" />
-			) : (
-				<PageLoadingWrapper
-					requiredPermission={{ resource: 'dashboard', action: 'access' }}
-					resourceName="study planner comparison"
-					isLoading={false}
-				>
-					<div className="page-bg p-6 min-h-screen">
-						<div className="max-w-7xl mx-auto">
-							<div className="mb-8 flex justify-between items-center">
-								<div>
-									<h1 className="title-text text-3xl font-bold">Compare Study Planner</h1>
-									<p className="text-muted text-sm mt-1">
-										Search for a student and compare their completed units with available study planners
-									</p>
+		<>
+			<ConditionalRequireAuth>
+				{!hasReadPermission ? (
+					<AccessDenied requiredPermission="planner:read or system:superadmin" resourceName="study planner comparison" />
+				) : (
+					<PageLoadingWrapper
+						requiredPermission={{ resource: 'dashboard', action: 'access' }}
+						resourceName="study planner comparison"
+						isLoading={false}
+					>
+						<div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+							<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+								
+								{/* Header Section with Gradient */}
+								<div className="mb-8">
+									<div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl shadow-xl p-6 text-white">
+										<div className="flex justify-between items-center flex-wrap gap-4">
+											<div>
+												<div className="flex items-center gap-3 mb-2">
+													<div className="bg-white/20 p-2 rounded-xl">
+														<AcademicCapIcon className="h-8 w-8" />
+													</div>
+													<h1 className="text-3xl font-bold">Study Planner Comparison</h1>
+												</div>
+												<p className="text-blue-100">
+													Compare student's completed units with available study planners to find the best academic path
+												</p>
+											</div>
+											{matchedPlanners.length > 0 && studentInfo && (
+												<button
+													onClick={exportToExcel}
+													disabled={exporting}
+													className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white font-semibold py-2 px-4 rounded-xl flex items-center gap-2 transition-all duration-200 hover:scale-105"
+												>
+													<DocumentArrowDownIcon className="h-5 w-5" />
+													{exporting ? 'Exporting...' : 'Export Report'}
+												</button>
+											)}
+										</div>
+									</div>
 								</div>
-								{matchedPlanners.length > 0 && studentInfo && (
-									<button
-										onClick={exportToExcel}
-										disabled={exporting}
-										className="bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-150"
-									>
-										<DocumentArrowDownIcon className="h-5 w-5" />
-										{exporting ? 'Exporting...' : 'Export to Excel'}
-									</button>
-								)}
-							</div>
 
-							<div className="flex gap-6">
-								{/* Main Content */}
-								<div className="flex-1">
-									{/* Search Form */}
-									<div className="card-bg p-6 rounded-theme shadow-theme mb-8">
-										<form onSubmit={handleSearch}>
-											<div className="flex flex-col md:flex-row gap-4">
-												<div className="flex-1">
-													<label className="label-text-alt block mb-2 text-sm font-medium">Student ID</label>
+								{/* Search Card */}
+								<div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-100">
+									<form onSubmit={handleSearch}>
+										<div className="flex flex-col md:flex-row gap-4">
+											<div className="flex-1">
+												<label className="block text-sm font-semibold text-gray-700 mb-2">
+													Student ID
+												</label>
+												<div className="relative">
+													<MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
 													<input
 														type="text"
 														value={studentId}
 														onChange={(e) => setStudentId(e.target.value)}
 														placeholder="Enter student ID..."
-														className="input-field w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+														className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
 													/>
 												</div>
-												<div className="flex items-end">
-													<button
-														type="submit"
-														disabled={loading}
-														className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-bold py-2 px-6 rounded-lg transition duration-150 ease-in-out flex items-center gap-2"
-													>
+											</div>
+											<div className="flex items-end">
+												<button
+													type="submit"
+													disabled={loading}
+													className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white font-semibold py-3 px-8 rounded-xl transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+												>
+													{loading ? (
+														<ArrowPathIcon className="h-5 w-5 animate-spin" />
+													) : (
 														<MagnifyingGlassIcon className="h-5 w-5" />
-														{loading ? 'Searching...' : 'Search'}
-													</button>
-												</div>
+													)}
+													{loading ? 'Searching...' : 'Search'}
+												</button>
 											</div>
-										</form>
+										</div>
+									</form>
+								</div>
+
+								{/* Error Message */}
+								{error && (
+									<div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 mb-6">
+										<div className="flex items-center gap-3">
+											<div className="flex-shrink-0">
+												<svg className="h-5 w-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+													<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+												</svg>
+											</div>
+											<div>
+												<h3 className="text-sm font-semibold text-red-800">Error</h3>
+												<p className="text-sm text-red-700">{error}</p>
+											</div>
+										</div>
 									</div>
+								)}
 
-									{/* Error Message */}
-									{error && (
-										<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
-											<strong>Error:</strong> {error}
+								{/* Student Information Card - Updated with Year/Semester/Course/Major */}
+								{studentInfo && (
+									<div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-lg p-6 mb-8 border border-blue-100">
+										<div className="flex items-center gap-3 mb-4">
+											<div className="bg-blue-500 p-2 rounded-xl">
+												<AcademicCapIcon className="h-6 w-6 text-white" />
+											</div>
+											<h2 className="text-xl font-bold text-gray-800">Student Overview</h2>
 										</div>
-									)}
+										
+										<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+											<div className="bg-white rounded-xl p-3 shadow-sm">
+												<p className="text-xs text-gray-500 uppercase tracking-wide">Student ID</p>
+												<p className="text-lg font-bold text-gray-800">{studentInfo.studentId}</p>
+											</div>
+											<div className="bg-white rounded-xl p-3 shadow-sm">
+												<p className="text-xs text-gray-500 uppercase tracking-wide">Current Year</p>
+												<p className="text-lg font-bold text-blue-600">Year {studentInfo.currentYear || '?'}</p>
+											</div>
+											<div className="bg-white rounded-xl p-3 shadow-sm">
+												<p className="text-xs text-gray-500 uppercase tracking-wide">Current Semester</p>
+												<p className="text-lg font-bold text-blue-600">Semester {studentInfo.currentSemester || '?'}</p>
+											</div>
+											<div className="bg-white rounded-xl p-3 shadow-sm">
+												<p className="text-xs text-gray-500 uppercase tracking-wide">Completed Units</p>
+												<p className="text-lg font-bold text-green-600">{studentInfo.completedUnitsCount}</p>
+											</div>
+										</div>
+										
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+											<div className="bg-white rounded-xl p-3 shadow-sm">
+												<p className="text-xs text-gray-500 uppercase tracking-wide">Course</p>
+												<p className="font-semibold text-gray-800">{studentInfo.courseName || 'Not specified'}</p>
+											</div>
+											<div className="bg-white rounded-xl p-3 shadow-sm">
+												<p className="text-xs text-gray-500 uppercase tracking-wide">Major / Specialization</p>
+												<p className="font-semibold text-gray-800">{studentInfo.majorName || 'Not specified'}</p>
+											</div>
+										</div>
+										
+										<div className="bg-white rounded-xl p-4">
+											<p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+												<CheckCircleIcon className="h-4 w-4 text-green-600" />
+												Completed Units ({studentInfo.completedUnitsCount})
+											</p>
+											<div className="flex flex-wrap gap-2">
+												{studentInfo.completedUnitsList.map((unit) => (
+													<span
+														key={unit.id}
+														className="bg-green-100 text-green-800 text-sm font-medium px-3 py-1.5 rounded-full hover:bg-green-200 transition-colors cursor-help"
+														title={`${unit.name || ''} (${unit.creditPoints} credits)`}
+													>
+														{unit.code}
+													</span>
+												))}
+											</div>
+										</div>
+									</div>
+								)}
 
-									{/* Student Information */}
-									{studentInfo && (
-										<div className="card-bg p-6 rounded-theme shadow-theme mb-8 bg-gradient-to-r from-blue-50 to-indigo-50">
-											<h2 className="text-lg font-semibold heading-text mb-4 flex items-center gap-2">
-												<AcademicCapIcon className="h-5 w-5" />
-												Student Information
-											</h2>
-											<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-												<div>
-													<p className="text-sm text-muted">Student ID</p>
-													<p className="font-semibold text-primary text-lg">{studentInfo.studentId}</p>
+								{/* Results Section */}
+								{searched && !error && matchedPlanners.length === 0 && studentInfo ? (
+									<div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+										<ChartBarIcon className="h-20 w-20 text-gray-300 mx-auto mb-4" />
+										<p className="text-gray-500 text-lg font-medium">No matching study planners found</p>
+										<p className="text-gray-400 text-sm mt-2">Try checking another student or create a new study planner.</p>
+									</div>
+								) : (
+									matchedPlanners.length > 0 && (
+										<div className="space-y-6">
+											<div className="flex items-center justify-between mb-4">
+												<div className="flex items-center gap-3">
+													<div className="bg-gradient-to-r from-green-500 to-emerald-500 p-2 rounded-xl">
+														<TrophyIcon className="h-6 w-6 text-white" />
+													</div>
+													<h2 className="text-2xl font-bold text-gray-800">
+														Top {matchedPlanners.length} Matching Study Planners
+													</h2>
 												</div>
-												<div>
-													<p className="text-sm text-muted">Completed Units</p>
-													<p className="font-semibold text-primary text-lg">{studentInfo.completedUnitsCount} / 24</p>
-												</div>
-												<div>
-													<p className="text-sm text-muted">Total Credits</p>
-													<p className="font-semibold text-primary text-lg">{studentInfo.totalCredits} / 300</p>
+												<div className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+													Sorted by most matches
 												</div>
 											</div>
-
-											{studentInfo.completedUnitsList && studentInfo.completedUnitsList.length > 0 && (
-												<div className="mt-4">
-													<p className="text-sm font-semibold text-muted mb-2">Completed Units:</p>
-													<div className="flex flex-wrap gap-2">
-														{studentInfo.completedUnitsList.map((unit) => (
-															<span
-																key={unit.id}
-																className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full"
-																title={`${unit.name || ''} (${unit.creditPoints} credits)`}
-															>
-																{unit.code}
-															</span>
-														))}
-													</div>
-												</div>
-											)}
-										</div>
-									)}
-
-									{/* Results */}
-									{searched && !error && matchedPlanners.length === 0 && studentInfo ? (
-										<div className="card-bg p-12 rounded-theme shadow-theme text-center">
-											<ChartBarIcon className="h-16 w-16 text-muted mx-auto mb-4 opacity-50" />
-											<p className="text-muted text-lg">No matching study planners found.</p>
-										</div>
-									) : (
-										matchedPlanners.length > 0 && (
-											<div className="space-y-6">
-												<h2 className="text-xl font-semibold heading-text mb-4 flex items-center gap-2">
-													<ChartBarIcon className="h-6 w-6" />
-													Top {matchedPlanners.length} Matching Study Planners
-												</h2>
-
-												{matchedPlanners.map((planner, index) => (
-													<div key={planner.plannerId} className="card-bg rounded-theme shadow-theme overflow-hidden">
-														<div className="p-6 border-b bg-gradient-to-r from-gray-50 to-white">
-															<div className="flex items-start justify-between">
+											
+											{matchedPlanners.map((planner, index) => {
+												const rankStyle = getRankStyle(index);
+												const isExpanded = expandedPlanners[planner.plannerId];
+												
+												return (
+													<div 
+														key={planner.plannerId} 
+														className={`bg-white rounded-2xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl border-l-4 ${rankStyle.border}`}
+														onMouseEnter={() => setHoveredPlanner(planner.plannerId)}
+														onMouseLeave={() => setHoveredPlanner(null)}
+													>
+														{/* Planner Header */}
+														<div className={`p-6 ${rankStyle.bg} text-white`}>
+															<div className="flex items-start justify-between flex-wrap gap-4">
 																<div className="flex-1">
 																	<div className="flex items-center gap-3 mb-2">
-																		<span className="text-2xl font-bold text-blue-600">#{index + 1}</span>
-																		<h3 className="text-xl font-bold heading-text">{planner.plannerName}</h3>
+																		<span className="text-3xl font-bold drop-shadow-lg">
+																			{rankStyle.icon}
+																		</span>
+																		<h3 className="text-2xl font-bold">
+																			{planner.plannerName}
+																		</h3>
 																	</div>
-																	<p className="text-sm text-muted">
-																		Planner ID: {planner.plannerId} | Created: {new Date(planner.createdAt).toLocaleDateString()}
+																	<p className="text-white/80 text-sm">
+																		ID: {planner.plannerId} | Created: {new Date(planner.createdAt).toLocaleDateString()}
 																	</p>
 																</div>
+																<div className="bg-white/20 backdrop-blur-sm rounded-xl px-4 py-2 text-center">
+																	<p className="text-xs font-semibold">Completion</p>
+																	<p className="text-2xl font-bold">{planner.matchPlannerPct.toFixed(1)}%</p>
+																</div>
 															</div>
+														</div>
 
-															<div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-																<div className="bg-blue-50 p-3 rounded-lg">
-																	<p className="text-xs text-muted mb-1">Matching Units</p>
-																	<p className="text-2xl font-bold text-blue-600">{planner.overlapCount} / {planner.completedCount}</p>
+														{/* Statistics Grid */}
+														<div className="p-6 border-b border-gray-100">
+															<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+																<div className="text-center p-3 bg-blue-50 rounded-xl">
+																	<p className="text-xs text-gray-500 mb-1">Matched Units</p>
+																	<p className="text-2xl font-bold text-blue-600">
+																		{planner.overlapCount}
+																	</p>
+																	<p className="text-xs text-gray-500">of {planner.completedCount}</p>
 																</div>
-																<div className="bg-indigo-50 p-3 rounded-lg">
-																	<p className="text-xs text-muted mb-1">Matched Credits</p>
-																	<p className="text-2xl font-bold text-indigo-600">{planner.totalMatchedCredits}</p>
+																<div className="text-center p-3 bg-indigo-50 rounded-xl">
+																	<p className="text-xs text-gray-500 mb-1">Matched Credits</p>
+																	<p className="text-2xl font-bold text-indigo-600">
+																		{planner.totalMatchedCredits}
+																	</p>
+																	<p className="text-xs text-gray-500">total points</p>
 																</div>
-																<div className="bg-green-50 p-3 rounded-lg">
-																	<p className="text-xs text-muted mb-1">% of Student's Completed</p>
-																	<p className="text-2xl font-bold text-green-600">{planner.matchStudentPct.toFixed(1)}%</p>
-																	<div className="w-full bg-green-200 rounded-full h-1.5 mt-2">
-																		<div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchStudentPct, 100)}%` }}></div>
+																<div className="text-center p-3 bg-green-50 rounded-xl">
+																	<p className="text-xs text-gray-500 mb-1">Remaining Units</p>
+																	<p className="text-2xl font-bold text-green-600">
+																		{planner.remainingUnits}
+																	</p>
+																	<p className="text-xs text-gray-500">to graduate</p>
+																</div>
+																<div className="text-center p-3 bg-purple-50 rounded-xl">
+																	<p className="text-xs text-gray-500 mb-1">Student Match</p>
+																	<p className="text-2xl font-bold text-purple-600">
+																		{planner.matchStudentPct.toFixed(0)}%
+																	</p>
+																	<p className="text-xs text-gray-500">of completed units</p>
+																</div>
+															</div>
+															
+															{/* Progress Bars */}
+															<div className="mt-4 space-y-3">
+																<div>
+																	<div className="flex justify-between text-sm mb-1">
+																		<span className="text-gray-600">Progress toward this planner</span>
+																		<span className="font-semibold text-purple-600">{planner.matchPlannerPct.toFixed(1)}%</span>
 																	</div>
-																</div>
-																<div className="bg-purple-50 p-3 rounded-lg">
-																	<p className="text-xs text-muted mb-1">% of Planner's Units</p>
-																	<p className="text-2xl font-bold text-purple-600">{planner.matchPlannerPct.toFixed(1)}%</p>
-																	<div className="w-full bg-purple-200 rounded-full h-1.5 mt-2">
-																		<div className="bg-purple-600 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchPlannerPct, 100)}%` }}></div>
+																	<div className="w-full bg-gray-200 rounded-full h-2.5">
+																		<div 
+																			className="bg-purple-600 h-2.5 rounded-full transition-all duration-500"
+																			style={{ width: `${planner.matchPlannerPct}%` }}
+																		></div>
 																	</div>
 																</div>
 															</div>
 														</div>
 
-														<div className="p-6">
-															<h4 className="font-semibold text-sm heading-text mb-3 flex items-center gap-2">
-																<CheckCircleIcon className="h-4 w-4 text-green-600" />
-																Matched Units ({planner.matchingUnits.length})
-															</h4>
+														{/* Matched Units Section */}
+														<div className="p-6 border-b border-gray-100">
+															<div className="flex items-center justify-between mb-4">
+																<h4 className="font-semibold text-gray-800 flex items-center gap-2">
+																	<CheckCircleIcon className="h-5 w-5 text-green-600" />
+																	Matched Units ({planner.matchingUnits.length})
+																</h4>
+																<div className="flex gap-2">
+																	<button
+																		onClick={() => openUnitRecommendations(planner)}
+																		className="bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm font-medium px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+																	>
+																		<LightBulbIcon className="h-4 w-4" />
+																		Get Recommendations
+																	</button>
+																	<button
+																		onClick={() => toggleExpanded(planner.plannerId)}
+																		className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+																	>
+																		{isExpanded ? (
+																			<>Show Less <ChevronUpIcon className="h-4 w-4" /></>
+																		) : (
+																			<>View All Units <ChevronDownIcon className="h-4 w-4" /></>
+																		)}
+																	</button>
+																</div>
+															</div>
+															
 															{planner.matchingUnits.length > 0 ? (
 																<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 																	{planner.matchingUnits.map((unit, idx) => (
-																		<div key={idx} className="bg-green-50 border border-green-200 rounded-lg p-3">
-																			<p className="font-mono text-sm font-semibold text-green-800">{unit.code}</p>
-																			{unit.name && <p className="text-xs text-green-700 mt-1">{unit.name}</p>}
-																			<p className="text-xs text-green-600 mt-1">{unit.creditPoints} credits</p>
+																		<div key={idx} className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-3 hover:shadow-md transition-all hover:scale-[1.02]">
+																			<div className="flex items-start justify-between">
+																				<div className="flex-1">
+																					<p className="font-mono text-sm font-bold text-green-800">
+																						{unit.code}
+																					</p>
+																					{unit.name && (
+																						<p className="text-xs text-green-700 mt-1 line-clamp-2">
+																							{unit.name}
+																						</p>
+																					)}
+																					{unit.creditPoints > 0 && (
+																						<p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+																							<CreditCardIcon className="h-3 w-3" />
+																							{unit.creditPoints} credits
+																						</p>
+																					)}
+																				</div>
+																				<CheckCircleIcon className="h-5 w-5 text-green-600 flex-shrink-0" />
+																			</div>
 																		</div>
 																	))}
 																</div>
 															) : (
-																<p className="text-sm text-muted">No matching units found</p>
+																<p className="text-gray-500 text-center py-4">No matching units found</p>
 															)}
 														</div>
 
-														<details className="border-t">
-															<summary className="px-6 py-3 cursor-pointer hover:bg-gray-50 text-sm font-medium text-muted">
-																View all units in this planner ({planner.totalUnits.length} total)
-															</summary>
-															<div className="px-6 pb-4 pt-2">
+														{/* All Planner Units (Expandable) */}
+														{isExpanded && (
+															<div className="p-6 bg-gray-50 border-t border-gray-100">
+																<h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+																	<BookOpenIcon className="h-4 w-4" />
+																	All Units in This Planner ({planner.totalUnits.length} total)
+																</h5>
 																<div className="flex flex-wrap gap-2">
 																	{planner.totalUnits.map((unit) => {
 																		const isMatched = planner.matchingUnits.some(mu => mu.id === unit.ID);
 																		return (
-																			<span key={unit.ID} className={`text-xs font-medium px-2.5 py-1 rounded-full ${isMatched ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-gray-100 text-gray-600'}`}>
-																				{unit.UnitCode}{isMatched && ' ✓'}
+																			<span
+																				key={unit.ID}
+																				className={`text-sm font-medium px-3 py-1.5 rounded-full transition-all ${
+																					isMatched
+																						? 'bg-green-100 text-green-800 border border-green-300 hover:bg-green-200'
+																						: 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+																				}`}
+																			>
+																				{unit.UnitCode}
+																				{isMatched && ' ✓'}
 																			</span>
 																		);
 																	})}
 																</div>
 															</div>
-														</details>
+														)}
 													</div>
-												))}
+												);
+											})}
+										</div>
+									)
+								)}
+
+								{/* Empty State */}
+								{!searched && !studentInfo && !error && (
+									<div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+										<div className="max-w-md mx-auto">
+											<div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-full p-6 w-32 h-32 mx-auto mb-6 flex items-center justify-center">
+												<MagnifyingGlassIcon className="h-16 w-16 text-blue-500" />
 											</div>
-										)
-									)}
-								</div>
-
-								{/* Sidebar - Suggested Study Path */}
-								{needsSuggestions && suggestedPath.plan && suggestedPath.plan.length > 0 && (
-									<div className="w-96 flex-shrink-0">
-										<div className="sticky top-6">
-											<div className="card-bg rounded-theme shadow-theme overflow-hidden bg-gradient-to-b from-amber-50 to-orange-50 border-l-4 border-amber-500">
-												<div className="p-4 bg-amber-100 border-b border-amber-200">
-													<div className="flex items-center gap-2">
-														<LightBulbIcon className="h-6 w-6 text-amber-600" />
-														<h2 className="font-bold text-amber-800">Suggested Study Path</h2>
-													</div>
-													<p className="text-xs text-amber-700 mt-1">
-														Based on: {matchedPlanners[0]?.plannerName}
-													</p>
-												</div>
-
-												<div className="p-4 max-h-[600px] overflow-y-auto">
-													{/* Progress */}
-													<div className="mb-4 p-3 bg-amber-100 rounded-lg">
-														<p className="text-sm font-semibold text-amber-800">Progress to Goal:</p>
-														<div className="mt-2 space-y-2">
-															<div>
-																<div className="flex justify-between text-xs text-amber-700">
-																	<span>Units:</span>
-																	<span>{studentInfo.completedUnitsCount} / 24</span>
-																</div>
-																<div className="w-full bg-amber-200 rounded-full h-2 mt-1">
-																	<div className="bg-amber-600 h-2 rounded-full" style={{ width: `${Math.min((studentInfo.completedUnitsCount / 24) * 100, 100)}%` }}></div>
-																</div>
-															</div>
-															<div>
-																<div className="flex justify-between text-xs text-amber-700">
-																	<span>Credits:</span>
-																	<span>{studentInfo.totalCredits} / 300</span>
-																</div>
-																<div className="w-full bg-amber-200 rounded-full h-2 mt-1">
-																	<div className="bg-amber-600 h-2 rounded-full" style={{ width: `${Math.min((studentInfo.totalCredits / 300) * 100, 100)}%` }}></div>
-																</div>
-															</div>
-														</div>
-													</div>
-
-													{/* Semester Plan */}
-													<h3 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
-														<ArrowPathIcon className="h-4 w-4" />
-														Recommended Semester Plan
-													</h3>
-
-													<div className="space-y-4">
-														{suggestedPath.plan.map((semester, idx) => (
-															<div key={idx} className="border border-amber-200 rounded-lg overflow-hidden">
-																<div className="bg-amber-200 px-3 py-2">
-																	<p className="font-semibold text-amber-800 text-sm">{semester.semesterName}</p>
-																	<p className="text-xs text-amber-700">{semester.unitCount} units · {semester.totalCredits} credits</p>
-																</div>
-																<div className="p-3 space-y-2 bg-white">
-																	{semester.units.map((unit, unitIdx) => (
-																		<div key={unit.ID} className="text-sm">
-																			<p className="font-mono font-semibold text-amber-800">{unit.UnitCode}</p>
-																			<p className="text-xs text-gray-600">{unit.Name}</p>
-																			<p className="text-xs text-gray-500">{unit.creditPoints} credits</p>
-																		</div>
-																	))}
-																</div>
-															</div>
-														))}
-													</div>
-
-													{/* Blocked Units */}
-													{suggestedPath.orderedUnits && suggestedPath.orderedUnits.some(u => u.blocked) && (
-														<div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-															<p className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1">
-																<ExclamationTriangleIcon className="h-4 w-4" /> Units with Unmet Prerequisites:
-															</p>
-															<div className="space-y-1">
-																{suggestedPath.orderedUnits.filter(u => u.blocked).map((unit, idx) => (
-																	<p key={idx} className="text-xs text-red-600">{unit.UnitCode}: {unit.reason}</p>
-																))}
-															</div>
-														</div>
-													)}
-												</div>
-
-												<div className="p-3 bg-amber-100 border-t border-amber-200 text-center">
-													<p className="text-xs text-amber-700">Max 4 units (50 credits) per semester</p>
-												</div>
-											</div>
+											<p className="text-gray-600 text-lg font-medium">Find the Best Academic Path</p>
+											<p className="text-gray-400 text-sm mt-2">
+												Enter a student ID to analyze completed units and discover matching study planners
+											</p>
 										</div>
 									</div>
 								)}
 							</div>
-
-							{/* Initial State */}
-							{!searched && !studentInfo && !error && (
-								<div className="card-bg p-12 rounded-theme shadow-theme text-center mt-6">
-									<MagnifyingGlassIcon className="h-16 w-16 text-muted mx-auto mb-4 opacity-50" />
-									<p className="text-muted text-lg">Enter a student ID to search and compare study planners</p>
-								</div>
-							)}
 						</div>
-					</div>
-				</PageLoadingWrapper>
-			)}
-		</ConditionalRequireAuth>
+					</PageLoadingWrapper>
+				)}
+			</ConditionalRequireAuth>
+			
+			{/* Unit Recommendations Modal */}
+			<UnitRecommendations
+				isOpen={showUnitRecommendations}
+				onClose={closeUnitRecommendations}
+				planner={selectedPlanner}
+				completedUnits={completedUnits}
+				studentInfo={studentInfo}
+			/>
+		</>
 	);
 }
