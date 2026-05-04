@@ -172,7 +172,7 @@ const Dashboard = () => {
 			icon: ChartBarIcon,
 			permission: "system",
 			links: [
-				{ name: "Graduation Dashboard", href: "/view/graduation-dashboard", permission: "planner:read" },
+				{ name: "Graduation Dashboard", href: "/view/graduation_dashboard", permission: "planner:read" },
 			],
 			color: "text-emerald-600",
 			bgColor: "bg-emerald-50"
