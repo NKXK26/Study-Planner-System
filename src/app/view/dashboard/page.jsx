@@ -156,12 +156,13 @@ const Dashboard = () => {
 		},
 		{
 			title: "Study Planner",
-			description: "Upload new study planners",
+			description: "Manage study planners",
 			icon: ChartBarIcon,
 			permission: "system",
 			links: [
 				{ name: "Upload Study Planner", href: "/view/upload_planner", permission: "planner:read" },
 				{ name: "Compare Study Planner", href: "/view/compare_study_planner", permission: "planner:read" },
+				{ name: "Study Planner Management", href: "/view/study_planners", permission: "planner:read" },
 			],
 			color: "text-blue-600",
 			bgColor: "bg-blue-50"
@@ -338,18 +339,6 @@ const Dashboard = () => {
 						</div>
 					</div>
 				</div>
-
-				{/* Floating AI Assistant Button */}
-				<Link
-					href="/view/ai-assistant"
-					className={`fixed bottom-6 right-6 p-4 rounded-full shadow-lg transition-all duration-200 hover:scale-110 z-50 ${theme === 'dark'
-						? 'bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500'
-						: 'bg-gradient-to-br from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600'
-						} text-white flex items-center justify-center w-14 h-14 group`}
-					title="AI Study Planner Assistant"
-				>
-					<SparklesIcon className="h-6 w-6 transition-transform group-hover:rotate-12" />
-				</Link>
 			</PageLoadingWrapper>
 		</ConditionalRequireAuth>
 	);

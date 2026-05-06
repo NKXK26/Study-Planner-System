@@ -256,7 +256,7 @@ const UploadPlannerPage = () => {
             const responseText = await response.text();
             console.log('📡 Study planner API response status:', response.status);
             console.log('📡 Study planner API response text:', responseText);
-            
+
             let result = {};
             if (responseText) {
                 try {
@@ -381,7 +381,7 @@ const UploadPlannerPage = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 bg-white">
-                                {matchedUnits.map((unit) => (
+                                {matchedUnits.filter(unit => unit.availability === 'published').map((unit) => (
                                     <tr key={unit.id} className={selectedUnitIds.includes(unit.id) ? 'bg-blue-50' : ''}>
                                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{unit.unit_code}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700">{unit.name}</td>
@@ -400,7 +400,9 @@ const UploadPlannerPage = () => {
                                 ))}
                             </tbody>
                         </table>
-                        <p className="mt-3 text-sm text-gray-600">Selected units: {selectedUnitIds.length}</p>
+                        <p className="mt-3 text-sm text-gray-600">
+                            Selected units: {selectedUnitIds.filter(id => matchedUnits.some(u => u.id === id && u.availability === 'published')).length}
+                        </p>
                     </div>
                 )}
 
@@ -414,7 +416,7 @@ const UploadPlannerPage = () => {
                         {isUploading ? 'Saving...' : 'Save selected units to study planner'}
                     </button>
                 </div>
-                {/* 
+
                 {extractedText && (
                     <div className="mt-6">
                         <h2 className="text-lg font-semibold mb-2">Raw extracted text</h2>
@@ -425,7 +427,7 @@ const UploadPlannerPage = () => {
                             className="w-full rounded border border-gray-300 bg-gray-100 p-3 text-sm text-gray-800"
                         />
                     </div>
-                )} */}
+                )}
             </div>
         </div>
     );
