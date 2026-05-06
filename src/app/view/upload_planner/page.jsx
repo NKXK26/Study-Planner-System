@@ -79,7 +79,15 @@ const UploadPlannerPage = () => {
             }
 
             setExtractedText(text);
-            const extractedUnits = extractUnitsFromText(text);
+            // Normalise the raw text: join broken unit codes that are split across newlines
+            let normalized = text.replace(/([A-Z]{2,4}\d{3})\n(\d{2})/gi, '$1$2');  // e.g. COS100\n26 → COS10026
+            normalized = normalized.replace(/([A-Z]{2,4})\n(\d{5})/gi, '$1$2');        // e.g. COS\n10025 → COS10025
+
+            // Also remove spaces inside codes (e.g. "COS 10025")
+            normalized = normalized.replace(/([A-Z]{2,4})\s+(\d{5})/gi, '$1$2');
+
+            // Then use the normalised text for extraction
+            const extractedUnits = extractUnitsFromText(normalized);
             setUnits(extractedUnits);
 
             if (extractedUnits.length > 0) {
@@ -321,7 +329,8 @@ const UploadPlannerPage = () => {
                         value={plannerName}
                         onChange={(e) => setPlannerName(e.target.value)}
                         placeholder="Auto-filled from file name"
-                        className="mt-2 block w-full rounded border border-gray-300 bg-white p-2"
+                        disabled
+                        className="mt-2 block w-full rounded border border-gray-300 bg-gray-100 p-2 text-gray-500 cursor-not-allowed"
                     />
                 </label>
 
