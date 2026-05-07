@@ -146,6 +146,8 @@ export async function GET(req) {
 			where,
 			...(orderBy && { orderBy }),
 			include: {
+				unitType: true,
+
 				UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit: {
 					include: {
 						Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit: {
@@ -160,6 +162,7 @@ export async function GET(req) {
 						ID: 'asc',
 					},
 				},
+
 				UnitTermOffered: {
 					select: {
 						ID: true,
@@ -455,7 +458,7 @@ export async function PUT(req) {
 				},
 			});
 
-			
+
 			// Insert new offered terms (if any)
 			if (unit_data.offered_terms && Array.isArray(unit_data.offered_terms)) {
 				// Delete old offered terms

@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "windows"]  // ✅ Use "windows" instead
+  binaryTargets = ["native", "windows"] // ✅ Use "windows" instead
 }
 
 datasource db {
@@ -32,7 +32,7 @@ model CourseIntake {
 }
 
 model Major {
-  ID           Int            @id @default(autoincrement())  // Removed @unique (redundant)
+  ID           Int            @id @default(autoincrement()) // Removed @unique (redundant)
   CourseID     Int
   CourseCode   String
   Name         String?
@@ -41,7 +41,7 @@ model Major {
   Course       Course         @relation(fields: [CourseID, CourseCode], references: [ID, Code], onDelete: SetDefault)
   Student      Student[]
 
-  @@unique([ID, CourseID, CourseCode])  // Changed from @@id to @@unique
+  @@unique([ID, CourseID, CourseCode]) // Changed from @@id to @@unique
 }
 
 model MasterStudyPlanner {
@@ -63,7 +63,7 @@ model SemesterInStudyPlannerYear {
 }
 
 model Student {
-  StudentID                      Int                              @id @unique  // Changed from Decimal to Int
+  StudentID                      Int                              @id @unique // Changed from Decimal to Int
   IntakeID                       Int
   FirstName                      String?
   Status                         String?
@@ -80,9 +80,9 @@ model Student {
 
 model StudentStudyPlannerAmmendments {
   ID                                                  Int                         @id @default(autoincrement())
-  StudentID                                           Int                         // Changed from Decimal to Int
+  StudentID                                           Int // Changed from Decimal to Int
   Action                                              String
-  TimeofAction                                        DateTime?                   @default(now())  // Removed PostgreSQL-specific
+  TimeofAction                                        DateTime?                   @default(now()) // Removed PostgreSQL-specific
   NewUnitTypeID                                       Int?
   Year                                                Int?
   SemIndex                                            Int?
@@ -111,11 +111,17 @@ model Term {
 }
 
 model Unit {
-  UnitCode                                                                      String
-  Name                                                                          String
-  CreditPoints                                                                  Float?
-  Availability                                                                  String
-  ID                                                                            Int                              @id @unique @default(autoincrement())
+  UnitCode     String
+  Name         String
+  CreditPoints Float?
+  Availability String
+  ID           Int    @id @unique @default(autoincrement())
+
+  // New fields for unit type classification
+  unitTypeId Int?      @map("unit_type_id")
+  unitType   UnitType? @relation(fields: [unitTypeId], references: [ID])
+
+
   StudentStudyPlannerAmmendments_StudentStudyPlannerAmmendments_NewUnitIDToUnit StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitIDToUnit")
   StudentStudyPlannerAmmendments_StudentStudyPlannerAmmendments_UnitIDToUnit    StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_UnitIDToUnit")
   UnitHistory                                                                   UnitHistory[]
@@ -130,16 +136,18 @@ model UnitType {
   ID                                         Int                              @id @default(autoincrement())
   Name                                       String
   Colour                                     String?
+
+  units                                      Unit[] 
   StudentStudyPlannerAmmendments_NewUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitType")
   StudentStudyPlannerAmmendments_OldUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_OldUnitType")
   UnitInSemesterStudyPlanner                 UnitInSemesterStudyPlanner[]
 
-  @@unique([ID, Name])  // Changed from @@id to @@unique
+  @@unique([ID, Name])
 }
 
 model UnitHistory {
   ID        Int     @id @default(autoincrement())
-  StudentID Int     // Changed from Decimal to Int
+  StudentID Int // Changed from Decimal to Int
   Status    String?
   TermID    Int?
   Year      Int
@@ -293,6 +301,7 @@ model AuditLog {
 
   @@map("audit_logs")
 }
+
 model StudyPlanner {
   id        Int      @id @default(autoincrement())
   name      String
@@ -300,5 +309,3 @@ model StudyPlanner {
 
   units Unit[]
 }
-
-

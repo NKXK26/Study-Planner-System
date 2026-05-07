@@ -52,6 +52,15 @@ export async function GET(req) {
                     ID: true,
                     UnitCode: true,
                     Name: true,
+                    CreditPoints: true,
+                    unitTypeId: true,
+
+                    unitType: {
+                        select: {
+                            ID: true,
+                            Name: true,
+                        },
+                    },
                 },
             },
         },
@@ -167,8 +176,8 @@ export async function POST(req) {
         console.error('❌ Study planner POST error:', error.message || error);
         console.error('Full error:', error);
         return NextResponse.json(
-            { 
-                success: false, 
+            {
+                success: false,
                 message: 'Failed to create study planner',
                 details: error.message || 'Unknown error',
                 error: error.code
