@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
 import UnitDB from '@app/class/Unit/UnitDB';
@@ -13,13 +13,61 @@ const UploadPlannerPage = () => {
     const [extractedText, setExtractedText] = useState('');
     const [units, setUnits] = useState([]);
     const [matchedUnits, setMatchedUnits] = useState([]);
-    const [selectedUnitIds, setSelectedUnitIds] = useState([]);
+    const [selectedUnitTypes, setSelectedUnitTypes] = useState({});
     const [missingCodes, setMissingCodes] = useState([]);
+    const [unitTypeOptions, setUnitTypeOptions] = useState([]);
     const [isParsing, setIsParsing] = useState(false);
     const [isMatching, setIsMatching] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [isAutoPopulating, setIsAutoPopulating] = useState(false);
     const [message, setMessage] = useState(null);
     const [error, setError] = useState(null);
+
+    // Debug modal states
+    const [showDebugModal, setShowDebugModal] = useState(false);
+    const [debugData, setDebugData] = useState([]);
+    const [debugLoading, setDebugLoading] = useState(false);
+
+    // Colour → unit type ID mapping
+    const COLOR_TO_TYPE_ID = {
+        '#c5d9f0': 2,   // Core
+        '#fce9d9': 3,   // Major
+        '#d5e2bb': 1,   // Elective
+        '#b1a0c6': 17,  // WIL (Work-Integrated Learning)
+    };
+
+    const FALLBACK_UNIT_TYPES = [
+        { id: 2, name: 'Core' },
+        { id: 1, name: 'Elective' },
+        { id: 3, name: 'Major' },
+        { id: 4, name: 'MPU' },
+        { id: 17, name: 'WIL' },
+    ];
+
+    const normalizeCode = (str) => {
+        return (str || '')
+            .replace(/[\s\u00A0\u2000-\u200F\u2028-\u202F]+/g, '')
+            .toUpperCase();
+    };
+
+    useEffect(() => {
+        const fetchUnitTypes = async () => {
+            try {
+                const response = await SecureFrontendAuthHelper.authenticatedFetch('/api/unit_type');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data && data.data.length) {
+                        setUnitTypeOptions(data.data);
+                        return;
+                    }
+                }
+                setUnitTypeOptions(FALLBACK_UNIT_TYPES);
+            } catch (err) {
+                setUnitTypeOptions(FALLBACK_UNIT_TYPES);
+            }
+        };
+        fetchUnitTypes();
+    }, []);
 
     const handleFileChange = async (event) => {
         setMessage(null);
@@ -27,7 +75,7 @@ const UploadPlannerPage = () => {
         setUnits([]);
         setExtractedText('');
         setMatchedUnits([]);
-        setSelectedUnitIds([]);
+        setSelectedUnitTypes({});
         setMissingCodes([]);
 
         const file = event.target.files?.[0];
@@ -37,8 +85,7 @@ const UploadPlannerPage = () => {
             return;
         }
 
-        const extension = file.name.split('.').pop().toLowerCase();
-        if (extension !== 'pdf') {
+        if (file.type !== 'application/pdf') {
             setError('Please upload a PDF file.');
             setPdfFile(null);
             setFileName('');
@@ -71,7 +118,7 @@ const UploadPlannerPage = () => {
             const pdf = await loadingTask.promise;
 
             let text = '';
-            for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
+            for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
                 const page = await pdf.getPage(pageIndex);
                 const content = await page.getTextContent();
                 const pageText = content.items.map((item) => item.str).join('\n');
@@ -79,14 +126,10 @@ const UploadPlannerPage = () => {
             }
 
             setExtractedText(text);
-            // Normalise the raw text: join broken unit codes that are split across newlines
-            let normalized = text.replace(/([A-Z]{2,4}\d{3})\n(\d{2})/gi, '$1$2');  // e.g. COS100\n26 → COS10026
-            normalized = normalized.replace(/([A-Z]{2,4})\n(\d{5})/gi, '$1$2');        // e.g. COS\n10025 → COS10025
-
-            // Also remove spaces inside codes (e.g. "COS 10025")
+            let normalized = text.replace(/([A-Z]{2,4}\d{3})\n(\d{2})/gi, '$1$2');
+            normalized = normalized.replace(/([A-Z]{2,4})\n(\d{5})/gi, '$1$2');
             normalized = normalized.replace(/([A-Z]{2,4})\s+(\d{5})/gi, '$1$2');
 
-            // Then use the normalised text for extraction
             const extractedUnits = extractUnitsFromText(normalized);
             setUnits(extractedUnits);
 
@@ -95,15 +138,11 @@ const UploadPlannerPage = () => {
             } else {
                 setMatchedUnits([]);
                 setMissingCodes([]);
-            }
-
-            if (extractedUnits.length === 0) {
                 setMessage('PDF read successfully, but no unit rows were detected.');
             }
         } catch (parseError) {
             console.error('PDF parse error', parseError);
-            const parseMessage = parseError?.message ? ` (${parseError.message})` : '';
-            setError(`Unable to read the PDF file. Please use a text-based PDF and try again.${parseMessage}`);
+            setError(`Unable to read the PDF file. Please use a text-based PDF and try again.`);
         } finally {
             setIsParsing(false);
         }
@@ -111,9 +150,7 @@ const UploadPlannerPage = () => {
 
     const extractUnitsFromText = (text) => {
         const unitRegex = /((COS|SWE|ICT|TNE)\d{5})/g;
-
         const matches = [...text.matchAll(unitRegex)];
-
         const units = [];
 
         for (let i = 0; i < matches.length; i++) {
@@ -126,7 +163,6 @@ const UploadPlannerPage = () => {
 
             let name = text.slice(start, end).trim();
 
-            // 🧹 CLEANING RULES
             name = name
                 .replace(/Semester\s+\d/gi, '')
                 .replace(/Year\s+\w+/gi, '')
@@ -137,25 +173,16 @@ const UploadPlannerPage = () => {
                 .replace(/\s{2,}/g, ' ')
                 .trim();
 
-            // ❌ Skip garbage
             if (!name || name.length < 3) continue;
 
-            units.push({
-                code,
-                name,
-            });
+            units.push({ code, name });
         }
-
         return units;
     };
 
     const fetchMatchingUnits = async (extractedUnits) => {
         const codes = Array.from(
-            new Set(
-                extractedUnits
-                    .map((unit) => unit.code.trim().toUpperCase())
-                    .filter(Boolean)
-            )
+            new Set(extractedUnits.map((unit) => normalizeCode(unit.code)).filter(Boolean))
         );
 
         if (codes.length === 0) {
@@ -164,9 +191,7 @@ const UploadPlannerPage = () => {
             return;
         }
 
-        console.log('Fetching matching units for codes:', codes);
         setIsMatching(true);
-
         try {
             const result = await UnitDB.FetchUnits({
                 code: codes.join(','),
@@ -175,55 +200,140 @@ const UploadPlannerPage = () => {
                 order_by: [{ column: 'UnitCode', ascending: true }],
             });
 
-            console.log('FetchUnits result:', result);
-
             if (!result.success) {
-                console.error('API returned error:', result.message);
+                setError(`Failed to fetch units: ${result.message || 'Unknown error'}`);
                 setMatchedUnits([]);
                 setMissingCodes(codes);
-                setError(`Failed to fetch units: ${result.message || 'Unknown error'}`);
                 return;
             }
 
             const matched = result.data || [];
-            console.log('Matched units from API:', matched);
             setMatchedUnits(matched);
-            setSelectedUnitIds(matched.map((unit) => unit.id));
 
-            const matchedCodes = new Set(matched.map((unit) => unit.UnitCode));
-            const missingCodesLocal = codes.filter((code) => !matchedCodes.has(code));
+            const initialTypes = {};
+            matched.forEach(unit => {
+                initialTypes[unit.id] = unit.unitTypeId || 1;
+            });
+            setSelectedUnitTypes(initialTypes);
+
+            const matchedCodesSet = new Set(matched.map(u => normalizeCode(u.UnitCode)));
+            const missingCodesLocal = codes.filter(code => !matchedCodesSet.has(code));
             setMissingCodes(missingCodesLocal);
 
             if (missingCodesLocal.length === 0 && matched.length > 0) {
-                setMessage('All extracted units are matched. Review selections and click Save to create the study planner.');
+                setMessage('All extracted units matched. Use "Auto Populate" to detect types from PDF colours.');
             }
-
         } catch (fetchError) {
             console.error('Matching units fetch error', fetchError);
             setMatchedUnits([]);
-            setSelectedUnitIds([]);
             setMissingCodes(codes);
-            const errorMsg = fetchError?.message || 'Unknown fetch error';
-            setError(`Failed to match units: ${errorMsg}. Please check the console for details.`);
+            setError(`Failed to match units: ${fetchError?.message || 'Unknown fetch error'}`);
         } finally {
             setIsMatching(false);
         }
     };
 
-    const handleToggleUnit = (unitId) => {
-        setSelectedUnitIds((prev) =>
-            prev.includes(unitId)
-                ? prev.filter((id) => id !== unitId)
-                : [...prev, unitId]
-        );
+    // Auto-populate unit types using PyMuPDF colour extraction
+    const handleAutoPopulate = async () => {
+        if (!pdfFile) {
+            setError('No PDF file to analyze.');
+            return;
+        }
+
+        setIsAutoPopulating(true);
+        setError(null);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', pdfFile);
+
+            const response = await fetch('/api/pdf-debug', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to extract colours');
+            }
+
+            const colorBlocks = await response.json();
+
+            // Build a map: unit code -> typeId from colour
+            const colorMap = {};
+            for (const block of colorBlocks) {
+                const raw = block.text.trim();
+                const codeMatch = raw.match(/^([A-Z]{2,4}\d{5})$/);
+                if (codeMatch) {
+                    const code = normalizeCode(codeMatch[1]);
+                    const color = block.color.toLowerCase();
+                    const typeId = COLOR_TO_TYPE_ID[color];
+                    if (typeId && !colorMap[code]) {
+                        colorMap[code] = typeId;
+                    }
+                }
+            }
+
+            if (Object.keys(colorMap).length === 0) {
+                setError('No coloured unit codes found in the PDF. Cannot auto-populate.');
+                return;
+            }
+
+            // Apply to matched units
+            const newTypes = { ...selectedUnitTypes };
+            for (const unit of matchedUnits) {
+                const normCode = normalizeCode(unit.unit_code);
+                if (colorMap[normCode]) {
+                    newTypes[unit.id] = colorMap[normCode];
+                }
+            }
+            setSelectedUnitTypes(newTypes);
+            setMessage('Unit types have been auto‑populated from PDF colours.');
+        } catch (err) {
+            console.error('Auto-populate error', err);
+            setError(`Auto-populate failed: ${err.message}`);
+        } finally {
+            setIsAutoPopulating(false);
+        }
     };
 
-    const handleSelectAll = () => {
-        setSelectedUnitIds(matchedUnits.map((unit) => unit.id));
+    // Debug: show coloured blocks from the PDF
+    const handleDebugColors = async () => {
+        if (!pdfFile) {
+            setError('Please upload a PDF first.');
+            return;
+        }
+
+        setDebugLoading(true);
+        setDebugData([]);
+        setShowDebugModal(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', pdfFile);
+
+            const response = await fetch('/api/pdf-debug', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to extract colors');
+            }
+
+            const data = await response.json();
+            setDebugData(data);
+        } catch (err) {
+            console.error(err);
+            setDebugData([{ error: err.message }]);
+        } finally {
+            setDebugLoading(false);
+        }
     };
 
-    const handleDeselectAll = () => {
-        setSelectedUnitIds([]);
+    const handleTypeChange = (unitId, typeId) => {
+        setSelectedUnitTypes(prev => ({ ...prev, [unitId]: parseInt(typeId, 10) }));
     };
 
     const handleUploadToDatabase = async () => {
@@ -235,55 +345,40 @@ const UploadPlannerPage = () => {
             return;
         }
 
-        if (selectedUnitIds.length === 0) {
-            setError('No matched units selected to upload.');
+        if (matchedUnits.length === 0) {
+            setError('No units to upload.');
             return;
         }
+
+        const unitsToSave = matchedUnits.map(unit => ({
+            unitId: unit.id,
+            unitTypeId: selectedUnitTypes[unit.id] || 1,
+        }));
 
         setIsUploading(true);
 
         try {
-            const selectedUnitCodes = matchedUnits
-                .filter((unit) => selectedUnitIds.includes(unit.id))
-                .map((unit) => unit.unit_code)
-                .filter(Boolean);
-
-            const response = await SecureFrontendAuthHelper.authenticatedFetch(
-                '/api/study-planner',
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: plannerName.trim(),
-                        unitIds: selectedUnitIds.filter((id) => Number.isInteger(id)),
-                        unitCodes: selectedUnitCodes,
-                    }),
-                }
-            );
+            const response = await SecureFrontendAuthHelper.authenticatedFetch('/api/study-planner', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: plannerName.trim(),
+                    units: unitsToSave,
+                }),
+            });
 
             const responseText = await response.text();
-            console.log('📡 Study planner API response status:', response.status);
-            console.log('📡 Study planner API response text:', responseText);
-
             let result = {};
             if (responseText) {
                 try {
                     result = JSON.parse(responseText);
-                } catch (jsonError) {
-                    const message = responseText || response.statusText || 'Invalid JSON response from server';
-                    throw new Error(message);
+                } catch {
+                    throw new Error(responseText || 'Invalid JSON response');
                 }
             }
 
-            if (!response.ok) {
-                const message = result.message || result.error || result.details || `Upload failed (${response.status})`;
-                console.error('❌ API error:', message);
-                throw new Error(message);
-            }
-
-            if (!result.success) {
-                const message = result.message || result.error || result.details || 'Upload failed';
-                throw new Error(message);
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || `Upload failed (${response.status})`);
             }
 
             setMessage('Study planner saved successfully!');
@@ -291,14 +386,15 @@ const UploadPlannerPage = () => {
             setFileName('');
             setUnits([]);
             setMatchedUnits([]);
-            setSelectedUnitIds([]);
+            setSelectedUnitTypes({});
             setMissingCodes([]);
             setPlannerName('');
+            setExtractedText('');
         } catch (err) {
             console.error('Upload error', err);
             const errorMsg = err.message || 'Unknown error during upload';
             if (errorMsg.includes('already exists')) {
-                setError('A study planner with this name already exists. Please choose a different planner name and try again.');
+                setError('A study planner with this name already exists. Please choose a different planner name.');
             } else {
                 setError(`Failed to save study planner: ${errorMsg}`);
             }
@@ -314,7 +410,7 @@ const UploadPlannerPage = () => {
                     <div>
                         <h1 className="text-3xl font-bold mb-2">Upload Study Planner</h1>
                         <p className="text-sm text-gray-600">
-                            Upload a study planner PDF and extract unit codes and names.
+                            Upload a study planner PDF – use <strong>Auto Populate</strong> to detect unit types from colours (Core = light blue, Major = light orange, Elective = light green).
                         </p>
                     </div>
                     <Link href="/view/dashboard" className="text-blue-600 hover:underline text-sm">
@@ -349,80 +445,74 @@ const UploadPlannerPage = () => {
                 {message && <p className="text-sm text-green-600 mb-4">{message}</p>}
                 {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
-                {isMatching && (
-                    <p className="text-sm text-blue-600 mb-4">Looking up matching units in the database...</p>
-                )}
+                {isMatching && <p className="text-sm text-blue-600 mb-4">Looking up matching units in the database...</p>}
 
                 {matchedUnits.length > 0 && (
                     <div className="mb-6 overflow-x-auto">
-                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                            <div>
-                                <h2 className="text-xl font-semibold">Matched database units</h2>
-                                <p className="text-sm text-gray-600">
-                                    Click Add/Remove to choose which units to save.
-                                </p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={handleSelectAll}
-                                    className="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
-                                >
-                                    Select all
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleDeselectAll}
-                                    className="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                >
-                                    Deselect all
-                                </button>
-                            </div>
+                        <div className="mb-3">
+                            <h2 className="text-xl font-semibold">Matched database units</h2>
+                            <p className="text-sm text-gray-600">
+                                You can manually select unit types or click <strong>Auto Populate</strong> to detect them from PDF colours.
+                            </p>
                         </div>
                         <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Code</th>
                                     <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Name</th>
-                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Availability</th>
                                     <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Credit points</th>
-                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Action</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Type in this planner</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 bg-white">
                                 {matchedUnits.filter(unit => unit.availability === 'published').map((unit) => (
-                                    <tr key={unit.id} className={selectedUnitIds.includes(unit.id) ? 'bg-blue-50' : ''}>
+                                    <tr key={unit.id}>
                                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{unit.unit_code}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700">{unit.name}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-700">{unit.availability || 'Unknown'}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700">{unit.credit_points ?? '-'}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleToggleUnit(unit.id)}
-                                                className={`rounded px-3 py-1 text-sm ${selectedUnitIds.includes(unit.id) ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                                            <select
+                                                value={selectedUnitTypes[unit.id] || ''}
+                                                onChange={(e) => handleTypeChange(unit.id, e.target.value)}
+                                                className="border border-gray-300 rounded-md px-2 py-1 text-sm"
                                             >
-                                                {selectedUnitIds.includes(unit.id) ? 'Remove' : 'Add'}
-                                            </button>
+                                                {unitTypeOptions.map(opt => (
+                                                    <option key={opt.id} value={opt.id}>{opt.name}</option>
+                                                ))}
+                                            </select>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                        <p className="mt-3 text-sm text-gray-600">
-                            Selected units: {selectedUnitIds.filter(id => matchedUnits.some(u => u.id === id && u.availability === 'published')).length}
-                        </p>
+                        <p className="mt-3 text-sm text-gray-600">All matched units will be saved to the study planner with their selected types.</p>
                     </div>
                 )}
 
                 <div className="flex gap-3">
                     <button
                         type="button"
-                        disabled={!pdfFile || isParsing || isUploading || !plannerName.trim() || selectedUnitIds.length === 0}
+                        onClick={handleAutoPopulate}
+                        disabled={!pdfFile || matchedUnits.length === 0 || isAutoPopulating}
+                        className="inline-flex items-center justify-center rounded bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {isAutoPopulating ? 'Detecting colours...' : 'Auto Populate'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleDebugColors}
+                        disabled={!pdfFile || isParsing || debugLoading}
+                        className="inline-flex items-center justify-center rounded bg-gray-600 px-4 py-2 text-white hover:bg-gray-700 disabled:opacity-50"
+                    >
+                        {debugLoading ? 'Analyzing...' : 'Show Color Debug'}
+                    </button>
+                    <button
+                        type="button"
+                        disabled={!pdfFile || isParsing || isUploading || !plannerName.trim() || matchedUnits.length === 0}
                         onClick={handleUploadToDatabase}
                         className="inline-flex items-center justify-center rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        {isUploading ? 'Saving...' : 'Save selected units to study planner'}
+                        {isUploading ? 'Saving...' : 'Save all units to study planner'}
                     </button>
                 </div>
 
@@ -435,6 +525,49 @@ const UploadPlannerPage = () => {
                             rows={10}
                             className="w-full rounded border border-gray-300 bg-gray-100 p-3 text-sm text-gray-800"
                         />
+                    </div>
+                )}
+
+                {/* Debug Modal */}
+                {showDebugModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowDebugModal(false)}>
+                        <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+                            <div className="p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+                                <h3 className="text-lg font-semibold">PDF Color & Text Extraction</h3>
+                                <button onClick={() => setShowDebugModal(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+                            </div>
+                            <div className="p-4">
+                                {debugLoading && <p className="text-gray-500">Analyzing PDF colors... (this may take a moment)</p>}
+                                {!debugLoading && debugData.length === 0 && !debugData.error && <p className="text-gray-500">No colored text blocks found.</p>}
+                                {!debugLoading && debugData.length > 0 && (
+                                    <table className="min-w-full text-sm">
+                                        <thead className="bg-gray-100">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left">Color (Hex)</th>
+                                                <th className="px-3 py-2 text-left">Text</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {debugData.map((item, idx) => (
+                                                <tr key={idx} className="border-b border-gray-200">
+                                                    <td className="px-3 py-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-5 h-5 rounded border" style={{ backgroundColor: item.color }}></div>
+                                                            <code className="text-xs">{item.color}</code>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-xs font-mono">{item.text}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                                {!debugLoading && debugData.error && <p className="text-red-600">{debugData.error}</p>}
+                                <p className="text-xs text-gray-400 mt-4">
+                                    <strong>Note:</strong> This requires a Python backend with PyMuPDF installed at `/api/pdf-debug`.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

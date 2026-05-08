@@ -1,471 +1,424 @@
-import prisma from "@utils/db/db";
-import { NextResponse } from "next/server";
-import AuditLogger from "@app/class/Audit/AuditLogger";
-import SecureSessionManager from "@utils/auth/SimpleSessionManager";
-import { TokenValidation } from "@app/api/api_helper";
+'use client';
 
-// GET Unit Types
-export async function GET(req) {
-	try {
-		// Check for DEV override
-		const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
+import UnitDB from '@app/class/Unit/UnitDB';
 
-		if (!isDevOverride) {
-			const authHeader = req.headers.get('Authorization');
-			const token_res = TokenValidation(authHeader);
+const UploadPlannerPage = () => {
+    const [plannerName, setPlannerName] = useState('');
+    const [lastAutoPlannerName, setLastAutoPlannerName] = useState('');
+    const [pdfFile, setPdfFile] = useState(null);
+    const [fileName, setFileName] = useState('');
+    const [extractedText, setExtractedText] = useState('');
+    const [units, setUnits] = useState([]);
+    const [matchedUnits, setMatchedUnits] = useState([]);
+    const [selectedUnitTypes, setSelectedUnitTypes] = useState({});
+    const [missingCodes, setMissingCodes] = useState([]);
+    const [unitTypeOptions, setUnitTypeOptions] = useState([]);
+    const [isParsing, setIsParsing] = useState(false);
+    const [isMatching, setIsMatching] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [message, setMessage] = useState(null);
+    const [error, setError] = useState(null);
 
-			if (!token_res.success) {
-				return NextResponse.json({ success: false, message: token_res.message }, { status: token_res.status });
-			}
-			// Require actor email for auditability
-			const sessionEmail = req.headers.get('x-session-email');
-			if (!sessionEmail) {
-				return NextResponse.json({ success: false, message: 'Missing authentication header x-session-email' }, { status: 401 });
-			}
-		}
-		const { searchParams } = new URL(req.url);
-		const params_name = searchParams.get('name');
-		const params_ids = searchParams.get('ids');
-		const return_attributes = searchParams.get('return');
-		const order_by = searchParams.get('order_by');
+    // Fallback unit types in case API fails
+    const FALLBACK_UNIT_TYPES = [
+        { id: 2, name: 'Core' },
+        { id: 1, name: 'Elective' },
+        { id: 3, name: 'Major' },
+        { id: 4, name: 'MPU' },
+        { id: 17, name: 'WIL' },
+    ];
 
-		// Pagination parameters
-		// REMOVE PAGINATION
+    // Fetch unit type options
+    useEffect(() => {
+        const fetchUnitTypes = async () => {
+            try {
+                const response = await SecureFrontendAuthHelper.authenticatedFetch('/api/unit_type');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data && data.data.length) {
+                        setUnitTypeOptions(data.data);
+                        return;
+                    }
+                }
+                // Fallback to hardcoded types
+                console.warn('Using fallback unit types');
+                setUnitTypeOptions(FALLBACK_UNIT_TYPES);
+            } catch (err) {
+                console.error('Failed to fetch unit types, using fallback', err);
+                setUnitTypeOptions(FALLBACK_UNIT_TYPES);
+            }
+        };
+        fetchUnitTypes();
+    }, []);
 
-		let orderBy = undefined;
-		if (order_by) {
-			try {
-				const parsed = JSON.parse(order_by);
-				const allowed_columns = ['Name', 'Colour'];
-				orderBy = parsed
-					.filter(entry =>
-						entry.column &&
-						allowed_columns.includes(entry.column) &&
-						typeof entry.ascending === 'boolean'
-					)
-					.map(entry => ({
-						[entry.column]: entry.ascending ? 'asc' : 'desc'
-					}));
-			} catch (err) {
-				console.warn("Invalid order_by format:", err.message);
-			}
-		}
+    const handleFileChange = async (event) => {
+        setMessage(null);
+        setError(null);
+        setUnits([]);
+        setExtractedText('');
+        setMatchedUnits([]);
+        setSelectedUnitTypes({});
+        setMissingCodes([]);
 
-		let select = undefined;
-		if (return_attributes) {
-			const allowed_attributes = ['ID', 'Name', 'Colour'];
-			const fields = return_attributes
-				.split(',')
-				.map(f => f.trim())
-				.filter(f => allowed_attributes.includes(f));
+        const file = event.target.files?.[0];
+        if (!file) {
+            setPdfFile(null);
+            setFileName('');
+            return;
+        }
 
-			if (fields.length > 0) {
-				select = {};
-				fields.forEach(field => {
-					select[field] = true;
-				});
-			}
-		}
+        const extension = file.name.split('.').pop().toLowerCase();
+        if (extension !== 'pdf') {
+            setError('Please upload a PDF file.');
+            setPdfFile(null);
+            setFileName('');
+            return;
+        }
 
-		// Parse IDs
-		let ids = [];
-		if (params_ids) {
-			try {
-				const parsed = JSON.parse(params_ids);
+        setPdfFile(file);
+        setFileName(file.name);
+        const defaultName = file.name.replace(/\.pdf$/i, '').trim();
+        if (!plannerName.trim() || plannerName === lastAutoPlannerName) {
+            setPlannerName(defaultName);
+            setLastAutoPlannerName(defaultName);
+        }
+        await parsePdfFile(file);
+    };
 
-				if (Array.isArray(parsed)) {
-					ids = parsed.map(id => Number(id));
-				} else {
-					ids = [Number(parsed)];
-				}
-			} catch (err) {
-				return NextResponse.json(
-					{ error: 'Invalid IDs format. Must be a number or a JSON array of numbers' },
-					{ status: 400 }
-				);
-			}
-		}
+    const parsePdfFile = async (file) => {
+        setIsParsing(true);
+        setError(null);
 
-		const query = {
-			where: {
-				...(params_name && {
-					Name: {
-						contains: params_name
-					}
-				}),
-				...(ids.length > 0 && {
-					ID: {
-						in: ids
-					}
-				})
-			},
-			...(select && { select }),
-			...(orderBy && { orderBy }),
-		};
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdfjs = await import('pdfjs-dist');
+            pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
-		const totalCount = await prisma.UnitType.count({ where: query.where });
-		const unitTypes = await prisma.UnitType.findMany(query);
+            const loadingTask = pdfjs.getDocument({
+                data: new Uint8Array(arrayBuffer),
+                disableWorker: true,
+            });
+            const pdf = await loadingTask.promise;
 
-		if (unitTypes.length === 0) {
-			return NextResponse.json({
-				data: [],
-				pagination: {
-					total: totalCount,
-					page: 1,
-					limit: totalCount,
-					totalPages: 1
-				}
-			}, { status: 200 });
-		}
+            let text = '';
+            for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
+                const page = await pdf.getPage(pageIndex);
+                const content = await page.getTextContent();
+                const pageText = content.items.map((item) => item.str).join('\n');
+                text += `${pageText}\n\n`;
+            }
 
-		return new NextResponse(JSON.stringify({
-			data: unitTypes,
-			pagination: {
-				total: totalCount,
-				page: 1,
-				limit: totalCount,
-				totalPages: 1
-			}
-		}), {
-			status: 200,
-			headers: {
-				'Content-Type': 'application/json',
-				'Cache-Control': 'no-store',
-			},
-		});
-	} catch (error) {
-		console.error('Error:', error);
-		return NextResponse.json(
-			{ error: 'Failed to process the request', details: error.message },
-			{ status: 500 }
-		);
-	}
-}
-// ADD Unit Type
-export async function POST(req) {
-	try {
-		// Check for DEV override
-		const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+            setExtractedText(text);
+            // Normalise the raw text
+            let normalized = text.replace(/([A-Z]{2,4}\d{3})\n(\d{2})/gi, '$1$2');
+            normalized = normalized.replace(/([A-Z]{2,4})\n(\d{5})/gi, '$1$2');
+            normalized = normalized.replace(/([A-Z]{2,4})\s+(\d{5})/gi, '$1$2');
 
-		if (!isDevOverride) {
-			const authHeader = req.headers.get('Authorization');
-			const token_res = TokenValidation(authHeader);
+            const extractedUnits = extractUnitsFromText(normalized);
+            setUnits(extractedUnits);
 
-			if (!token_res.success) {
-				return NextResponse.json({ success: false, message: token_res.message }, { status: token_res.status });
-			}
-			// Require actor email for auditability
-			const sessionEmail = req.headers.get('x-session-email');
-			if (!sessionEmail) {
-				return NextResponse.json({ success: false, message: 'Missing authentication header x-session-email' }, { status: 401 });
-			}
-		}
-		const { Name, Colour } = await req.json();
+            if (extractedUnits.length > 0) {
+                await fetchMatchingUnits(extractedUnits);
+            } else {
+                setMatchedUnits([]);
+                setMissingCodes([]);
+            }
 
-		if (!Name) {
-			return NextResponse.json(
-				{ message: 'Name is required' },
-				{ status: 400 }
-			);
-		}
+            if (extractedUnits.length === 0) {
+                setMessage('PDF read successfully, but no unit rows were detected.');
+            }
+        } catch (parseError) {
+            console.error('PDF parse error', parseError);
+            const parseMessage = parseError?.message ? ` (${parseError.message})` : '';
+            setError(`Unable to read the PDF file. Please use a text-based PDF and try again.${parseMessage}`);
+        } finally {
+            setIsParsing(false);
+        }
+    };
 
-		const existingUnitType = await prisma.UnitType.findFirst({
-			where: {
-				Name: {
-					equals: Name
-				}
-			}
-		});
+    const extractUnitsFromText = (text) => {
+        const unitRegex = /((COS|SWE|ICT|TNE)\d{5})/g;
+        const matches = [...text.matchAll(unitRegex)];
+        const units = [];
 
-		if (existingUnitType) {
-			return NextResponse.json(
-				{ message: 'Unit type with this name already exists' },
-				{ status: 409 }
-			);
-		}
+        for (let i = 0; i < matches.length; i++) {
+            const current = matches[i];
+            const next = matches[i + 1];
 
-		//Check for existing colour
-		if (Colour) {
-			const colourExist = await prisma.UnitType.findFirst({
-				where: { Colour }
-			});
+            const code = current[1];
+            const start = current.index + code.length;
+            const end = next ? next.index : text.length;
 
-			if (colourExist) {
-				return NextResponse.json(
-					{ message: 'A unit with the same colour already exists' },
-					{ status: 409 }
-				);
-			}
-		}
+            let name = text.slice(start, end).trim();
 
-		const newUnitType = await prisma.UnitType.create({
-			data: {
-				Name,
-				Colour: Colour || '#000000'
-			}
-		});
+            // Cleaning rules
+            name = name
+                .replace(/Semester\s+\d/gi, '')
+                .replace(/Year\s+\w+/gi, '')
+                .replace(/Elective\s+\d/gi, '')
+                .replace(/Nil/gi, '')
+                .replace(/Co-?requisite:.*/gi, '')
+                .replace(/Pre-?requisites?.*/gi, '')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
 
-		// AUDIT CREATE
-		try {
-			const user = await SecureSessionManager.authenticateUser(req);
-			const actorEmail = user?.email || req.headers.get('x-session-email') || undefined;
-			await AuditLogger.logCreate({
-				userId: user?.id || null,
-				email: actorEmail,
-				module: 'unit_management',
-				entity: 'UnitType',
-				entityId: newUnitType.ID,
-				after: newUnitType
-			}, req);
-		} catch (e) {
-			console.warn('Audit CREATE UnitType failed:', e?.message);
-		}
+            if (!name || name.length < 3) continue;
 
-		return NextResponse.json(
-			{
-				message: 'Unit type created successfully',
-				unitType: {
-					id: newUnitType.ID,
-					name: newUnitType.Name,
-					colour: newUnitType.Colour
-				}
-			},
-			{ status: 201 }
-		);
-	} catch (error) {
-		console.error('Error:', error);
-		return NextResponse.json(
-			{ error: 'Failed to create unit type', details: error.message },
-			{ status: 500 }
-		);
-	}
-}
+            units.push({ code, name });
+        }
+        return units;
+    };
 
-// UPDATE Unit Type
-export async function PUT(req) {
-	try {
-		// Check for DEV override
-		const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+    const fetchMatchingUnits = async (extractedUnits) => {
+        const codes = Array.from(
+            new Set(extractedUnits.map((unit) => unit.code.trim().toUpperCase()).filter(Boolean))
+        );
 
-		if (!isDevOverride) {
-			const authHeader = req.headers.get('Authorization');
-			const token_res = TokenValidation(authHeader);
+        if (codes.length === 0) {
+            setMatchedUnits([]);
+            setMissingCodes([]);
+            return;
+        }
 
-			if (!token_res.success) {
-				return NextResponse.json({ success: false, message: token_res.message }, { status: token_res.status });
-			}
-			// Require actor email for auditability
-			const sessionEmail = req.headers.get('x-session-email');
-			if (!sessionEmail) {
-				return NextResponse.json({ success: false, message: 'Missing authentication header x-session-email' }, { status: 401 });
-			}
-		}
-		const { ID, Name, Colour } = await req.json();
+        setIsMatching(true);
+        try {
+            const result = await UnitDB.FetchUnits({
+                code: codes.join(','),
+                exact: true,
+                return: ['ID', 'UnitCode', 'Name', 'Availability', 'CreditPoints'],
+                order_by: [{ column: 'UnitCode', ascending: true }],
+            });
 
-		if (!ID) {
-			return NextResponse.json(
-				{ message: 'Unit type ID is required' },
-				{ status: 400 }
-			);
-		}
+            if (!result.success) {
+                setError(`Failed to fetch units: ${result.message || 'Unknown error'}`);
+                setMatchedUnits([]);
+                setMissingCodes(codes);
+                return;
+            }
 
-		// Check if unit type exists
-		const existingUnitType = await prisma.UnitType.findUnique({
-			where: { ID }
-		});
+            const matched = result.data || [];
+            setMatchedUnits(matched);
 
-		if (!existingUnitType) {
-			return NextResponse.json(
-				{ message: 'Unit type not found' },
-				{ status: 404 }
-			);
-		}
+            // Initialize selected unit types (use existing unitTypeId if available, else default to Elective = 1)
+            const initialTypes = {};
+            matched.forEach(unit => {
+                initialTypes[unit.id] = unit.unitTypeId || 1;
+            });
+            setSelectedUnitTypes(initialTypes);
 
-		// Check if name is being changed to something that already exists
-		if (Name && Name !== existingUnitType.Name) {
-			const nameExists = await prisma.UnitType.findFirst({
-				where: { Name }
-			});
+            // Compute missing codes correctly
+            const matchedCodesSet = new Set(matched.map(u => u.UnitCode?.toUpperCase()));
+            const missingCodesLocal = codes.filter(code => !matchedCodesSet.has(code));
+            setMissingCodes(missingCodesLocal);
 
-			if (nameExists) {
-				return NextResponse.json(
-					{ message: 'Another unit type with this name already exists' },
-					{ status: 409 }
-				);
-			}
-		}
+            if (missingCodesLocal.length === 0 && matched.length > 0) {
+                setMessage('All extracted units matched. Select a type for each unit and click Save.');
+            } else if (missingCodesLocal.length > 0) {
+                setMessage(`⚠️ Some units could not be matched: ${missingCodesLocal.join(', ')}`);
+            }
+        } catch (fetchError) {
+            console.error('Matching units fetch error', fetchError);
+            setMatchedUnits([]);
+            setMissingCodes(codes);
+            setError(`Failed to match units: ${fetchError?.message || 'Unknown fetch error'}`);
+        } finally {
+            setIsMatching(false);
+        }
+    };
 
-		if (Colour && Colour !== existingUnitType.Colour) {
-			const colourExist = await prisma.UnitType.findFirst({
-				where: {
-					Colour,
-					ID: { not: ID }
-				}
-			});
+    const handleTypeChange = (unitId, typeId) => {
+        setSelectedUnitTypes(prev => ({ ...prev, [unitId]: parseInt(typeId, 10) }));
+    };
 
-			if (colourExist) {
-				return NextResponse.json(
-					{ message: 'Another unit type with the same colour already exists' },
-					{ status: 409 }
-				);
-			}
-		}
+    const handleUploadToDatabase = async () => {
+        setMessage(null);
+        setError(null);
 
-		// Update unit type
-		const updatedUnitType = await prisma.UnitType.update({
-			where: { ID },
-			data: {
-				Name,
-				Colour
-			},
-			select: {
-				ID: true,
-				Name: true,
-				Colour: true
-			}
-		});
+        if (!plannerName.trim()) {
+            setError('Please enter a planner name.');
+            return;
+        }
 
-		// AUDIT UPDATE
-		try {
-			const user = await SecureSessionManager.authenticateUser(req);
-			const actorEmail = user?.email || req.headers.get('x-session-email') || undefined;
-			await AuditLogger.logUpdate({
-				userId: user?.id || null,
-				email: actorEmail,
-				module: 'unit_management',
-				entity: 'UnitType',
-				entityId: ID,
-				before: existingUnitType,
-				after: updatedUnitType
-			}, req);
-		} catch (e) {
-			console.warn('Audit UPDATE UnitType failed:', e?.message);
-		}
+        if (matchedUnits.length === 0) {
+            setError('No units to upload.');
+            return;
+        }
 
-		return NextResponse.json(
-			{
-				message: 'Unit type updated successfully',
-				unitType: {
-					id: updatedUnitType.ID,
-					name: updatedUnitType.Name,
-					colour: updatedUnitType.Colour
-				}
-			},
-			{ status: 200 }
-		);
-	} catch (error) {
-		console.error('Error:', error);
-		return NextResponse.json(
-			{ error: 'Failed to update unit type', details: error.message },
-			{ status: 500 }
-		);
-	}
-}
+        const unitsToSave = matchedUnits.map(unit => ({
+            unitId: unit.id,
+            unitTypeId: selectedUnitTypes[unit.id] || 1,
+        }));
 
-// DELETE Unit Type
-export async function DELETE(request) {
-	try {
-		// Check for DEV override
-		const isDevOverride = request.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+        setIsUploading(true);
 
-		if (!isDevOverride) {
-			const authHeader = request.headers.get('Authorization');
-			const token_res = TokenValidation(authHeader);
+        try {
+            const response = await SecureFrontendAuthHelper.authenticatedFetch('/api/study-planner', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: plannerName.trim(),
+                    units: unitsToSave,
+                }),
+            });
 
-			if (!token_res.success) {
-				return NextResponse.json({ success: false, message: token_res.message }, { status: token_res.status });
-			}
-			// Require actor email for auditability
-			const sessionEmail = request.headers.get('x-session-email');
-			if (!sessionEmail) {
-				return NextResponse.json({ success: false, message: 'Missing authentication header x-session-email' }, { status: 401 });
-			}
-		}
-		const { ID } = await request.json();
-		console.log('DELETE request received for unit type ID:', ID);
+            const responseText = await response.text();
+            let result = {};
+            if (responseText) {
+                try {
+                    result = JSON.parse(responseText);
+                } catch {
+                    throw new Error(responseText || 'Invalid JSON response');
+                }
+            }
 
-		if (!ID) {
-			console.log('No ID provided in request');
-			return NextResponse.json(
-				{ success: false, message: 'Unit type ID is required' },
-				{ status: 400 }
-			);
-		}
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || `Upload failed (${response.status})`);
+            }
 
-		// Prevent deletion of protected system unit types
-		const unitType = await prisma.UnitType.findUnique({ where: { ID } });
-		if (!unitType) {
-			return NextResponse.json(
-				{ success: false, message: 'Unit type not found' },
-				{ status: 404 }
-			);
-		}
-		const protectedNames = ['core', 'major', 'elective', 'mpu'];
-		if (protectedNames.includes((unitType.Name || '').toLowerCase())) {
-			return NextResponse.json(
-				{ success: false, message: `"${unitType.Name}" is a system unit type and cannot be deleted` },
-				{ status: 400 }
-			);
-		}
+            setMessage('Study planner saved successfully!');
+            // Reset form
+            setPdfFile(null);
+            setFileName('');
+            setUnits([]);
+            setMatchedUnits([]);
+            setSelectedUnitTypes({});
+            setMissingCodes([]);
+            setPlannerName('');
+            setExtractedText('');
+        } catch (err) {
+            console.error('Upload error', err);
+            const errorMsg = err.message || 'Unknown error during upload';
+            if (errorMsg.includes('already exists')) {
+                setError('A study planner with this name already exists. Please choose a different planner name.');
+            } else {
+                setError(`Failed to save study planner: ${errorMsg}`);
+            }
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
-		// First check if this unit type is being used anywhere
-		console.log('Checking if unit type is in use...');
-		const isUsedInPlanner = await prisma.UnitInSemesterStudyPlanner.findFirst({
-			where: { UnitTypeID: ID }
-		});
-		console.log('Is used in planner:', isUsedInPlanner);
+    return (
+        <div className="min-h-screen bg-gray-50 p-6">
+            <div className="max-w-5xl mx-auto bg-white rounded-xl shadow p-8">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+                    <div>
+                        <h1 className="text-3xl font-bold mb-2">Upload Study Planner</h1>
+                        <p className="text-sm text-gray-600">
+                            Upload a study planner PDF – assign a type (Core/Elective/Major) to each unit.
+                        </p>
+                    </div>
+                    <Link href="/view/dashboard" className="text-blue-600 hover:underline text-sm">
+                        Back to dashboard
+                    </Link>
+                </div>
 
-		const isUsedInAmendment = await prisma.StudentStudyPlannerAmmendments.findFirst({
-			where: { NewUnitTypeID: ID }
-		});
-		console.log('Is used in amendment:', isUsedInAmendment);
+                <label className="block mb-4">
+                    <span className="text-sm font-medium text-gray-700">Planner Name</span>
+                    <input
+                        type="text"
+                        value={plannerName}
+                        onChange={(e) => setPlannerName(e.target.value)}
+                        placeholder="Auto-filled from file name"
+                        disabled
+                        className="mt-2 block w-full rounded border border-gray-300 bg-gray-100 p-2 text-gray-500 cursor-not-allowed"
+                    />
+                </label>
 
-		const isUsed = isUsedInPlanner || isUsedInAmendment;
-		console.log('Is unit type in use:', isUsed);
+                <label className="block mb-4">
+                    <span className="text-sm font-medium text-gray-700">Planner PDF file</span>
+                    <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={handleFileChange}
+                        className="mt-2 block w-full rounded border border-gray-300 bg-white p-2"
+                    />
+                </label>
 
-		if (isUsed) {
-			return NextResponse.json(
-				{ success: false, message: 'This unit type is being used and cannot be deleted' },
-				{ status: 400 }
-			);
-		}
+                {fileName && <p className="mb-4 text-sm text-gray-700">Selected file: {fileName}</p>}
+                {isParsing && <p className="text-sm text-blue-600 mb-4">Reading PDF and extracting text...</p>}
+                {message && <p className="text-sm text-green-600 mb-4">{message}</p>}
+                {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
-		// Then delete the unit type
-		console.log('Attempting to delete unit type...');
-		const deletedUnitType = await prisma.UnitType.delete({
-			where: { ID },
-		});
-		console.log('Unit type deleted successfully:', deletedUnitType);
+                {isMatching && <p className="text-sm text-blue-600 mb-4">Looking up matching units in the database...</p>}
 
-		// AUDIT DELETE
-		try {
-			const user = await SecureSessionManager.authenticateUser(request);
-			const actorEmail = user?.email || request.headers.get('x-session-email') || undefined;
-			await AuditLogger.logDelete({
-				userId: user?.id || null,
-				email: actorEmail,
-				module: 'unit_management',
-				entity: 'UnitType',
-				entityId: ID,
-				before: unitType
-			}, request);
-		} catch (e) {
-			console.warn('Audit DELETE UnitType failed:', e?.message);
-		}
+                {matchedUnits.length > 0 && (
+                    <div className="mb-6 overflow-x-auto">
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                            <div>
+                                <h2 className="text-xl font-semibold">Matched database units</h2>
+                                <p className="text-sm text-gray-600">
+                                    Choose a type for each unit (Core/Elective/Major/MPU/WIL).
+                                </p>
+                            </div>
+                        </div>
+                        <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Code</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Name</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Credit points</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Type in this planner</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 bg-white">
+                                {matchedUnits.filter(unit => unit.availability === 'published').map((unit) => (
+                                    <tr key={unit.id}>
+                                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{unit.unit_code}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{unit.name}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{unit.credit_points ?? '-'}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">
+                                            <select
+                                                value={selectedUnitTypes[unit.id] || ''}
+                                                onChange={(e) => handleTypeChange(unit.id, e.target.value)}
+                                                className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                                            >
+                                                {unitTypeOptions.map(opt => (
+                                                    <option key={opt.id} value={opt.id}>{opt.name}</option>
+                                                ))}
+                                            </select>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {missingCodes.length > 0 && (
+                            <p className="mt-2 text-sm text-amber-600">
+                                ⚠️ Could not match: {missingCodes.join(', ')}
+                            </p>
+                        )}
+                        <p className="mt-3 text-sm text-gray-600">All matched units will be saved with their selected types.</p>
+                    </div>
+                )}
 
-		return NextResponse.json(
-			{ success: true, message: 'Unit type deleted successfully', unitType: deletedUnitType },
-			{ status: 200 }
-		);
-	} catch (error) {
-		console.error('Delete error:', error);
-		return NextResponse.json(
-			{ success: false, message: 'Failed to delete unit type', error: error.message },
-			{ status: 500 }
-		);
-	}
-}
+                <div className="flex gap-3">
+                    <button
+                        type="button"
+                        disabled={!pdfFile || isParsing || isUploading || !plannerName.trim() || matchedUnits.length === 0}
+                        onClick={handleUploadToDatabase}
+                        className="inline-flex items-center justify-center rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {isUploading ? 'Saving...' : 'Save selected units to study planner'}
+                    </button>
+                </div>
+
+                {extractedText && (
+                    <div className="mt-6">
+                        <h2 className="text-lg font-semibold mb-2">Raw extracted text</h2>
+                        <textarea
+                            readOnly
+                            value={extractedText}
+                            rows={10}
+                            className="w-full rounded border border-gray-300 bg-gray-100 p-3 text-sm text-gray-800"
+                        />
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default UploadPlannerPage;

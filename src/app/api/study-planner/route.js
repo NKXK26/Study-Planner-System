@@ -43,24 +43,15 @@ export async function GET(req) {
         );
     }
 
+    // Use the explicit join table StudyPlannerUnit
     const studyPlanners = await prisma.studyPlanner.findMany({
         where: id ? { id } : {},
         orderBy: { createdAt: 'desc' },
         include: {
-            units: {
-                select: {
-                    ID: true,
-                    UnitCode: true,
-                    Name: true,
-                    CreditPoints: true,
-                    unitTypeId: true,
-
-                    unitType: {
-                        select: {
-                            ID: true,
-                            Name: true,
-                        },
-                    },
+            studyPlannerUnits: {
+                include: {
+                    unit: true,
+                    unitType: true,
                 },
             },
         },
@@ -73,10 +64,26 @@ export async function GET(req) {
         );
     }
 
+    // Transform to the old `units` structure for frontend compatibility
+    const transformed = studyPlanners.map(planner => ({
+        id: planner.id,
+        name: planner.name,
+        createdAt: planner.createdAt,
+        units: planner.studyPlannerUnits.map(j => ({
+            ID: j.unit.ID,
+            UnitCode: j.unit.UnitCode,
+            Name: j.unit.Name,
+            CreditPoints: j.unit.CreditPoints,
+            Availability: j.unit.Availability,
+            unitTypeId: j.unitTypeId,
+            unitType: j.unitType,
+        })),
+    }));
+
     return NextResponse.json({
         success: true,
         count: studyPlanners.length,
-        data: studyPlanners,
+        data: transformed,
     });
 }
 
@@ -95,12 +102,8 @@ export async function POST(req) {
         }
 
         const name = typeof body.name === 'string' ? body.name.trim() : '';
-        const unitIds = Array.isArray(body.unitIds)
-            ? body.unitIds.map((id) => parseInt(id, 10)).filter((id) => Number.isInteger(id) && id > 0)
-            : [];
-        const unitCodes = Array.isArray(body.unitCodes)
-            ? body.unitCodes.map((code) => String(code).trim().toUpperCase()).filter(Boolean)
-            : [];
+        // New payload: { name, units: [{ unitId, unitTypeId }] }
+        const units = Array.isArray(body.units) ? body.units : [];
 
         if (!name) {
             return NextResponse.json({ success: false, message: 'Study planner name is required' }, { status: 400 });
@@ -117,60 +120,65 @@ export async function POST(req) {
             }, { status: 400 });
         }
 
-        if (unitIds.length === 0 && unitCodes.length === 0) {
-            return NextResponse.json({ success: false, message: 'At least one unitId or unitCode is required' }, { status: 400 });
-        }
-
-        const uniqueUnitIds = Array.from(new Set(unitIds));
-        const uniqueUnitCodes = Array.from(new Set(unitCodes));
-
-        let units = [];
-        if (uniqueUnitIds.length > 0) {
-            units = await prisma.Unit.findMany({
-                where: { ID: { in: uniqueUnitIds } },
-            });
-        }
-
-        if (units.length === 0 && uniqueUnitCodes.length > 0) {
-            units = await prisma.Unit.findMany({
-                where: { UnitCode: { in: uniqueUnitCodes } },
-            });
-        }
-
         if (units.length === 0) {
+            return NextResponse.json({ success: false, message: 'At least one unit is required' }, { status: 400 });
+        }
+
+        // Validate that all unitIds exist
+        const unitIds = units.map(u => u.unitId).filter(id => Number.isInteger(id) && id > 0);
+        const validUnits = await prisma.unit.findMany({
+            where: { ID: { in: unitIds } },
+            select: { ID: true },
+        });
+        const validUnitIds = new Set(validUnits.map(u => u.ID));
+        const missingUnitIds = unitIds.filter(id => !validUnitIds.has(id));
+        if (missingUnitIds.length > 0) {
             return NextResponse.json(
-                { success: false, message: 'No matching units found for the provided IDs or codes' },
+                { success: false, message: `Invalid unit IDs: ${missingUnitIds.join(', ')}` },
                 { status: 400 }
             );
         }
 
-        const validUnits = Array.from(
-            new Map(units.map((unit) => [unit.ID, unit])).values()
-        );
-        const missingCodes = uniqueUnitCodes.filter(
-            (code) => !units.some((unit) => unit.UnitCode.toUpperCase() === code)
-        );
-
-        console.log('📊 Creating study planner:', { name, unitCount: validUnits.length });
-
+        // Create the planner and its join records
         const studyPlannerWithUnits = await prisma.studyPlanner.create({
             data: {
                 name,
-                units: {
-                    connect: validUnits.map((unit) => ({
-                        ID: unit.ID,
+                studyPlannerUnits: {
+                    create: units.map(({ unitId, unitTypeId }) => ({
+                        unitId,
+                        unitTypeId: unitTypeId || null, // default to null if not provided
                     })),
                 },
             },
             include: {
-                units: true,
+                studyPlannerUnits: {
+                    include: {
+                        unit: true,
+                        unitType: true,
+                    },
+                },
             },
         });
 
+        // Transform the response to the old format for consistency
+        const responseData = {
+            id: studyPlannerWithUnits.id,
+            name: studyPlannerWithUnits.name,
+            createdAt: studyPlannerWithUnits.createdAt,
+            units: studyPlannerWithUnits.studyPlannerUnits.map(j => ({
+                ID: j.unit.ID,
+                UnitCode: j.unit.UnitCode,
+                Name: j.unit.Name,
+                CreditPoints: j.unit.CreditPoints,
+                Availability: j.unit.Availability,
+                unitTypeId: j.unitTypeId,
+                unitType: j.unitType,
+            })),
+        };
+
         return NextResponse.json({
             success: true,
-            data: studyPlannerWithUnits,
-            missingCodes,
+            data: responseData,
         }, { status: 201 });
     } catch (error) {
         console.error('❌ Study planner POST error:', error.message || error);

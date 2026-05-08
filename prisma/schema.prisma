@@ -117,10 +117,11 @@ model Unit {
   Availability String
   ID           Int    @id @unique @default(autoincrement())
 
-  // New fields for unit type classification
   unitTypeId Int?      @map("unit_type_id")
   unitType   UnitType? @relation(fields: [unitTypeId], references: [ID])
 
+  // Relations to join table
+  studyPlannerUnits StudyPlannerUnit[]
 
   StudentStudyPlannerAmmendments_StudentStudyPlannerAmmendments_NewUnitIDToUnit StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitIDToUnit")
   StudentStudyPlannerAmmendments_StudentStudyPlannerAmmendments_UnitIDToUnit    StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_UnitIDToUnit")
@@ -129,15 +130,16 @@ model Unit {
   UnitRequisiteRelationship_UnitRequisiteRelationship_RequisiteUnitIDToUnit     UnitRequisiteRelationship[]      @relation("UnitRequisiteRelationship_RequisiteUnitIDToUnit")
   UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit              UnitRequisiteRelationship[]      @relation("UnitRequisiteRelationship_UnitIDToUnit")
   UnitTermOffered                                                               UnitTermOffered[]
-  studyPlanners                                                                 StudyPlanner[]
 }
 
 model UnitType {
-  ID                                         Int                              @id @default(autoincrement())
-  Name                                       String
-  Colour                                     String?
+  ID   Int    @id @default(autoincrement())
+  Name String
+  Colour String?
 
-  units                                      Unit[] 
+  units Unit[]                     // global unit type assignment (optional, can be removed later)
+  studyPlannerUnits StudyPlannerUnit[]   // <-- relation via join table
+
   StudentStudyPlannerAmmendments_NewUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitType")
   StudentStudyPlannerAmmendments_OldUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_OldUnitType")
   UnitInSemesterStudyPlanner                 UnitInSemesterStudyPlanner[]
@@ -145,6 +147,28 @@ model UnitType {
   @@unique([ID, Name])
 }
 
+model StudyPlanner {
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now())
+
+  // Explicit relation to join table
+  studyPlannerUnits StudyPlannerUnit[]
+}
+
+// New join model
+model StudyPlannerUnit {
+  id             Int      @id @default(autoincrement())
+  studyPlannerId Int
+  unitId         Int
+  unitTypeId     Int?      // the role of this unit inside this specific planner
+
+  studyPlanner StudyPlanner @relation(fields: [studyPlannerId], references: [id], onDelete: Cascade)
+  unit         Unit         @relation(fields: [unitId], references: [ID], onDelete: Cascade)
+  unitType     UnitType?    @relation(fields: [unitTypeId], references: [ID])
+
+  @@unique([studyPlannerId, unitId])
+}
 model UnitHistory {
   ID        Int     @id @default(autoincrement())
   StudentID Int // Changed from Decimal to Int
@@ -302,10 +326,3 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-model StudyPlanner {
-  id        Int      @id @default(autoincrement())
-  name      String
-  createdAt DateTime @default(now())
-
-  units Unit[]
-}
