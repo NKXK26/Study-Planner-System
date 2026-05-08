@@ -52,5 +52,3 @@ extraResources:
     to: app/public
   - from: prisma/app.db
     to: app/prisma/app.db
-  - from: build-resources/ollama-installer
-    to: ollama-installer
