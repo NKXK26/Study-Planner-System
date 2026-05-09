@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 const TYPE_ID_TO_COLOR = {
@@ -165,7 +165,7 @@ export default function StudyPlannerEditPage() {
                     </thead>
                     <tbody className="divide-y">
                         {groupedUnits.map(({ typeId, units: group }) => (
-                            <>
+                            <React.Fragment key={`group-${typeId}`}>
                                 {/* Section header row */}
                                 <tr key={`header-${typeId}`}>
                                     <td
@@ -208,7 +208,7 @@ export default function StudyPlannerEditPage() {
                                         </td>
                                     </tr>
                                 ))}
-                            </>
+                            </React.Fragment>
                         ))}
                     </tbody>
                 </table>
