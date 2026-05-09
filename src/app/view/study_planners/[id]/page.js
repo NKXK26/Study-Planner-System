@@ -28,9 +28,34 @@ export default function StudyPlannerDetailPage() {
   const [unitSearch, setUnitSearch] = useState('');
   const [addingUnit, setAddingUnit] = useState(false);
   const [unitLoading, setUnitLoading] = useState(false);
+  const [unitTypes, setUnitTypes]   = useState([]); // for type dropdown
 
   // Remove unit confirm
   const [removeUnitId, setRemoveUnitId] = useState(null);
+
+  // Fetch unit types
+  useEffect(() => {
+    async function fetchUnitTypes() {
+      try {
+        const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/unit_type');
+        const json = await res.json();
+        if (json.success && json.data) {
+          setUnitTypes(json.data);
+        } else {
+          // fallback
+          setUnitTypes([
+            { id: 1, name: 'Elective' },
+            { id: 2, name: 'Core' },
+            { id: 3, name: 'Major' },
+            { id: 17, name: 'WIL' },
+          ]);
+        }
+      } catch (err) {
+        console.error('Failed to load unit types', err);
+      }
+    }
+    fetchUnitTypes();
+  }, []);
 
   const fetchPlanner = useCallback(async () => {
     setLoading(true);
@@ -46,7 +71,7 @@ export default function StudyPlannerDetailPage() {
       } else {
         setError(json.message);
       }
-    } catch {
+    } catch (err) {
       setError('Failed to load study planner.');
     } finally {
       setLoading(false);
@@ -64,7 +89,7 @@ export default function StudyPlannerDetailPage() {
       );
       const json = await res.json();
       if (json.success) setAllUnits(json.data || json.units || []);
-    } catch {
+    } catch (err) {
       console.error('Failed to load units');
     } finally {
       setUnitLoading(false);
@@ -91,6 +116,8 @@ export default function StudyPlannerDetailPage() {
         setEditingName(false);
         setSaveMsg('Saved!');
         setTimeout(() => setSaveMsg(''), 2000);
+      } else {
+        setSaveMsg('Failed to save.');
       }
     } catch {
       setSaveMsg('Failed to save.');
@@ -99,57 +126,72 @@ export default function StudyPlannerDetailPage() {
     }
   }
 
-  // Add unit to planner
-  async function addUnit(unit) {
-    if (!planner) return;
-    const currentIds = planner.units.map(u => u.ID);
-    if (currentIds.includes(unit.ID)) return; // already in planner
-    const newIds = [...currentIds, unit.ID];
+  // Helper: convert current planner units to payload format { unitId, unitTypeId }
+  function getUnitsPayload() {
+    if (!planner) return [];
+    return planner.units.map(u => ({
+      unitId: u.ID,
+      unitTypeId: u.unitTypeId || 1, // default Elective
+    }));
+  }
 
+  // Update entire planner units on the server
+  async function updatePlannerUnits(unitsPayload) {
     try {
-      const res  = await SecureFrontendAuthHelper.authenticatedFetch(
+      const res = await SecureFrontendAuthHelper.authenticatedFetch(
         `${process.env.NEXT_PUBLIC_SERVER_URL}/api/study_planners/${id}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ unitIds: newIds }),
+          body: JSON.stringify({ units: unitsPayload }),
         }
       );
       const json = await res.json();
       if (json.success) {
-        setPlanner(prev => ({ ...prev, units: json.data.units }));
+        setPlanner(json.data);
+        return true;
+      } else {
+        alert(json.message || 'Failed to update units');
+        return false;
       }
-    } catch {
-      alert('Failed to add unit.');
+    } catch (err) {
+      alert('Network error while updating units');
+      return false;
     }
+  }
+
+  // Add unit to planner (with default type = Elective = 1)
+  async function addUnit(unit) {
+    if (!planner) return;
+    const currentIds = planner.units.map(u => u.ID);
+    if (currentIds.includes(unit.ID)) return;
+
+    const newUnitsPayload = [
+      ...getUnitsPayload(),
+      { unitId: unit.ID, unitTypeId: 1 }, // default Elective
+    ];
+    await updatePlannerUnits(newUnitsPayload);
   }
 
   // Remove unit from planner
   async function removeUnit(unitId) {
     if (!planner) return;
-    const newIds = planner.units.map(u => u.ID).filter(uid => uid !== unitId);
-
-    try {
-      const res  = await SecureFrontendAuthHelper.authenticatedFetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/study_planners/${id}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ unitIds: newIds }),
-        }
-      );
-      const json = await res.json();
-      if (json.success) {
-        setPlanner(prev => ({ ...prev, units: json.data.units }));
-        setRemoveUnitId(null);
-      }
-    } catch {
-      alert('Failed to remove unit.');
-    }
+    const newUnitsPayload = getUnitsPayload().filter(u => u.unitId !== unitId);
+    const success = await updatePlannerUnits(newUnitsPayload);
+    if (success) setRemoveUnitId(null);
   }
 
-  // Filtered units for add panel (exclude already added)
-  const existingIds  = new Set((planner?.units || []).map(u => u.ID));
+  // Change type of a unit
+  async function handleTypeChange(unitId, newTypeId) {
+    if (!planner) return;
+    const newUnitsPayload = getUnitsPayload().map(u =>
+      u.unitId === unitId ? { ...u, unitTypeId: parseInt(newTypeId, 10) } : u
+    );
+    await updatePlannerUnits(newUnitsPayload);
+  }
+
+  // Map existing IDs for add panel
+  const existingIds = new Set((planner?.units || []).map(u => u.ID));
   const filteredUnits = allUnits.filter(u =>
     !existingIds.has(u.ID) && (
       u.UnitCode?.toLowerCase().includes(unitSearch.toLowerCase()) ||
@@ -157,7 +199,7 @@ export default function StudyPlannerDetailPage() {
     )
   );
 
-  // ── Loading ──────────────────────────────────────────────────────────────
+  // Loading / error states
   if (loading) return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/20 flex items-center justify-center">
       <div className="text-center">
@@ -179,7 +221,7 @@ export default function StudyPlannerDetailPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/20">
 
-      {/* ── Remove unit confirm modal ── */}
+      {/* Remove unit confirm modal */}
       {removeUnitId && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
@@ -206,7 +248,7 @@ export default function StudyPlannerDetailPage() {
         </div>
       )}
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -274,7 +316,7 @@ export default function StudyPlannerDetailPage() {
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
 
-        {/* ── Add unit panel ── */}
+        {/* Add unit panel */}
         {addingUnit && (
           <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-5">
             <h2 className="text-sm font-bold text-gray-700 mb-3">Add Units to Planner</h2>
@@ -319,7 +361,7 @@ export default function StudyPlannerDetailPage() {
           </div>
         )}
 
-        {/* ── Units table ── */}
+        {/* Units table with type dropdown */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-bold text-gray-700">Units in This Planner</h2>
@@ -335,54 +377,68 @@ export default function StudyPlannerDetailPage() {
               <p className="text-xs mt-1">Click "+ Add Unit" to get started</p>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Unit Code</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Credits</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Availability</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {planner.units.map(u => (
-                  <tr key={u.ID} className="hover:bg-gray-50/60 transition-colors group">
-                    <td className="px-5 py-3.5 font-mono text-xs font-bold text-blue-700">{u.UnitCode}</td>
-                    <td className="px-5 py-3.5 text-gray-700">{u.Name}</td>
-                    <td className="px-5 py-3.5">
-                      {u.CreditPoints != null ? (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600">
-                          {u.CreditPoints} cr
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 text-xs text-gray-500">{u.Availability || '—'}</td>
-                    <td className="px-5 py-3.5">
-                      <button
-                        onClick={() => setRemoveUnitId(u.ID)}
-                        className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg text-xs font-semibold transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        Remove
-                      </button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Unit Code</th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Credits</th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Availability</th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-gray-50 border-t border-gray-100">
-                <tr>
-                  <td colSpan={2} className="px-5 py-3 text-xs font-semibold text-gray-500">Total</td>
-                  <td className="px-5 py-3">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
-                      {planner.units.reduce((sum, u) => sum + (u.CreditPoints || 0), 0)} cr
-                    </span>
-                  </td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {planner.units.map(u => (
+                    <tr key={u.ID} className="hover:bg-gray-50/60 transition-colors group">
+                      <td className="px-5 py-3.5 font-mono text-xs font-bold text-blue-700">{u.UnitCode}</td>
+                      <td className="px-5 py-3.5 text-gray-700">{u.Name}</td>
+                      <td className="px-5 py-3.5">
+                        {u.CreditPoints != null ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600">
+                            {u.CreditPoints} cr
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-gray-500">{u.Availability || '—'}</td>
+                      <td className="px-5 py-3.5">
+                        <select
+                          value={u.unitTypeId || 1}
+                          onChange={(e) => handleTypeChange(u.ID, e.target.value)}
+                          className="border border-gray-300 rounded-md px-2 py-1 text-xs bg-white focus:border-blue-400"
+                        >
+                          {unitTypes.map(type => (
+                            <option key={type.id} value={type.id}>{type.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <button
+                          onClick={() => setRemoveUnitId(u.ID)}
+                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg text-xs font-semibold transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 border-t border-gray-100">
+                  <tr>
+                    <td colSpan={2} className="px-5 py-3 text-xs font-semibold text-gray-500">Total</td>
+                    <td className="px-5 py-3">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
+                        {planner.units.reduce((sum, u) => sum + (u.CreditPoints || 0), 0)} cr
+                      </span>
+                    </td>
+                    <td colSpan={3} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           )}
         </div>
       </div>

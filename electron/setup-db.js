@@ -1,12 +1,15 @@
 const path = require('path')
 const fs = require('fs')
 
+const SCHEMA_VERSION = 2 // ← bump this every time you change your schema
+
 async function runDbSetup() {
   const { app } = require('electron')
 
   const isProd = app.isPackaged
   const userData = app.getPath('userData')
   const dbPath = path.join(userData, 'planner.db')
+  const versionPath = path.join(userData, 'db_version.txt')
 
   const sourceDb = isProd
     ? path.join(process.resourcesPath, 'app', 'prisma', 'app.db')
@@ -17,13 +20,31 @@ async function runDbSetup() {
   console.log('dbPath:', dbPath)
   console.log('dbPath exists:', fs.existsSync(dbPath))
 
-  if (!fs.existsSync(dbPath)) {
-    console.log('First launch — copying bundled database...')
-    fs.mkdirSync(userData, { recursive: true })
+  fs.mkdirSync(userData, { recursive: true })
+
+  const currentVersion = fs.existsSync(versionPath)
+    ? parseInt(fs.readFileSync(versionPath, 'utf8').trim())
+    : 0
+
+  const dbMissing = !fs.existsSync(dbPath)
+  const schemaOutdated = currentVersion < SCHEMA_VERSION
+
+  if (dbMissing || schemaOutdated) {
+    if (dbMissing) {
+      console.log('First launch — copying bundled database...')
+    } else {
+      console.log(`Schema updated (v${currentVersion} → v${SCHEMA_VERSION}) — replacing database...`)
+      // Optional: back up the old DB before replacing
+      const backupPath = path.join(userData, `planner.backup.v${currentVersion}.db`)
+      fs.copyFileSync(dbPath, backupPath)
+      console.log('Old DB backed up to:', backupPath)
+    }
+
     fs.copyFileSync(sourceDb, dbPath)
+    fs.writeFileSync(versionPath, String(SCHEMA_VERSION))
     console.log('Done.')
   } else {
-    console.log('Database already exists, skipping copy.')
+    console.log(`Database up to date (v${SCHEMA_VERSION}), skipping copy.`)
   }
 }
 

@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
 import UnitDB from '@app/class/Unit/UnitDB';
@@ -48,6 +48,17 @@ const UploadPlannerPage = () => {
         return (str || '')
             .replace(/[\s\u00A0\u2000-\u200F\u2028-\u202F]+/g, '')
             .toUpperCase();
+    };
+
+    // Helper to get background color for a unit type ID
+    const getTypeColor = (typeId) => {
+        switch (typeId) {
+            case 2: return '#c5d9f0'; // Core (light blue)
+            case 3: return '#fce9d9'; // Major (light orange)
+            case 1: return '#d5e2bb'; // Elective (light green)
+            case 17: return '#b1a0c6'; // WIL (light purple)
+            default: return '#ffffff';
+        }
     };
 
     useEffect(() => {
@@ -335,7 +346,26 @@ const UploadPlannerPage = () => {
     const handleTypeChange = (unitId, typeId) => {
         setSelectedUnitTypes(prev => ({ ...prev, [unitId]: parseInt(typeId, 10) }));
     };
+    // Sort units by type priority: Core (2) → Major (3) → Elective (1) → WIL (17) → others, then by unit code
+    const sortedMatchedUnits = useMemo(() => {
+        const getPriority = (typeId) => {
+            switch (typeId) {
+                case 2: return 1;   // Core first
+                case 3: return 2;   // Major second
+                case 1: return 3;   // Elective third
+                case 17: return 4;  // WIL fourth
+                default: return 999;
+            }
+        };
 
+        return [...matchedUnits].sort((a, b) => {
+            const priorityA = getPriority(selectedUnitTypes[a.id] || 1);
+            const priorityB = getPriority(selectedUnitTypes[b.id] || 1);
+            if (priorityA !== priorityB) return priorityA - priorityB;
+            // If same type, sort by unit code alphabetically
+            return (a.unit_code || '').localeCompare(b.unit_code || '');
+        });
+    }, [matchedUnits, selectedUnitTypes]);
     const handleUploadToDatabase = async () => {
         setMessage(null);
         setError(null);
@@ -464,9 +494,13 @@ const UploadPlannerPage = () => {
                                     <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Type in this planner</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-200 bg-white">
-                                {matchedUnits.filter(unit => unit.availability === 'published').map((unit) => (
-                                    <tr key={unit.id}>
+                            <tbody className="divide-y divide-gray-200">
+                                {sortedMatchedUnits.filter(unit => unit.availability === 'published').map((unit) => (
+                                    <tr
+                                        key={unit.id}
+                                        style={{ backgroundColor: getTypeColor(selectedUnitTypes[unit.id]) }}
+                                        className="transition-colors"
+                                    >
                                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{unit.unit_code}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700">{unit.name}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700">{unit.credit_points ?? '-'}</td>
@@ -474,7 +508,7 @@ const UploadPlannerPage = () => {
                                             <select
                                                 value={selectedUnitTypes[unit.id] || ''}
                                                 onChange={(e) => handleTypeChange(unit.id, e.target.value)}
-                                                className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                                                className="border border-gray-300 rounded-md px-2 py-1 text-sm bg-white"
                                             >
                                                 {unitTypeOptions.map(opt => (
                                                     <option key={opt.id} value={opt.id}>{opt.name}</option>
@@ -485,7 +519,13 @@ const UploadPlannerPage = () => {
                                 ))}
                             </tbody>
                         </table>
-                        <p className="mt-3 text-sm text-gray-600">All matched units will be saved to the study planner with their selected types.</p>
+                        <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: '#c5d9f0' }}></span> Core</span>
+                            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: '#fce9d9' }}></span> Major</span>
+                            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: '#d5e2bb' }}></span> Elective</span>
+                            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: '#b1a0c6' }}></span> WIL</span>
+                        </div>
+                        <p className="mt-2 text-sm text-gray-600">All matched units will be saved to the study planner with their selected types.</p>
                     </div>
                 )}
 

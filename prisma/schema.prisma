@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "windows"] // ✅ Use "windows" instead
+  binaryTargets = ["native", "windows"]
 }
 
 datasource db {
@@ -25,14 +25,14 @@ model CourseIntake {
   Status             String?
   TermID             Int?
   MajorID            Int?
-  Major              Major?               @relation(fields: [MajorID], references: [ID], onDelete: Cascade)
   Term               Term?                @relation(fields: [TermID], references: [ID], onDelete: Cascade)
+  Major              Major?               @relation(fields: [MajorID], references: [ID], onDelete: Cascade)
   MasterStudyPlanner MasterStudyPlanner[]
   Student            Student[]
 }
 
 model Major {
-  ID           Int            @id @default(autoincrement()) // Removed @unique (redundant)
+  ID           Int            @id @default(autoincrement())
   CourseID     Int
   CourseCode   String
   Name         String?
@@ -41,7 +41,7 @@ model Major {
   Course       Course         @relation(fields: [CourseID, CourseCode], references: [ID, Code], onDelete: SetDefault)
   Student      Student[]
 
-  @@unique([ID, CourseID, CourseCode]) // Changed from @@id to @@unique
+  @@unique([ID, CourseID, CourseCode])
 }
 
 model MasterStudyPlanner {
@@ -63,7 +63,7 @@ model SemesterInStudyPlannerYear {
 }
 
 model Student {
-  StudentID                      Int                              @id @unique // Changed from Decimal to Int
+  StudentID                      Int                              @id @unique @default(autoincrement())
   IntakeID                       Int
   FirstName                      String?
   Status                         String?
@@ -71,18 +71,18 @@ model Student {
   MajorID                        Int
   CreditCompleted                Float?
   MPUCreditCompleted             Float?                           @default(0)
-  Course                         Course                           @relation(fields: [CourseID], references: [ID], onDelete: SetDefault)
-  CourseIntake                   CourseIntake                     @relation(fields: [IntakeID], references: [ID], onDelete: NoAction, onUpdate: NoAction)
   Major                          Major                            @relation(fields: [MajorID], references: [ID], onDelete: SetDefault)
+  CourseIntake                   CourseIntake                     @relation(fields: [IntakeID], references: [ID], onDelete: NoAction, onUpdate: NoAction)
+  Course                         Course                           @relation(fields: [CourseID], references: [ID], onDelete: SetDefault)
   StudentStudyPlannerAmmendments StudentStudyPlannerAmmendments[]
   UnitHistory                    UnitHistory[]
 }
 
 model StudentStudyPlannerAmmendments {
   ID                                                  Int                         @id @default(autoincrement())
-  StudentID                                           Int // Changed from Decimal to Int
+  StudentID                                           Int
   Action                                              String
-  TimeofAction                                        DateTime?                   @default(now()) // Removed PostgreSQL-specific
+  TimeofAction                                        DateTime?                   @default(now())
   NewUnitTypeID                                       Int?
   Year                                                Int?
   SemIndex                                            Int?
@@ -91,12 +91,12 @@ model StudentStudyPlannerAmmendments {
   UnitID                                              Int?
   NewUnitID                                           Int?
   OldUnitTypeID                                       Int?
-  Unit_StudentStudyPlannerAmmendments_NewUnitIDToUnit Unit?                       @relation("StudentStudyPlannerAmmendments_NewUnitIDToUnit", fields: [NewUnitID], references: [ID], onDelete: Cascade)
-  UnitType_NewUnitType                                UnitType?                   @relation("StudentStudyPlannerAmmendments_NewUnitType", fields: [NewUnitTypeID], references: [ID], onDelete: SetDefault)
-  UnitType_OldUnitType                                UnitType?                   @relation("StudentStudyPlannerAmmendments_OldUnitType", fields: [OldUnitTypeID], references: [ID], onDelete: SetDefault)
-  SemesterInStudyPlannerYear                          SemesterInStudyPlannerYear? @relation(fields: [SemID], references: [ID], onDelete: NoAction, onUpdate: NoAction)
-  Student                                             Student                     @relation(fields: [StudentID], references: [StudentID], onDelete: Cascade)
   Unit_StudentStudyPlannerAmmendments_UnitIDToUnit    Unit?                       @relation("StudentStudyPlannerAmmendments_UnitIDToUnit", fields: [UnitID], references: [ID], onDelete: Cascade)
+  Student                                             Student                     @relation(fields: [StudentID], references: [StudentID], onDelete: Cascade)
+  SemesterInStudyPlannerYear                          SemesterInStudyPlannerYear? @relation(fields: [SemID], references: [ID], onDelete: NoAction, onUpdate: NoAction)
+  UnitType_OldUnitType                                UnitType?                   @relation("StudentStudyPlannerAmmendments_OldUnitType", fields: [OldUnitTypeID], references: [ID], onDelete: SetDefault)
+  UnitType_NewUnitType                                UnitType?                   @relation("StudentStudyPlannerAmmendments_NewUnitType", fields: [NewUnitTypeID], references: [ID], onDelete: SetDefault)
+  Unit_StudentStudyPlannerAmmendments_NewUnitIDToUnit Unit?                       @relation("StudentStudyPlannerAmmendments_NewUnitIDToUnit", fields: [NewUnitID], references: [ID], onDelete: Cascade)
 }
 
 model Term {
@@ -111,74 +111,65 @@ model Term {
 }
 
 model Unit {
-  UnitCode     String
-  Name         String
-  CreditPoints Float?
-  Availability String
-  ID           Int    @id @unique @default(autoincrement())
-
-  unitTypeId Int?      @map("unit_type_id")
-  unitType   UnitType? @relation(fields: [unitTypeId], references: [ID])
-
-  // Relations to join table
-  studyPlannerUnits StudyPlannerUnit[]
-
-  StudentStudyPlannerAmmendments_StudentStudyPlannerAmmendments_NewUnitIDToUnit StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitIDToUnit")
+  UnitCode                                                                      String
+  Name                                                                          String
+  CreditPoints                                                                  Float?
+  Availability                                                                  String
+  ID                                                                            Int                              @id @unique @default(autoincrement())
+  unitTypeId                                                                    Int?                             @map("unit_type_id")
   StudentStudyPlannerAmmendments_StudentStudyPlannerAmmendments_UnitIDToUnit    StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_UnitIDToUnit")
+  StudentStudyPlannerAmmendments_StudentStudyPlannerAmmendments_NewUnitIDToUnit StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitIDToUnit")
+  studyPlannerUnits                                                             StudyPlannerUnit[]
+  unitType                                                                      UnitType?                        @relation(fields: [unitTypeId], references: [ID])
   UnitHistory                                                                   UnitHistory[]
   UnitInSemesterStudyPlanner                                                    UnitInSemesterStudyPlanner[]
-  UnitRequisiteRelationship_UnitRequisiteRelationship_RequisiteUnitIDToUnit     UnitRequisiteRelationship[]      @relation("UnitRequisiteRelationship_RequisiteUnitIDToUnit")
   UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit              UnitRequisiteRelationship[]      @relation("UnitRequisiteRelationship_UnitIDToUnit")
+  UnitRequisiteRelationship_UnitRequisiteRelationship_RequisiteUnitIDToUnit     UnitRequisiteRelationship[]      @relation("UnitRequisiteRelationship_RequisiteUnitIDToUnit")
   UnitTermOffered                                                               UnitTermOffered[]
 }
 
 model UnitType {
-  ID   Int    @id @default(autoincrement())
-  Name String
-  Colour String?
-
-  units Unit[]                     // global unit type assignment (optional, can be removed later)
-  studyPlannerUnits StudyPlannerUnit[]   // <-- relation via join table
-
-  StudentStudyPlannerAmmendments_NewUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitType")
+  ID                                         Int                              @id @default(autoincrement())
+  Name                                       String
+  Colour                                     String?
   StudentStudyPlannerAmmendments_OldUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_OldUnitType")
+  StudentStudyPlannerAmmendments_NewUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitType")
+  studyPlannerUnits                          StudyPlannerUnit[]
+  units                                      Unit[]
   UnitInSemesterStudyPlanner                 UnitInSemesterStudyPlanner[]
 
   @@unique([ID, Name])
 }
 
 model StudyPlanner {
-  id        Int      @id @default(autoincrement())
-  name      String
-  createdAt DateTime @default(now())
-
-  // Explicit relation to join table
+  id                Int                @id @default(autoincrement())
+  name              String
+  createdAt         DateTime           @default(now())
   studyPlannerUnits StudyPlannerUnit[]
 }
 
-// New join model
 model StudyPlannerUnit {
-  id             Int      @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   studyPlannerId Int
   unitId         Int
-  unitTypeId     Int?      // the role of this unit inside this specific planner
-
-  studyPlanner StudyPlanner @relation(fields: [studyPlannerId], references: [id], onDelete: Cascade)
-  unit         Unit         @relation(fields: [unitId], references: [ID], onDelete: Cascade)
-  unitType     UnitType?    @relation(fields: [unitTypeId], references: [ID])
+  unitTypeId     Int?
+  unitType       UnitType?    @relation(fields: [unitTypeId], references: [ID])
+  unit           Unit         @relation(fields: [unitId], references: [ID], onDelete: Cascade)
+  studyPlanner   StudyPlanner @relation(fields: [studyPlannerId], references: [id], onDelete: Cascade)
 
   @@unique([studyPlannerId, unitId])
 }
+
 model UnitHistory {
   ID        Int     @id @default(autoincrement())
-  StudentID Int // Changed from Decimal to Int
+  StudentID Int
   Status    String?
   TermID    Int?
   Year      Int
   UnitID    Int?
-  Student   Student @relation(fields: [StudentID], references: [StudentID], onDelete: Cascade)
-  Term      Term?   @relation(fields: [TermID], references: [ID], onDelete: Cascade)
   Unit      Unit?   @relation(fields: [UnitID], references: [ID], onDelete: Cascade)
+  Term      Term?   @relation(fields: [TermID], references: [ID], onDelete: Cascade)
+  Student   Student @relation(fields: [StudentID], references: [StudentID], onDelete: Cascade)
 }
 
 model UnitInSemesterStudyPlanner {
@@ -186,9 +177,9 @@ model UnitInSemesterStudyPlanner {
   UnitTypeID                   Int?
   SemesterInStudyPlannerYearID Int
   UnitID                       Int?
-  SemesterInStudyPlannerYear   SemesterInStudyPlannerYear @relation(fields: [SemesterInStudyPlannerYearID], references: [ID], onDelete: Cascade)
-  UnitType                     UnitType?                  @relation(fields: [UnitTypeID], references: [ID], onDelete: SetDefault)
   Unit                         Unit?                      @relation(fields: [UnitID], references: [ID], onDelete: Cascade)
+  UnitType                     UnitType?                  @relation(fields: [UnitTypeID], references: [ID], onDelete: SetDefault)
+  SemesterInStudyPlannerYear   SemesterInStudyPlannerYear @relation(fields: [SemesterInStudyPlannerYearID], references: [ID], onDelete: Cascade)
 }
 
 model UnitTermOffered {
@@ -208,8 +199,8 @@ model UserProfile {
   UpdatedAt         DateTime         @updatedAt
   PermissionGrants  RolePermission[] @relation("PermissionGrant")
   users             users            @relation(fields: [UserID], references: [ID], onDelete: Cascade)
-  RoleAssignments   UserRole[]       @relation("RoleAssignment")
   UserRoles         UserRole[]
+  RoleAssignments   UserRole[]       @relation("RoleAssignment")
 
   @@unique([UserID, UserEmail, UserGroupAccessID])
   @@map("user_profiles")
@@ -252,9 +243,9 @@ model UserRole {
   AssignedBy        Int?
   AssignedAt        DateTime     @default(now())
   ExpiresAt         DateTime?
-  AssignedByProfile UserProfile? @relation("RoleAssignment", fields: [AssignedBy], references: [ID])
-  Role              Role         @relation(fields: [RoleID], references: [ID], onDelete: Cascade)
   UserProfile       UserProfile  @relation(fields: [UserProfileID], references: [ID], onDelete: Cascade)
+  Role              Role         @relation(fields: [RoleID], references: [ID], onDelete: Cascade)
+  AssignedByProfile UserProfile? @relation("RoleAssignment", fields: [AssignedBy], references: [ID])
 
   @@unique([UserProfileID, RoleID])
   @@map("user_roles")
@@ -267,9 +258,9 @@ model RolePermission {
   Granted          Boolean      @default(true)
   GrantedAt        DateTime     @default(now())
   GrantedBy        Int?
-  GrantedByProfile UserProfile? @relation("PermissionGrant", fields: [GrantedBy], references: [ID])
-  Permission       Permission   @relation(fields: [PermissionID], references: [ID], onDelete: Cascade)
   Role             Role         @relation(fields: [RoleID], references: [ID], onDelete: Cascade)
+  Permission       Permission   @relation(fields: [PermissionID], references: [ID], onDelete: Cascade)
+  GrantedByProfile UserProfile? @relation("PermissionGrant", fields: [GrantedBy], references: [ID])
 
   @@unique([RoleID, PermissionID])
   @@map("role_permissions")
@@ -282,8 +273,8 @@ model UnitRequisiteRelationship {
   MinCP                                                Float?
   UnitID                                               Int?
   RequisiteUnitID                                      Int?
-  Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit Unit?   @relation("UnitRequisiteRelationship_RequisiteUnitIDToUnit", fields: [RequisiteUnitID], references: [ID], onDelete: Cascade)
   Unit_UnitRequisiteRelationship_UnitIDToUnit          Unit?   @relation("UnitRequisiteRelationship_UnitIDToUnit", fields: [UnitID], references: [ID], onDelete: Cascade)
+  Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit Unit?   @relation("UnitRequisiteRelationship_RequisiteUnitIDToUnit", fields: [RequisiteUnitID], references: [ID], onDelete: Cascade)
 }
 
 model user_group_access {
@@ -325,4 +316,3 @@ model AuditLog {
 
   @@map("audit_logs")
 }
-

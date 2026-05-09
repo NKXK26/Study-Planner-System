@@ -11,7 +11,7 @@ function auth(req) {
   return token_res;
 }
 
-// GET — single planner with all its units
+// GET – get a single planner with its units and their types
 export async function GET(req, { params }) {
   try {
     const check = auth(req);
@@ -22,7 +22,9 @@ export async function GET(req, { params }) {
       );
     }
 
-    const id = parseInt(params.id);
+    // ✅ await params (Next.js App Router requirement)
+    const resolvedParams = await params;
+    const id = parseInt(resolvedParams.id, 10);
     if (isNaN(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid ID" },
@@ -30,16 +32,13 @@ export async function GET(req, { params }) {
       );
     }
 
-    const planner = await prisma.StudyPlanner.findUnique({
+    const planner = await prisma.studyPlanner.findUnique({
       where: { id },
       include: {
-        units: {
-          select: {
-            ID:           true,
-            UnitCode:     true,
-            Name:         true,
-            CreditPoints: true,
-            Availability: true,
+        studyPlannerUnits: {
+          include: {
+            unit: true,
+            unitType: true,
           },
         },
       },
@@ -52,7 +51,23 @@ export async function GET(req, { params }) {
       );
     }
 
-    return NextResponse.json({ success: true, data: planner });
+    // Transform to the format expected by the frontend detail page
+    const transformed = {
+      id: planner.id,
+      name: planner.name,
+      createdAt: planner.createdAt,
+      units: planner.studyPlannerUnits.map(spu => ({
+        ID: spu.unit.ID,
+        UnitCode: spu.unit.UnitCode,
+        Name: spu.unit.Name,
+        CreditPoints: spu.unit.CreditPoints,
+        Availability: spu.unit.Availability,
+        unitTypeId: spu.unitTypeId,
+        unitType: spu.unitType ? { id: spu.unitType.ID, name: spu.unitType.Name } : null,
+      })),
+    };
+
+    return NextResponse.json({ success: true, data: transformed });
 
   } catch (error) {
     console.error("Get planner error:", error);
@@ -63,7 +78,7 @@ export async function GET(req, { params }) {
   }
 }
 
-// PATCH — update planner name and/or its units
+// PATCH – update planner name and/or its units (with unitTypeId)
 export async function PATCH(req, { params }) {
   try {
     const check = auth(req);
@@ -74,7 +89,8 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    const id = parseInt(params.id);
+    const resolvedParams = await params;
+    const id = parseInt(resolvedParams.id, 10);
     if (isNaN(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid ID" },
@@ -82,39 +98,92 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    const { name, unitIds } = await req.json();
-
-    // Build update payload
+    const body = await req.json();
     const updateData = {};
 
-    if (name?.trim()) {
-      updateData.name = name.trim();
+    // Update name if provided
+    if (body.name?.trim()) {
+      updateData.name = body.name.trim();
     }
 
-    // If unitIds provided, replace the unit connections
-    if (Array.isArray(unitIds)) {
-      updateData.units = {
-        set: unitIds.map(uid => ({ ID: uid })),
-      };
+    // Update units if provided (expects { units: [{ unitId, unitTypeId }] })
+    if (body.units !== undefined) {
+      if (!Array.isArray(body.units)) {
+        return NextResponse.json(
+          { success: false, message: "units must be an array" },
+          { status: 400 }
+        );
+      }
+
+      // Validate unit IDs exist
+      const unitIds = body.units.map(u => u.unitId).filter(v => v != null);
+      if (unitIds.length !== body.units.length) {
+        return NextResponse.json(
+          { success: false, message: "Every unit must have a unitId" },
+          { status: 400 }
+        );
+      }
+
+      const existingUnits = await prisma.unit.findMany({
+        where: { ID: { in: unitIds } },
+        select: { ID: true },
+      });
+      if (existingUnits.length !== unitIds.length) {
+        return NextResponse.json(
+          { success: false, message: "One or more unit IDs are invalid" },
+          { status: 400 }
+        );
+      }
+
+      // Replace all join records
+      await prisma.$transaction([
+        prisma.studyPlannerUnit.deleteMany({
+          where: { studyPlannerId: id },
+        }),
+        prisma.studyPlannerUnit.createMany({
+          data: body.units.map(u => ({
+            studyPlannerId: id,
+            unitId: u.unitId,
+            unitTypeId: u.unitTypeId || null,
+          })),
+        }),
+      ]);
     }
 
-    const updated = await prisma.StudyPlanner.update({
+    // Apply name update separately if needed
+    if (Object.keys(updateData).length > 0) {
+      await prisma.studyPlanner.update({
+        where: { id },
+        data: updateData,
+      });
+    }
+
+    // Fetch fresh data to return
+    const updatedPlanner = await prisma.studyPlanner.findUnique({
       where: { id },
-      data: updateData,
       include: {
-        units: {
-          select: {
-            ID:           true,
-            UnitCode:     true,
-            Name:         true,
-            CreditPoints: true,
-            Availability: true,
-          },
+        studyPlannerUnits: {
+          include: { unit: true, unitType: true },
         },
       },
     });
 
-    return NextResponse.json({ success: true, data: updated });
+    const transformed = {
+      id: updatedPlanner.id,
+      name: updatedPlanner.name,
+      createdAt: updatedPlanner.createdAt,
+      units: updatedPlanner.studyPlannerUnits.map(spu => ({
+        ID: spu.unit.ID,
+        UnitCode: spu.unit.UnitCode,
+        Name: spu.unit.Name,
+        CreditPoints: spu.unit.CreditPoints,
+        Availability: spu.unit.Availability,
+        unitTypeId: spu.unitTypeId,
+        unitType: spu.unitType ? { id: spu.unitType.ID, name: spu.unitType.Name } : null,
+      })),
+    };
+
+    return NextResponse.json({ success: true, data: transformed });
 
   } catch (error) {
     console.error("Update planner error:", error);
@@ -125,7 +194,7 @@ export async function PATCH(req, { params }) {
   }
 }
 
-// DELETE — delete a study planner
+// DELETE – remove planner (cascade deletes join records)
 export async function DELETE(req, { params }) {
   try {
     const check = auth(req);
@@ -136,7 +205,8 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    const id = parseInt(params.id);
+    const resolvedParams = await params;
+    const id = parseInt(resolvedParams.id, 10);
     if (isNaN(id)) {
       return NextResponse.json(
         { success: false, message: "Invalid ID" },
@@ -144,8 +214,7 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    await prisma.StudyPlanner.delete({ where: { id } });
-
+    await prisma.studyPlanner.delete({ where: { id } });
     return NextResponse.json({ success: true, message: "Deleted successfully" });
 
   } catch (error) {
