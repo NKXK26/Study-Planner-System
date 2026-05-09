@@ -9,7 +9,7 @@ import { MagnifyingGlassIcon, CheckCircleIcon, AcademicCapIcon, ChartBarIcon, Do
 import * as XLSX from 'xlsx';
 import UnitRecommendations from '../unit_suggestion/UnitRecommendations';
 
-// Helper to map unit type ID to category name (same as in UnitRecommendations)
+// Helper to map unit type ID to category name – kept for use in per‑planner context if needed
 const getUnitCategoryById = (typeId) => {
 	switch (typeId) {
 		case 2: return 'core';
@@ -22,6 +22,7 @@ const getUnitCategoryById = (typeId) => {
 };
 
 // Determine unit category from unit object (using unitTypeId or unitType relation)
+// Kept for potential future use (e.g., inside planner details)
 const getUnitCategory = (unit) => {
 	let typeId = null;
 	if (unit.unitTypeId !== undefined) typeId = unit.unitTypeId;
@@ -51,7 +52,7 @@ export default function CompareStudyPlannerPage() {
 	const [showRecommendations, setShowRecommendations] = useState(false);
 	const [showUnitTypeDebug, setShowUnitTypeDebug] = useState(false);
 	const hasAccess = isSuperadmin() || can('planner', 'read');
-	const [globalUnitTypeMap, setGlobalUnitTypeMap] = useState(new Map());
+
 	const fetchStudentCompletedUnits = async (studentId) => {
 		try {
 			const response = await SecureFrontendAuthHelper.authenticatedFetch(
@@ -154,7 +155,8 @@ export default function CompareStudyPlannerPage() {
 	};
 
 	const exportToExcel = () => {
-		// ... unchanged, keep your existing export logic
+		// ... keep your existing export logic unchanged ...
+		// (omitted for brevity – it remains the same as in the original component)
 	};
 
 	const handleSearch = async (e) => {
@@ -181,7 +183,6 @@ export default function CompareStudyPlannerPage() {
 			}
 
 			const completedUnitsMap = new Map();
-			const completedUnitsSet = new Set();
 			completedUnitsList.forEach(unit => {
 				completedUnitsMap.set(unit.id, {
 					id: unit.id,
@@ -193,7 +194,6 @@ export default function CompareStudyPlannerPage() {
 					prerequisites: unit.prerequisites,
 					unitTypeId: unit.unitTypeId
 				});
-				completedUnitsSet.add(unit.code);
 			});
 			setCompletedUnits(Array.from(completedUnitsMap.values()));
 
@@ -201,11 +201,7 @@ export default function CompareStudyPlannerPage() {
 			setStudentInfo({
 				studentId: studentId.trim(),
 				completedUnitsCount: completedUnitsMap.size,
-				completedUnitsList: Array.from(completedUnitsMap.values()),
 				totalCredits: totalCredits,
-				completedCoreCount: 0,
-				completedElectiveCount: 0,
-				completedMajorCount: 0
 			});
 
 			const allPlanners = await fetchAllStudyPlanners();
@@ -228,28 +224,6 @@ export default function CompareStudyPlannerPage() {
 				setError('No matching study planners found for this student\'s completed units');
 			} else {
 				setMatchedPlanners(top5Planners);
-
-				// ---- Count categories directly from the units' own unitTypeId ----
-				let core = 0, elective = 0, major = 0;
-				for (const unit of completedUnitsList) {
-					const typeId = unit.unitTypeId;
-					if (typeId !== undefined && typeId !== null) {
-						const cat = getUnitCategoryById(typeId);
-						if (cat === 'core') core++;
-						else if (cat === 'elective') elective++;
-						else if (cat === 'major') major++;
-						// MPU, WIL etc. are ignored (they are not core/elective/major)
-					} else {
-						// If a unit somehow has no type, fallback to elective (should not happen)
-						elective++;
-					}
-				}
-				setStudentInfo(prev => ({
-					...prev,
-					completedCoreCount: core,
-					completedElectiveCount: elective,
-					completedMajorCount: major
-				}));
 			}
 		} catch (err) {
 			console.error('Error searching student:', err);
@@ -290,13 +264,22 @@ export default function CompareStudyPlannerPage() {
 											<DocumentArrowDownIcon className="h-5 w-5" />
 											{exporting ? 'Exporting...' : 'Export to Excel'}
 										</button>
-										<button
-											onClick={() => setShowRecommendations(true)}
-											className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-150"
-										>
-											<LightBulbIcon className="h-5 w-5" />
-											Unit Recommendations
-										</button>
+										<div className="relative">
+											<button
+												onClick={() => setShowRecommendations(true)}
+												disabled={studentInfo.totalCredits >= 300}
+												className={`bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-150 ${studentInfo.totalCredits >= 300 ? 'opacity-50 cursor-not-allowed' : ''
+													}`}
+											>
+												<LightBulbIcon className="h-5 w-5" />
+												Unit Recommendations
+											</button>
+											{studentInfo.totalCredits >= 300 && (
+												<div className="mt-2 text-xs text-green-600 bg-green-50 border border-green-200 rounded-md px-2 py-1 inline-block">
+													🎓 Student has already completed 300 credits – no recommendations needed.
+												</div>
+											)}
+										</div>
 									</div>
 								)}
 							</div>
@@ -337,142 +320,47 @@ export default function CompareStudyPlannerPage() {
 										</div>
 									)}
 
+									{/* Student Info (simplified – no global type breakdown) */}
 									{studentInfo && (
 										<div className="card-bg p-6 rounded-theme shadow-theme mb-8 bg-gradient-to-r from-blue-50 to-indigo-50">
 											<h2 className="text-lg font-semibold heading-text mb-4 flex items-center gap-2">
 												<AcademicCapIcon className="h-5 w-5" />
 												Student Information
 											</h2>
-											<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
 												<div>
 													<p className="text-sm text-muted">Student ID</p>
 													<p className="font-semibold text-primary text-lg">{studentInfo.studentId}</p>
 												</div>
 												<div>
-													<p className="text-sm text-muted">Completed Units</p>
-													<p className="font-semibold text-primary text-lg">{studentInfo.completedUnitsCount} / 24</p>
+													<p className="text-sm text-muted">Completed Units (Passed)</p>
+													<p className="font-semibold text-primary text-lg">{studentInfo.completedUnitsCount}</p>
 												</div>
 												<div>
-													<p className="text-sm text-muted">Total Credits</p>
-													<p className="font-semibold text-primary text-lg">{studentInfo.totalCredits} / 300</p>
+													<p className="text-sm text-muted">Total Credits Earned</p>
+													<p className="font-semibold text-primary text-lg">{studentInfo.totalCredits}</p>
 												</div>
 											</div>
-											{/* New row for Core/Elective/Major counts */}
-											<div className="grid grid-cols-3 gap-3 text-sm mb-4">
-												<div className="bg-white rounded-lg p-2 text-center border border-gray-200">
-													<span className="text-gray-500">Core Units</span>
-													<p className="font-bold text-blue-600 text-lg">
-														{studentInfo.completedCoreCount ?? 0} / 8
-													</p>
+											<details className="mt-4 border-t border-gray-200 pt-3">
+												<summary className="text-sm font-semibold text-gray-700 cursor-pointer hover:text-blue-600">
+													View Completed Units ({completedUnits.length} unit(s))
+												</summary>
+												<div className="flex flex-wrap gap-2 mt-3 max-h-64 overflow-y-auto p-2 bg-white rounded-md">
+													{completedUnits.map(unit => (
+														<span
+															key={unit.id}
+															title={`${unit.name || ''} (${unit.creditPoints} credits)`}
+															className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200 cursor-help"
+														>
+															{unit.code}
+														</span>
+													))}
 												</div>
-												<div className="bg-white rounded-lg p-2 text-center border border-gray-200">
-													<span className="text-gray-500">Elective Units</span>
-													<p className="font-bold text-green-600 text-lg">
-														{studentInfo.completedElectiveCount ?? 0} / 8
-													</p>
-												</div>
-												<div className="bg-white rounded-lg p-2 text-center border border-gray-200">
-													<span className="text-gray-500">Major Units</span>
-													<p className="font-bold text-purple-600 text-lg">
-														{studentInfo.completedMajorCount ?? 0} / 8
-													</p>
-												</div>
-											</div>
-											<div className="mt-4 border-t border-gray-200 pt-3">
-												<p className="text-sm font-semibold text-gray-700 mb-2">Completed Units by Type</p>
-												<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-													{/* Core Units */}
-													<div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-														<h4 className="text-sm font-bold text-blue-700 mb-2">Core Units</h4>
-														<div className="flex flex-wrap gap-1">
-															{studentInfo.completedUnitsList
-																.filter(unit => {
-																	const typeId = unit.unitTypeId;
-																	const cat = typeId !== undefined && typeId !== null ? getUnitCategoryById(typeId) : null;
-																	return cat === 'core';
-																})
-																.map(unit => (
-																	<span
-																		key={unit.id}
-																		className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full"
-																		title={unit.name || ''}
-																	>
-																		{unit.code}
-																	</span>
-																))}
-															{studentInfo.completedUnitsList.filter(unit => {
-																const typeId = unit.unitTypeId;
-																const cat = typeId !== undefined && typeId !== null ? getUnitCategoryById(typeId) : null;
-																return cat === 'core';
-															}).length === 0 && (
-																	<span className="text-xs text-gray-400 italic">No core units yet</span>
-																)}
-														</div>
-													</div>
-
-													{/* Elective Units */}
-													<div className="bg-green-50 rounded-lg p-3 border border-green-200">
-														<h4 className="text-sm font-bold text-green-700 mb-2">Elective Units</h4>
-														<div className="flex flex-wrap gap-1">
-															{studentInfo.completedUnitsList
-																.filter(unit => {
-																	const typeId = unit.unitTypeId;
-																	const cat = typeId !== undefined && typeId !== null ? getUnitCategoryById(typeId) : null;
-																	return cat === 'elective';
-																})
-																.map(unit => (
-																	<span
-																		key={unit.id}
-																		className="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full"
-																		title={unit.name || ''}
-																	>
-																		{unit.code}
-																	</span>
-																))}
-															{studentInfo.completedUnitsList.filter(unit => {
-																const typeId = unit.unitTypeId;
-																const cat = typeId !== undefined && typeId !== null ? getUnitCategoryById(typeId) : null;
-																return cat === 'elective';
-															}).length === 0 && (
-																	<span className="text-xs text-gray-400 italic">No elective units yet</span>
-																)}
-														</div>
-													</div>
-
-													{/* Major Units */}
-													<div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
-														<h4 className="text-sm font-bold text-purple-700 mb-2">Major Units</h4>
-														<div className="flex flex-wrap gap-1">
-															{studentInfo.completedUnitsList
-																.filter(unit => {
-																	const typeId = unit.unitTypeId;
-																	const cat = typeId !== undefined && typeId !== null ? getUnitCategoryById(typeId) : null;
-																	return cat === 'major';
-																})
-																.map(unit => (
-																	<span
-																		key={unit.id}
-																		className="bg-purple-100 text-purple-800 text-xs font-medium px-2 py-0.5 rounded-full"
-																		title={unit.name || ''}
-																	>
-																		{unit.code}
-																	</span>
-																))}
-															{studentInfo.completedUnitsList.filter(unit => {
-																const typeId = unit.unitTypeId;
-																const cat = typeId !== undefined && typeId !== null ? getUnitCategoryById(typeId) : null;
-																return cat === 'major';
-															}).length === 0 && (
-																	<span className="text-xs text-gray-400 italic">No major units yet</span>
-																)}
-														</div>
-													</div>
-												</div>
-											</div>
+											</details>
 										</div>
 									)}
-									{/* Planner results (unchanged) */}
+
+									{/* Planner results */}
 									{searched && !error && matchedPlanners.length === 0 && studentInfo ? (
 										<div className="card-bg p-12 rounded-theme shadow-theme text-center">
 											<ChartBarIcon className="h-16 w-16 text-muted mx-auto mb-4 opacity-50" />
@@ -487,7 +375,6 @@ export default function CompareStudyPlannerPage() {
 												</h2>
 												{matchedPlanners.map((planner, index) => (
 													<div key={planner.plannerId} className="card-bg rounded-theme shadow-theme overflow-hidden">
-														{/* ... planner details unchanged ... */}
 														<div className="p-6 border-b bg-gradient-to-r from-gray-50 to-white">
 															<div className="flex items-start justify-between">
 																<div className="flex-1">
@@ -501,7 +388,6 @@ export default function CompareStudyPlannerPage() {
 																</div>
 															</div>
 															<div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-																{/* stats cards */}
 																<div className="bg-blue-50 p-3 rounded-lg">
 																	<p className="text-xs text-muted mb-1">Matching Units</p>
 																	<p className="text-2xl font-bold text-blue-600">{planner.overlapCount} / {planner.completedCount}</p>

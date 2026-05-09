@@ -34,7 +34,7 @@ const UnitRecommendations = ({
   const [categoryWarning, setCategoryWarning] = useState(null);
   const [showDebug, setShowDebug] = useState(false);
 
-  // Helper to map unit type ID to category name (based on your UnitType lookup)
+  // Helper to map unit type ID to category name
   const getUnitCategoryById = (typeId) => {
     switch (typeId) {
       case 2: return 'core';
@@ -46,16 +46,13 @@ const UnitRecommendations = ({
     }
   };
 
-  // Convert year/semester to linear order (1‑based)
   const getSemesterOrderValue = (year, semester) => (year - 1) * 2 + (semester === 1 ? 1 : 2);
-
   const orderToYearSemester = (order) => {
     const year = Math.floor((order - 1) / 2) + 1;
     const semester = (order - 1) % 2 === 0 ? 1 : 2;
     return { year, semester, order };
   };
 
-  // --- Compute current year/semester from total credits ---
   useEffect(() => {
     if (!isOpen || !completedUnits) return;
     const totalCredits = completedUnits.reduce((sum, u) => sum + (u.creditPoints || 0), 0);
@@ -74,14 +71,12 @@ const UnitRecommendations = ({
     }
   }, [isOpen, planner, completedUnits, currentYear, currentSemester]);
 
-
   const extractUnitCode = (unitCodeStr) => {
     if (!unitCodeStr) return '';
     const match = unitCodeStr.match(/[A-Z]{3}\d{5}/i);
     return match ? match[0].toUpperCase() : unitCodeStr.split(' ')[0].toUpperCase();
   };
 
-  // Determine unit category – from unit_type_id or unitType relation
   const getUnitCategory = (unit) => {
     let typeId = null;
     if (unit.unitTypeId !== undefined) typeId = unit.unitTypeId;
@@ -135,50 +130,6 @@ const UnitRecommendations = ({
     return { type: 'unknown', conditions: [] };
   };
 
-  const arePrerequisitesMet = (unit, completedUnitsMap, totalCredits) => {
-    const prereqString = unit.Prerequisites;
-    const parsed = parsePrerequisites(prereqString);
-    if (parsed.type === 'none') return true;
-    if (parsed.type === 'anti') return true;
-    if (parsed.type === 'unknown') return false;
-    if (parsed.type === 'credit') return totalCredits >= parsed.conditions[0].value;
-    if (parsed.type === 'and') {
-      for (const condition of parsed.conditions) {
-        if (condition.type === 'unit') {
-          if (!completedUnitsMap.has(condition.code) && !completedUnitsMap.has(condition.code.toUpperCase())) return false;
-        } else if (condition.type === 'credit') {
-          if (totalCredits < condition.value) return false;
-        }
-      }
-      return true;
-    }
-    if (parsed.type === 'or') {
-      for (const condition of parsed.conditions) {
-        if (condition.type === 'unit') {
-          if (completedUnitsMap.has(condition.code) || completedUnitsMap.has(condition.code.toUpperCase())) return true;
-        }
-      }
-      return false;
-    }
-    if (parsed.type === 'unit') {
-      const unitCode = parsed.conditions[0].code;
-      return completedUnitsMap.has(unitCode) || completedUnitsMap.has(unitCode.toUpperCase());
-    }
-    if (parsed.type === 'coreq') {
-      const unitCode = parsed.conditions[0].code;
-      return completedUnitsMap.has(unitCode) || completedUnitsMap.has(unitCode.toUpperCase());
-    }
-    return false;
-  };
-
-  const isProjectACompleted = (completedUnitsMap) => completedUnitsMap.has('COS40005') || completedUnitsMap.has('COS40005'.toUpperCase());
-  const isProjectBCompleted = (completedUnitsMap) => completedUnitsMap.has('COS40006') || completedUnitsMap.has('COS40006'.toUpperCase());
-  const isWILCompleted = (completedUnitsMap) => completedUnitsMap.has('ICT20016') || completedUnitsMap.has('ICT20016'.toUpperCase());
-
-  // ============================================================
-  // AVAILABILITY & DISPLAY HELPERS
-  // ============================================================
-
   const isAvailableInSemester = (unit, year, semester) => {
     const offeredIn = unit.OfferedIn || unit.offeredIn || '';
     const offeredLower = offeredIn.toLowerCase();
@@ -189,28 +140,9 @@ const UnitRecommendations = ({
     return true;
   };
 
-  const getSemesterDisplayName = (unit) => {
-    const termId = unit.TermID || unit.termId || unit.semester || '';
-    const termLower = termId.toLowerCase();
-    const unitCode = unit.UnitCode || '';
-    if (unitCode === 'COS40005') return 'Year 3, Semester 1 (Capstone Project A)';
-    if (unitCode === 'COS40006') return 'Year 3, Semester 2 (Capstone Project B)';
-    if (unitCode === 'ICT20016') return 'Work-Integrated Learning (WIL)';
-    if (termLower.includes('year one') && termLower.includes('semester 1')) return 'Year 1, Semester 1';
-    if (termLower.includes('winter') && termLower.includes('june')) return 'Winter Term (Year 1)';
-    if (termLower.includes('year one') && termLower.includes('semester 2')) return 'Year 1, Semester 2';
-    if (termLower.includes('year two') && termLower.includes('semester 1')) return 'Year 2, Semester 1';
-    if (termLower.includes('year two') && termLower.includes('semester 2')) return 'Year 2, Semester 2';
-    if (termLower.includes('summer') && termLower.includes('jan')) return 'Summer Term (Year 2)';
-    if (termLower.includes('year three') && termLower.includes('semester 1')) return 'Year 3, Semester 1';
-    if (termLower.includes('year three') && termLower.includes('semester 2')) return 'Year 3, Semester 2';
-    return termId || 'Recommended';
-  };
-
   // ============================================================
-  // CONSTRAINT-BASED SCHEDULER
+  // SCHEDULER (Stops when requirements met)
   // ============================================================
-
   const scheduleRemainingUnits = (
     missingUnits,
     completedUnitsMap,
@@ -218,33 +150,43 @@ const UnitRecommendations = ({
     currentYear,
     currentSemester,
     totalUnitsCompleted,
-    requiredCore, requiredElective, requiredMajor,
-    completedCore, completedElective, completedMajor
+    needCore, needElective, needMajor
   ) => {
     let remaining = [...missingUnits];
     const schedule = [];
     let current = { year: currentYear, semester: currentSemester };
     let plannedCompletedCodes = new Set(Array.from(completedUnitsMap.keys()));
     let plannedSemesters = [];
-    let plannedCore = completedCore;
-    let plannedElective = completedElective;
-    let plannedMajor = completedMajor;
+    let scheduledCore = 0;
+    let scheduledElective = 0;
+    let scheduledMajor = 0;
     let maxSemesters = 12;
     let semesterCounter = 0;
 
     const getPriorityBonus = (unit) => {
       const cat = getUnitCategory(unit);
-      if (cat === 'core' && plannedCore < requiredCore) return 30;
-      if (cat === 'elective' && plannedElective < requiredElective) return 30;
-      if (cat === 'major' && plannedMajor < requiredMajor) return 30;
+      if (cat === 'core' && scheduledCore < needCore) return 30;
+      if (cat === 'elective' && scheduledElective < needElective) return 30;
+      if (cat === 'major' && scheduledMajor < needMajor) return 30;
       return 0;
     };
 
     while (remaining.length > 0 && semesterCounter < maxSemesters) {
+      // Stop if all needs are met
+      if (scheduledCore >= needCore && scheduledElective >= needElective && scheduledMajor >= needMajor) {
+        break;
+      }
+
       const currentOrder = getSemesterOrderValue(current.year, current.semester);
       const available = [];
 
       for (const unit of remaining) {
+        const cat = getUnitCategory(unit);
+        // Skip if we already have enough of this category
+        if (cat === 'core' && scheduledCore >= needCore) continue;
+        if (cat === 'elective' && scheduledElective >= needElective) continue;
+        if (cat === 'major' && scheduledMajor >= needMajor) continue;
+
         let prereqsMet = true;
         for (const prereq of (unit.prerequisites || [])) {
           if (plannedCompletedCodes.has(prereq)) continue;
@@ -283,13 +225,15 @@ const UnitRecommendations = ({
 
       for (const unit of available) {
         const credits = unit.CreditPoints || 12.5;
+        // Stop adding units if we already meet all needs (inside semester loop)
+        if (scheduledCore >= needCore && scheduledElective >= needElective && scheduledMajor >= needMajor) break;
         if (semesterUnits.length < MAX_UNITS && semesterCredits + credits <= MAX_CREDITS) {
           semesterUnits.push(unit);
           semesterCredits += credits;
           const cat = getUnitCategory(unit);
-          if (cat === 'core') plannedCore++;
-          else if (cat === 'elective') plannedElective++;
-          else if (cat === 'major') plannedMajor++;
+          if (cat === 'core') scheduledCore++;
+          else if (cat === 'elective') scheduledElective++;
+          else if (cat === 'major') scheduledMajor++;
         }
       }
 
@@ -303,10 +247,18 @@ const UnitRecommendations = ({
           unitCount: semesterUnits.length,
           order: currentOrder,
         });
-        semesterUnits.forEach(unit => { const code = unit.UnitCode || unit.code; if (code) plannedCompletedCodes.add(code); });
+        semesterUnits.forEach(unit => {
+          const code = unit.UnitCode || unit.code;
+          if (code) plannedCompletedCodes.add(code);
+        });
         plannedSemesters.push({ order: currentOrder, units: semesterUnits });
         const scheduledIds = new Set(semesterUnits.map(u => u.ID));
         remaining = remaining.filter(u => !scheduledIds.has(u.ID));
+
+        // ✅ Immediate break if all needs satisfied after this semester
+        if (scheduledCore >= needCore && scheduledElective >= needElective && scheduledMajor >= needMajor) {
+          break;
+        }
       }
 
       const nextOrder = currentOrder + 1;
@@ -318,15 +270,9 @@ const UnitRecommendations = ({
     return { schedule, remaining };
   };
 
-  const isWILEligible = (totalUnitsCompleted, studentYear, studentSemester) => {
-    const hasCompletedYear2Sem2 = (studentYear > 2) || (studentYear === 2 && studentSemester >= 2);
-    return hasCompletedYear2Sem2 && totalUnitsCompleted >= 12;
-  };
-
   // ============================================================
-  // MAIN GENERATION (with type enrichment)
+  // MAIN GENERATION (Count ALL completed units, use planner categories when available)
   // ============================================================
-
   const generateRecommendations = () => {
     setLoading(true);
     setCategoryWarning(null);
@@ -334,15 +280,16 @@ const UnitRecommendations = ({
       const plannerUnits = planner?.totalUnits || [];
       if (!plannerUnits.length) { setLoading(false); return; }
 
-      // Build set of planner unit codes (for missing units check)
-      const plannerUnitCodes = new Set();
-      plannerUnits.forEach(unit => {
+      // Build map of planner unit category by unit code (for units that exist in planner)
+      const plannerUnitTypeMap = new Map();
+      for (const unit of plannerUnits) {
         const code = extractUnitCode(unit.UnitCode);
-        if (code) plannerUnitCodes.add(code);
-      });
+        const cat = getUnitCategory(unit);
+        plannerUnitTypeMap.set(code, cat);
+      }
 
-      // Include ALL completed units (no planner filter)
-      const completedUnitsMap = new Map(); // key: unit code (uppercase)
+      // Build completed units map (key: unit code, value: unit object)
+      const completedUnitsMap = new Map();
       completedUnits.forEach(unit => {
         const codeUpper = unit.code?.toUpperCase();
         if (codeUpper) {
@@ -354,28 +301,39 @@ const UnitRecommendations = ({
             prerequisites: unit.prerequisites,
             year: unit.year,
             termId: unit.termId,
-            unitTypeId: unit.unitTypeId   // ← direct from API
+            unitTypeId: unit.unitTypeId
           });
         }
       });
 
-      // Count completed categories directly from completedUnits (not from planner)
+      // ========== COUNT COMPLETED CATEGORIES – USE ALL COMPLETED UNITS ==========
+      // For each completed unit:
+      // - If the unit exists in the planner, use the planner's category.
+      // - Otherwise, fall back to the student's global unitTypeId.
       let completedCore = 0, completedElective = 0, completedMajor = 0;
-      for (const unit of completedUnits) {
-        const typeId = unit.unitTypeId;
-        if (typeId !== undefined && typeId !== null) {
-          const cat = getUnitCategoryById(typeId);
-          if (cat === 'core') completedCore++;
-          else if (cat === 'elective') completedElective++;
-          else if (cat === 'major') completedMajor++;
-          // MPU/WIL ignored
+      for (const compUnit of completedUnits) {
+        const code = compUnit.code?.toUpperCase();
+        let cat = null;
+        if (plannerUnitTypeMap.has(code)) {
+          // Use planner's category if the unit appears in this planner
+          cat = plannerUnitTypeMap.get(code);
+        } else {
+          // Use the student's global type from the unit record
+          const typeId = compUnit.unitTypeId;
+          if (typeId !== undefined && typeId !== null) {
+            cat = getUnitCategoryById(typeId);
+          }
         }
+        if (cat === 'core') completedCore++;
+        else if (cat === 'elective') completedElective++;
+        else if (cat === 'major') completedMajor++;
+        // MPU and WIL are ignored (not counted for core/elective/major)
       }
 
-      const totalCredits = Array.from(completedUnitsMap.values()).reduce((sum, u) => sum + (u.creditPoints || 0), 0);
+      const totalCredits = completedUnits.reduce((sum, u) => sum + (u.creditPoints || 0), 0);
       const totalUnitsCompleted = completedUnitsMap.size;
 
-      // Build prerequisite map (from planner units, unchanged)
+      // Build prerequisite map from planner units (only needed for missing units)
       const prereqMap = new Map();
       for (const unit of plannerUnits) {
         const unitCode = extractUnitCode(unit.UnitCode);
@@ -393,12 +351,19 @@ const UnitRecommendations = ({
         prerequisites: prereqMap.get(extractUnitCode(unit.UnitCode)) || []
       }));
 
-      // Missing units (those not in completedUnitsMap)
+      // Missing units = planner units not yet completed (by code)
       const missingUnits = unitsWithPrereqs.filter(unit => {
         const code = extractUnitCode(unit.UnitCode);
         return !completedUnitsMap.has(code);
       });
 
+      // How many more of each category are needed (target is 8 each)
+      const requiredCore = 8, requiredElective = 8, requiredMajor = 8;
+      const needCore = Math.max(0, requiredCore - completedCore);
+      const needElective = Math.max(0, requiredElective - completedElective);
+      const needMajor = Math.max(0, requiredMajor - completedMajor);
+
+      // Optional warnings – check if planner has enough of each kind remaining
       let missingCore = 0, missingElective = 0, missingMajor = 0;
       for (const unit of missingUnits) {
         const cat = getUnitCategory(unit);
@@ -406,12 +371,6 @@ const UnitRecommendations = ({
         else if (cat === 'elective') missingElective++;
         else if (cat === 'major') missingMajor++;
       }
-
-      const requiredCore = 8, requiredElective = 8, requiredMajor = 8;
-      const needCore = Math.max(0, requiredCore - completedCore);
-      const needElective = Math.max(0, requiredElective - completedElective);
-      const needMajor = Math.max(0, requiredMajor - completedMajor);
-
       if (missingCore < needCore) {
         setCategoryWarning(`⚠️ Planner has only ${missingCore} core unit(s) remaining, but you need ${needCore} more to meet the 8 core requirement.`);
       } else if (missingElective < needElective) {
@@ -420,6 +379,7 @@ const UnitRecommendations = ({
         setCategoryWarning(`⚠️ Planner has only ${missingMajor} major unit(s) remaining, but you need ${needMajor} more to meet the 8 major requirement.`);
       }
 
+      // Build schedule – only up to needed units, using planner's missing units
       const { schedule } = scheduleRemainingUnits(
         missingUnits,
         completedUnitsMap,
@@ -427,22 +387,29 @@ const UnitRecommendations = ({
         currentYear,
         currentSemester,
         totalUnitsCompleted,
-        requiredCore, requiredElective, requiredMajor,
-        completedCore, completedElective, completedMajor
+        needCore, needElective, needMajor
       );
 
       setFullSchedule(schedule);
 
+      // TARGETS: 24 units (8+8+8) and 300 credits
+      const TARGET_UNITS = 24;
+      const TARGET_CREDITS = 300;
+      const totalCompletedRelevant = completedCore + completedElective + completedMajor;
+      const unitsLeftToSchedule = needCore + needElective + needMajor;
+      const creditsLeft = Math.max(0, TARGET_CREDITS - totalCredits);
+      const completedPercent = (totalCompletedRelevant / TARGET_UNITS) * 100;
+
       setRecommendations({
-        totalPlannerUnits: plannerUnits.length,
-        totalCompleted: totalUnitsCompleted,
-        totalRemaining: missingUnits.length,
+        totalPlannerUnits: plannerUnits.length,  // kept for info, not used for progress
+        totalCompleted: totalCompletedRelevant,
+        totalScheduled: unitsLeftToSchedule,
         totalCredits,
         plannerName: planner?.plannerName,
-        completedPercent: (totalUnitsCompleted / plannerUnits.length) * 100,
+        completedPercent,
         currentYear, currentSemester,
-        creditsToGraduate: Math.max(0, 300 - totalCredits),
-        unitsToGraduate: missingUnits.length,
+        creditsToGraduate: creditsLeft,
+        unitsToGraduate: unitsLeftToSchedule,
         categoryRequirements: {
           core: { completed: completedCore, required: requiredCore, missing: needCore },
           elective: { completed: completedElective, required: requiredElective, missing: needElective },
@@ -486,17 +453,17 @@ const UnitRecommendations = ({
         {/* Modal Body */}
         <div className="p-6">
 
-          {/* Student Progress Summary */}
+          {/* Student Progress Summary (based on target 24 units and 300 credits) */}
           {studentInfo && recommendations && (
             <div className="bg-emerald-50 rounded-xl p-4 mb-6 border border-emerald-200">
               <div className="flex items-center gap-2 mb-3">
                 <UserGroupIcon className="h-5 w-5 text-emerald-600" />
-                <h3 className="font-semibold text-emerald-800">Student Progress</h3>
+                <h3 className="font-semibold text-emerald-800">Student Progress (against graduation requirements)</h3>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
                 <div><span className="text-gray-500">Student ID:</span><p className="font-semibold">{studentInfo.studentId}</p></div>
                 <div><span className="text-gray-500">Current Position:</span><p className="font-semibold text-blue-600">Year {recommendations.currentYear}, Semester {recommendations.currentSemester}</p></div>
-                <div><span className="text-gray-500">Completed:</span><p className="font-semibold text-emerald-600">{recommendations.totalCompleted}/{recommendations.totalPlannerUnits} units</p></div>
+                <div><span className="text-gray-500">Completed:</span><p className="font-semibold text-emerald-600">{recommendations.totalCompleted}/24 units</p></div>
                 <div><span className="text-gray-500">Credits:</span><p className="font-semibold text-emerald-600">{recommendations.totalCredits}/300</p></div>
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs mb-3">
@@ -524,13 +491,13 @@ const UnitRecommendations = ({
                   <p className="font-bold text-orange-600 text-lg">{recommendations.creditsToGraduate}</p>
                 </div>
                 <div className="bg-white rounded-lg p-2 text-center">
-                  <span className="text-gray-500">Units Left:</span>
+                  <span className="text-gray-500">Units Left to Schedule:</span>
                   <p className="font-bold text-orange-600 text-lg">{recommendations.unitsToGraduate}</p>
                 </div>
               </div>
               <div className="border-t border-emerald-200 pt-3">
                 <div className="flex justify-between text-sm mb-1">
-                  <span>Progress</span>
+                  <span>Overall Progress (towards 24 units)</span>
                   <span>{recommendations.completedPercent?.toFixed(1)}%</span>
                 </div>
                 <div className="w-full bg-emerald-200 rounded-full h-2">
@@ -554,8 +521,8 @@ const UnitRecommendations = ({
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <CalendarIcon className="h-5 w-5 text-emerald-600" />
-                  <h3 className="text-lg font-bold text-gray-800">📅 Full Study Plan (All Remaining Semesters)</h3>
-                  <span className="text-xs text-gray-400">({fullSchedule.length} semester(s) until graduation)</span>
+                  <h3 className="text-lg font-bold text-gray-800">📅 Full Study Plan (up to graduation)</h3>
+                  <span className="text-xs text-gray-400">({fullSchedule.length} semester(s) until requirements met)</span>
                 </div>
                 <button
                   onClick={() => setShowFullPlan(!showFullPlan)}
@@ -612,14 +579,14 @@ const UnitRecommendations = ({
             </div>
           )}
 
-          {/* No Recommendations */}
+          {/* Graduated / No schedule needed */}
           {!loading && recommendations && fullSchedule.length === 0 && (
             <div className="text-center py-12">
               <div className="bg-emerald-100 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
                 <CheckCircleIcon className="h-10 w-10 text-emerald-600" />
               </div>
               <p className="text-gray-700 text-lg font-medium">🎓 Congratulations!</p>
-              <p className="text-gray-500 mt-2">You have completed all units for this study planner!</p>
+              <p className="text-gray-500 mt-2">You have met all 8 Core, 8 Elective, 8 Major requirements and 300 credits!</p>
             </div>
           )}
         </div>

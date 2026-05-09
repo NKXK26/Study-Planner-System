@@ -28,7 +28,6 @@ const UploadPlannerPage = () => {
     const [debugData, setDebugData] = useState([]);
     const [debugLoading, setDebugLoading] = useState(false);
 
-    // Colour → unit type ID mapping
     const COLOR_TO_TYPE_ID = {
         '#c5d9f0': 2,   // Core
         '#fce9d9': 3,   // Major
@@ -232,7 +231,7 @@ const UploadPlannerPage = () => {
             setMissingCodes(missingCodesLocal);
 
             if (missingCodesLocal.length === 0 && matched.length > 0) {
-                setMessage('All extracted units matched. Use "Auto Populate" to detect types from PDF colours.');
+                setMessage('All extracted units matched. Use "Auto Populate" to detect types from PDF colors.');
             }
         } catch (fetchError) {
             console.error('Matching units fetch error', fetchError);
@@ -244,7 +243,7 @@ const UploadPlannerPage = () => {
         }
     };
 
-    // Auto-populate unit types using PyMuPDF colour extraction
+
     const handleAutoPopulate = async () => {
         if (!pdfFile) {
             setError('No PDF file to analyze.');
@@ -265,12 +264,12 @@ const UploadPlannerPage = () => {
 
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.error || 'Failed to extract colours');
+                throw new Error(err.error || 'Failed to extract colors');
             }
 
             const colorBlocks = await response.json();
 
-            // Build a map: unit code -> typeId from colour
+        
             const colorMap = {};
             for (const block of colorBlocks) {
                 const raw = block.text.trim();
@@ -286,7 +285,7 @@ const UploadPlannerPage = () => {
             }
 
             if (Object.keys(colorMap).length === 0) {
-                setError('No coloured unit codes found in the PDF. Cannot auto-populate.');
+                setError('No colored unit codes found in the PDF. Cannot auto-populate.');
                 return;
             }
 
@@ -299,7 +298,7 @@ const UploadPlannerPage = () => {
                 }
             }
             setSelectedUnitTypes(newTypes);
-            setMessage('Unit types have been auto‑populated from PDF colours.');
+            setMessage('Unit types have been auto‑populated from PDF colors.');
         } catch (err) {
             console.error('Auto-populate error', err);
             setError(`Auto-populate failed: ${err.message}`);
@@ -440,7 +439,7 @@ const UploadPlannerPage = () => {
                     <div>
                         <h1 className="text-3xl font-bold mb-2">Upload Study Planner</h1>
                         <p className="text-sm text-gray-600">
-                            Upload a study planner PDF – use <strong>Auto Populate</strong> to detect unit types from colours (Core = light blue, Major = light orange, Elective = light green).
+                            Upload a study planner PDF – use <strong>Auto Populate</strong> to detect unit types from colors (Core = light blue, Major = light orange, Elective = light green).
                         </p>
                     </div>
                     <Link href="/view/dashboard" className="text-blue-600 hover:underline text-sm">
@@ -482,7 +481,7 @@ const UploadPlannerPage = () => {
                         <div className="mb-3">
                             <h2 className="text-xl font-semibold">Matched database units</h2>
                             <p className="text-sm text-gray-600">
-                                You can manually select unit types or click <strong>Auto Populate</strong> to detect them from PDF colours.
+                                You can manually select unit types or click <strong>Auto Populate</strong> to detect them from PDF colors.
                             </p>
                         </div>
                         <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
@@ -536,7 +535,7 @@ const UploadPlannerPage = () => {
                         disabled={!pdfFile || matchedUnits.length === 0 || isAutoPopulating}
                         className="inline-flex items-center justify-center rounded bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        {isAutoPopulating ? 'Detecting colours...' : 'Auto Populate'}
+                        {isAutoPopulating ? 'Detecting colors...' : 'Auto Populate'}
                     </button>
                     <button
                         type="button"
