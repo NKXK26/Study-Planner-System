@@ -162,7 +162,7 @@ const Dashboard = () => {
 			links: [
 				{ name: "Upload Study Planner", href: "/view/upload_planner", permission: "planner:read" },
 				{ name: "Compare Study Planner", href: "/view/compare_study_planner", permission: "planner:read" },
-				{ name: "Study Planner Management", href: "/view/study_planners", permission: "planner:read" },
+				{ name: "Study Planner Management", href: "/view/study-planner", permission: "planner:read" },
 			],
 			color: "text-blue-600",
 			bgColor: "bg-blue-50"

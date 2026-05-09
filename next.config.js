@@ -4,12 +4,10 @@ const path = require("path");
 const nextConfig = {
   output: "standalone",
 
+  outputFileTracingRoot: path.join(__dirname),
+
   images: {
     unoptimized: true,
-  },
-
-  experimental: {
-    outputFileTracingRoot: path.join(__dirname),
   },
 
   webpack: (config, { isServer }) => {
@@ -18,7 +16,6 @@ const nextConfig = {
       canvas: false,
     };
 
-    // Important for Prisma in Electron
     if (isServer) {
       config.externals.push("@prisma/client", "prisma");
     }

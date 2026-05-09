@@ -33,7 +33,7 @@ export default function StudyPlannerListPage() {
     setError(null);
     try {
       const res = await SecureFrontendAuthHelper.authenticatedFetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/study_planners`
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/study-planner`
       );
       const json = await res.json();
       if (json.success) {
@@ -63,11 +63,11 @@ export default function StudyPlannerListPage() {
     setCreating(true);
     try {
       const res = await SecureFrontendAuthHelper.authenticatedFetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/study_planners`,
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/study-planner`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newName.trim() }),
+          body: JSON.stringify({ name: newName.trim(), units: [] }), // units empty for blank planner
         }
       );
       const json = await res.json();
@@ -88,7 +88,7 @@ export default function StudyPlannerListPage() {
   async function handleDelete(id) {
     try {
       const res = await SecureFrontendAuthHelper.authenticatedFetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/study_planners/${id}`,
+        `${process.env.NEXT_PUBLIC_SERVER_URL}/api/study-planner?id=${id}`,
         { method: 'DELETE' }
       );
       const json = await res.json();
@@ -109,7 +109,6 @@ export default function StudyPlannerListPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/20">
-
       {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between flex-wrap gap-3">
@@ -149,7 +148,6 @@ export default function StudyPlannerListPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-
         {/* Delete confirmation modal */}
         {deleteId && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -272,7 +270,7 @@ export default function StudyPlannerListPage() {
                         <td className="px-5 py-4 font-medium text-gray-800">{p.name}</td>
                         <td className="px-5 py-4">
                           <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
-                            {p.unitCount ?? p.units?.length ?? 0} units
+                            {p.units?.length || 0} units
                           </span>
                         </td>
                         <td className="px-5 py-4 text-xs text-gray-400">{formatDate(p.createdAt)}</td>
