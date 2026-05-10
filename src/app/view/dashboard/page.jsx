@@ -161,8 +161,10 @@ const Dashboard = () => {
 			permission: "system",
 			links: [
 				{ name: "Upload Study Planner", href: "/view/upload_planner", permission: "planner:read" },
-				{ name: "Compare Study Planner", href: "/view/compare_study_planner", permission: "planner:read" },
+				{ name: "Compare Completed Units", href: "/view/compare_study_planner", permission: "planner:read" },
 				{ name: "Study Planner Management", href: "/view/study-planner", permission: "planner:read" },
+				{ name: "Differentiate Study Planners", href: "/view/compare-planners", permission: "planner:read" },
+				
 			],
 			color: "text-blue-600",
 			bgColor: "bg-blue-50"
@@ -185,6 +187,7 @@ const Dashboard = () => {
 			permission: "system",
 			links: [
 				{ name: "Unit Performance Analytics", href: "/view/unit_analytics", permission: "planner:read" },
+				{ name: "Unit Prerequisite Chain", href: "/view/prerequisite-chain", permission: "planner:read" },
 			],
 			color: "text-red-600",
 			bgColor: "bg-red-50"
