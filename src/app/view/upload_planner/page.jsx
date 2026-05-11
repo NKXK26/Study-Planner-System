@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
 import UnitDB from '@app/class/Unit/UnitDB';
+import Draggable from 'react-draggable';
+import { useRef } from 'react';
 
 const UploadPlannerPage = () => {
     const [plannerName, setPlannerName] = useState('');
@@ -22,26 +24,30 @@ const UploadPlannerPage = () => {
     const [isAutoPopulating, setIsAutoPopulating] = useState(false);
     const [message, setMessage] = useState(null);
     const [error, setError] = useState(null);
-
+    const [showColorSidebar, setShowColorSidebar] = useState(false);
+    const [colorMappings, setColorMappings] = useState([]);      // for matching
+    const [sidebarLoading, setSidebarLoading] = useState(false);
+    const [showPdfPreview, setShowPdfPreview] = useState(true);
+    const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+    const nodeRef = useRef(null);
     // Debug modal states
     const [showDebugModal, setShowDebugModal] = useState(false);
     const [debugData, setDebugData] = useState([]);
     const [debugLoading, setDebugLoading] = useState(false);
-
-    const COLOR_TO_TYPE_ID = {
-        '#c5d9f0': 2,   // Core
-        '#fce9d9': 3,   // Major
-        '#d5e2bb': 1,   // Elective
-        '#b1a0c6': 17,  // WIL (Work-Integrated Learning)
-    };
-
+    const [selectedUnitColors, setSelectedUnitColors] = useState({});
     const FALLBACK_UNIT_TYPES = [
-        { id: 2, name: 'Core' },
-        { id: 1, name: 'Elective' },
-        { id: 3, name: 'Major' },
-        { id: 4, name: 'MPU' },
-        { id: 17, name: 'WIL' },
+        { id: 2, name: 'Core', colour: '#c5d9f0', colors: [] },
+        { id: 1, name: 'Elective', colour: '#d5e2bb', colors: [] },
+        { id: 3, name: 'Major', colour: '#fce9d9', colors: [] },
+        { id: 4, name: 'MPU', colour: '#e5b8b7', colors: [] },
+        { id: 17, name: 'WIL', colour: '#b1a0c6', colors: [] },
     ];
+    // Helper: find unit type ID by exact colour match from colour mappings
+    function findMatchingUnitTypeFromMappings(exactHex, mappings) {
+        const normalizedHex = exactHex.toLowerCase();
+        const found = mappings.find(m => m.color.toLowerCase() === normalizedHex);
+        return found ? found.unitTypeId : null;
+    }
 
     const normalizeCode = (str) => {
         return (str || '')
@@ -49,17 +55,19 @@ const UploadPlannerPage = () => {
             .toUpperCase();
     };
 
-    // Helper to get background color for a unit type ID
     const getTypeColor = (typeId) => {
+        const found = unitTypeOptions.find(t => t.id === typeId);
+        if (found && found.colour) return found.colour;
         switch (typeId) {
-            case 2: return '#c5d9f0'; // Core (light blue)
-            case 3: return '#fce9d9'; // Major (light orange)
-            case 1: return '#d5e2bb'; // Elective (light green)
-            case 17: return '#b1a0c6'; // WIL (light purple)
+            case 2: return '#c5d9f0';
+            case 3: return '#fce9d9';
+            case 1: return '#d5e2bb';
+            case 17: return '#b1a0c6';
             default: return '#ffffff';
         }
     };
 
+    // Fetch unit types (for dropdown options and display)
     useEffect(() => {
         const fetchUnitTypes = async () => {
             try {
@@ -67,17 +75,65 @@ const UploadPlannerPage = () => {
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success && data.data && data.data.length) {
-                        setUnitTypeOptions(data.data);
+                        const types = data.data.map(t => ({
+                            id: t.id ?? t.ID,
+                            name: t.name ?? t.Name,
+                            colour: t.colour ?? t.Colour,
+                            colors: t.colors || []
+                        }));
+                        setUnitTypeOptions(types);
                         return;
                     }
                 }
                 setUnitTypeOptions(FALLBACK_UNIT_TYPES);
             } catch (err) {
+                console.error(err);
                 setUnitTypeOptions(FALLBACK_UNIT_TYPES);
             }
         };
         fetchUnitTypes();
     }, []);
+    // Clean up blob URL when component unmounts or file changes
+    useEffect(() => {
+        return () => {
+            if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
+        };
+    }, [pdfBlobUrl]);
+
+    useEffect(() => {
+        if (pdfFile) {
+            if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
+            setPdfBlobUrl(URL.createObjectURL(pdfFile));
+        } else {
+            if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
+            setPdfBlobUrl(null);
+        }
+    }, [pdfFile]);
+    // Fetch colour mappings from /api/unit-type-color (used for both sidebar and matching)
+    const fetchColourMappings = async () => {
+        setSidebarLoading(true);
+        try {
+            const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/unit-type-color');
+            const json = await res.json();
+            if (json.success && json.data) {
+                setColorMappings(json.data);
+            } else {
+                setColorMappings([]);
+            }
+        } catch (err) {
+            console.error('Failed to fetch colour mappings', err);
+            setColorMappings([]);
+        } finally {
+            setSidebarLoading(false);
+        }
+    };
+
+    const toggleColorSidebar = () => {
+        if (!showColorSidebar && colorMappings.length === 0) {
+            fetchColourMappings();
+        }
+        setShowColorSidebar(!showColorSidebar);
+    };
 
     const handleFileChange = async (event) => {
         setMessage(null);
@@ -159,7 +215,7 @@ const UploadPlannerPage = () => {
     };
 
     const extractUnitsFromText = (text) => {
-        const unitRegex = /((COS|SWE|ICT|TNE)\d{5})/g;
+        const unitRegex = /([A-Z]{2,4}\d{5})/g;
         const matches = [...text.matchAll(unitRegex)];
         const units = [];
 
@@ -231,7 +287,7 @@ const UploadPlannerPage = () => {
             setMissingCodes(missingCodesLocal);
 
             if (missingCodesLocal.length === 0 && matched.length > 0) {
-                setMessage('All extracted units matched. Use "Auto Populate" to detect types from PDF colors.');
+                setMessage('All extracted units matched. Use "Auto Populate" to detect types from PDF colours.');
             }
         } catch (fetchError) {
             console.error('Matching units fetch error', fetchError);
@@ -243,11 +299,18 @@ const UploadPlannerPage = () => {
         }
     };
 
-
+    // Auto‑populate using exact colour matching from the /api/unit-type-color endpoint
     const handleAutoPopulate = async () => {
         if (!pdfFile) {
             setError('No PDF file to analyze.');
             return;
+        }
+        if (colorMappings.length === 0) {
+            await fetchColourMappings();
+            if (colorMappings.length === 0) {
+                setError('No colour mappings defined. Please upload a study planner design first in Unit Type Management.');
+                return;
+            }
         }
 
         setIsAutoPopulating(true);
@@ -264,41 +327,47 @@ const UploadPlannerPage = () => {
 
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.error || 'Failed to extract colors');
+                throw new Error(err.error || 'Failed to extract colours');
             }
 
             const colorBlocks = await response.json();
 
-        
-            const colorMap = {};
+            // 🔁 Change 1: colorMap now stores { typeId, colorHex }
+            const colorMap = {}; // { code: { typeId, colorHex } }
+
             for (const block of colorBlocks) {
                 const raw = block.text.trim();
                 const codeMatch = raw.match(/^([A-Z]{2,4}\d{5})$/);
                 if (codeMatch) {
                     const code = normalizeCode(codeMatch[1]);
-                    const color = block.color.toLowerCase();
-                    const typeId = COLOR_TO_TYPE_ID[color];
+                    const extractedHex = block.color.toLowerCase();
+                    const typeId = findMatchingUnitTypeFromMappings(extractedHex, colorMappings);
                     if (typeId && !colorMap[code]) {
-                        colorMap[code] = typeId;
+                        // 🔁 Change 2: store both typeId and colour
+                        colorMap[code] = { typeId, colorHex: extractedHex };
                     }
                 }
             }
 
             if (Object.keys(colorMap).length === 0) {
-                setError('No colored unit codes found in the PDF. Cannot auto-populate.');
+                setError('No coloured unit codes found in the PDF that match any defined colour mapping. Please check the colour mappings in Unit Type Management.');
                 return;
             }
 
-            // Apply to matched units
+            // 🔁 Change 3: also update selectedUnitColors
             const newTypes = { ...selectedUnitTypes };
+            const newColors = { ...selectedUnitColors };
             for (const unit of matchedUnits) {
                 const normCode = normalizeCode(unit.unit_code);
                 if (colorMap[normCode]) {
-                    newTypes[unit.id] = colorMap[normCode];
+                    newTypes[unit.id] = colorMap[normCode].typeId;
+                    newColors[unit.id] = colorMap[normCode].colorHex;
                 }
             }
             setSelectedUnitTypes(newTypes);
-            setMessage('Unit types have been auto‑populated from PDF colors.');
+            setSelectedUnitColors(newColors);   // store the actual PDF colour
+
+            setMessage('Unit types have been auto‑populated by matching PDF colours to the colour mappings (exact match).');
         } catch (err) {
             console.error('Auto-populate error', err);
             setError(`Auto-populate failed: ${err.message}`);
@@ -306,7 +375,6 @@ const UploadPlannerPage = () => {
             setIsAutoPopulating(false);
         }
     };
-
     // Debug: show coloured blocks from the PDF
     const handleDebugColors = async () => {
         if (!pdfFile) {
@@ -345,7 +413,7 @@ const UploadPlannerPage = () => {
     const handleTypeChange = (unitId, typeId) => {
         setSelectedUnitTypes(prev => ({ ...prev, [unitId]: parseInt(typeId, 10) }));
     };
-    // Sort units by type priority: Core (2) → Major (3) → Elective (1) → WIL (17) → others, then by unit code
+
     const sortedMatchedUnits = useMemo(() => {
         const getPriority = (typeId) => {
             switch (typeId) {
@@ -356,15 +424,14 @@ const UploadPlannerPage = () => {
                 default: return 999;
             }
         };
-
         return [...matchedUnits].sort((a, b) => {
             const priorityA = getPriority(selectedUnitTypes[a.id] || 1);
             const priorityB = getPriority(selectedUnitTypes[b.id] || 1);
             if (priorityA !== priorityB) return priorityA - priorityB;
-            // If same type, sort by unit code alphabetically
             return (a.unit_code || '').localeCompare(b.unit_code || '');
         });
     }, [matchedUnits, selectedUnitTypes]);
+
     const handleUploadToDatabase = async () => {
         setMessage(null);
         setError(null);
@@ -439,7 +506,8 @@ const UploadPlannerPage = () => {
                     <div>
                         <h1 className="text-3xl font-bold mb-2">Upload Study Planner</h1>
                         <p className="text-sm text-gray-600">
-                            Upload a study planner PDF – use <strong>Auto Populate</strong> to detect unit types from colors (Core = light blue, Major = light orange, Elective = light green).
+                            Upload a study planner PDF – use <strong>Auto Populate</strong> to detect unit types by matching PDF colours to the colour mappings defined in <strong>Unit Type Management</strong>.<br />
+                            The system uses exact colour matching – no fuzzy matching.
                         </p>
                     </div>
                     <Link href="/view/dashboard" className="text-blue-600 hover:underline text-sm">
@@ -452,8 +520,6 @@ const UploadPlannerPage = () => {
                     <input
                         type="text"
                         value={plannerName}
-                        onChange={(e) => setPlannerName(e.target.value)}
-                        placeholder="Auto-filled from file name"
                         disabled
                         className="mt-2 block w-full rounded border border-gray-300 bg-gray-100 p-2 text-gray-500 cursor-not-allowed"
                     />
@@ -481,7 +547,7 @@ const UploadPlannerPage = () => {
                         <div className="mb-3">
                             <h2 className="text-xl font-semibold">Matched database units</h2>
                             <p className="text-sm text-gray-600">
-                                You can manually select unit types or click <strong>Auto Populate</strong> to detect them from PDF colors.
+                                You can manually select unit types or click <strong>Auto Populate</strong> to detect them from PDF colours (exact match to colour mappings).
                             </p>
                         </div>
                         <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
@@ -497,7 +563,7 @@ const UploadPlannerPage = () => {
                                 {sortedMatchedUnits.filter(unit => unit.availability === 'published').map((unit) => (
                                     <tr
                                         key={unit.id}
-                                        style={{ backgroundColor: getTypeColor(selectedUnitTypes[unit.id]) }}
+                                        style={{ backgroundColor: selectedUnitColors[unit.id] || getTypeColor(selectedUnitTypes[unit.id]) }}
                                         className="transition-colors"
                                     >
                                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{unit.unit_code}</td>
@@ -519,10 +585,14 @@ const UploadPlannerPage = () => {
                             </tbody>
                         </table>
                         <div className="mt-3 flex flex-wrap gap-3 text-xs">
-                            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: '#c5d9f0' }}></span> Core</span>
-                            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: '#fce9d9' }}></span> Major</span>
-                            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: '#d5e2bb' }}></span> Elective</span>
-                            <span><span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: '#b1a0c6' }}></span> WIL</span>
+                            {unitTypeOptions.map(t => (
+                                t.colour && (
+                                    <span key={t.id}>
+                                        <span className="inline-block w-3 h-3 rounded-sm mr-1" style={{ backgroundColor: t.colour }}></span>
+                                        {t.name}
+                                    </span>
+                                )
+                            ))}
                         </div>
                         <p className="mt-2 text-sm text-gray-600">All matched units will be saved to the study planner with their selected types.</p>
                     </div>
@@ -533,15 +603,15 @@ const UploadPlannerPage = () => {
                         type="button"
                         onClick={handleAutoPopulate}
                         disabled={!pdfFile || matchedUnits.length === 0 || isAutoPopulating}
-                        className="inline-flex items-center justify-center rounded bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center justify-center rounded bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50"
                     >
-                        {isAutoPopulating ? 'Detecting colors...' : 'Auto Populate'}
+                        {isAutoPopulating ? 'Detecting colours...' : 'Auto Populate'}
                     </button>
                     <button
                         type="button"
                         onClick={handleDebugColors}
                         disabled={!pdfFile || isParsing || debugLoading}
-                        className="inline-flex items-center justify-center rounded bg-gray-600 px-4 py-2 text-white hover:bg-gray-700 disabled:opacity-50"
+                        className="inline-flex items-center justify-center rounded bg-gray-600 px-4 py-2 text-white hover:bg-gray-700"
                     >
                         {debugLoading ? 'Analyzing...' : 'Show Color Debug'}
                     </button>
@@ -549,9 +619,24 @@ const UploadPlannerPage = () => {
                         type="button"
                         disabled={!pdfFile || isParsing || isUploading || !plannerName.trim() || matchedUnits.length === 0}
                         onClick={handleUploadToDatabase}
-                        className="inline-flex items-center justify-center rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center justify-center rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
                     >
                         {isUploading ? 'Saving...' : 'Save all units to study planner'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowPdfPreview(!showPdfPreview)}
+                        disabled={!pdfFile}
+                        className="inline-flex items-center justify-center rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                        {showPdfPreview ? 'Hide PDF Preview' : 'Show PDF Preview'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={toggleColorSidebar}
+                        className="inline-flex items-center justify-center rounded bg-purple-600 px-4 py-2 text-white hover:bg-purple-700"
+                    >
+                        {showColorSidebar ? 'Hide Colour Mappings' : 'Show Colour Mappings'}
                     </button>
                 </div>
 
@@ -566,8 +651,23 @@ const UploadPlannerPage = () => {
                         />
                     </div>
                 )}
-
-                {/* Debug Modal */}
+                {/* Draggable PDF Preview Window */}
+                {showPdfPreview && pdfBlobUrl && (
+                    <Draggable nodeRef={nodeRef} handle=".drag-handle" bounds="body">
+                        <div ref={nodeRef} className="fixed bg-white shadow-xl rounded-lg border border-gray-200 p-3 z-50"
+                            style={{ width: '500px', minWidth: '250px', maxWidth: '80vw', top: '100px', right: '20px' }}>
+                            <div className="drag-handle flex justify-between items-center mb-2 cursor-move bg-gray-100 p-1 rounded">
+                                <h3 className="font-semibold text-gray-800 text-sm">PDF Preview</h3>
+                                <button onClick={() => setShowPdfPreview(false)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+                            </div>
+                            <iframe
+                                src={`${pdfBlobUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                                className="w-full h-[70vh] border rounded"
+                                title="PDF preview"
+                            />
+                        </div>
+                    </Draggable>
+                )}
                 {showDebugModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowDebugModal(false)}>
                         <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
@@ -576,7 +676,7 @@ const UploadPlannerPage = () => {
                                 <button onClick={() => setShowDebugModal(false)} className="text-gray-500 hover:text-gray-700">✕</button>
                             </div>
                             <div className="p-4">
-                                {debugLoading && <p className="text-gray-500">Analyzing PDF colors... (this may take a moment)</p>}
+                                {debugLoading && <p className="text-gray-500">Analyzing PDF colors...</p>}
                                 {!debugLoading && debugData.length === 0 && !debugData.error && <p className="text-gray-500">No colored text blocks found.</p>}
                                 {!debugLoading && debugData.length > 0 && (
                                     <table className="min-w-full text-sm">
@@ -610,6 +710,34 @@ const UploadPlannerPage = () => {
                     </div>
                 )}
             </div>
+
+            {/* Colour Mapping Sidebar (uses same data as matching) */}
+            {showColorSidebar && (
+                <div className="fixed right-0 top-1/2 transform -translate-y-1/2 w-80 bg-white shadow-xl rounded-l-lg border-l border-t border-b border-gray-200 p-4 z-40 max-h-[80vh] overflow-y-auto">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-bold text-gray-800">Colour Mappings (Unit Type ↔ Colour)</h3>
+                        <button onClick={toggleColorSidebar} className="text-gray-400 hover:text-gray-600">✕</button>
+                    </div>
+                    {sidebarLoading ? (
+                        <p className="text-sm text-gray-500">Loading colour mappings...</p>
+                    ) : colorMappings.length === 0 ? (
+                        <p className="text-sm text-gray-500">No colour mappings defined.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {colorMappings.map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2 p-1 border-b border-gray-100">
+                                    <div className="w-6 h-6 rounded border" style={{ backgroundColor: item.color }}></div>
+                                    <code className="text-xs font-mono flex-1">{item.color}</code>
+                                    <span className="text-xs text-gray-700 truncate max-w-[120px]" title={item.unitTypeName}>
+                                        {item.unitTypeName}
+                                    </span>
+                                    <span className="text-[10px] text-gray-400">{item.source === 'Alternative' ? 'Alt' : 'Primary'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

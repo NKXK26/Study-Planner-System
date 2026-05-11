@@ -131,7 +131,8 @@ model Unit {
 model UnitType {
   ID                                         Int                              @id @default(autoincrement())
   Name                                       String
-  Colour                                     String?
+  Colour                                     String?  // primary color (still useful as display)
+  colors                                     UnitTypeColor[]                  // renamed to lowercase for clarity
   StudentStudyPlannerAmmendments_OldUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_OldUnitType")
   StudentStudyPlannerAmmendments_NewUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitType")
   studyPlannerUnits                          StudyPlannerUnit[]
@@ -140,6 +141,15 @@ model UnitType {
 
   @@unique([ID, Name])
 }
+model UnitTypeColor {
+  id         Int      @id @default(autoincrement())
+  unitTypeId Int
+  color      String   // store hex code, e.g. "#c5d9f0"
+  unitType   UnitType @relation(fields: [unitTypeId], references: [ID], onDelete: Cascade)
+
+  @@unique([unitTypeId, color])
+}
+
 
 model StudyPlanner {
   id                Int                @id @default(autoincrement())

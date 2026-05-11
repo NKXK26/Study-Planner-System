@@ -4,12 +4,10 @@ import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
 export default class UnitTypeDB {
 	static async FetchUnitTypes(params) {
 		try {
-			//Use this one for netlify
 			const queryParams = {};
 
 			for (const key in params) {
 				if (Array.isArray(params[key]) || typeof params[key] === 'object') {
-					// stringify arrays or objects
 					queryParams[key] = JSON.stringify(params[key]);
 				} else {
 					queryParams[key] = params[key];
@@ -17,7 +15,6 @@ export default class UnitTypeDB {
 			}
 
 			const url = `${process.env.NEXT_PUBLIC_SERVER_URL}/api/unit_type?${new URLSearchParams(queryParams)}`;
-
 			const response = await SecureFrontendAuthHelper.authenticatedFetch(url);
 
 			if (!response.ok) {
@@ -31,23 +28,27 @@ export default class UnitTypeDB {
 					} catch { }
 				}
 				console.error('FetchUnitTypes error:', errorMessage);
-				return [];
+				return { success: false, data: [], pagination: null };
 			}
 
 			const data = await response.json();
 			const pagination = data.pagination || null;
 			const arr = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []);
+			
 			if (!arr.length) {
 				return {
 					success: true,
 					data: [],
 					pagination
-				}
+				};
 			}
+			
+			// Map API response to UnitType instances (include colors array)
 			let unit_types = arr.map(unitType => new UnitType({
 				id: unitType.ID,
 				name: unitType.Name,
-				colour: unitType.Colour
+				colour: unitType.Colour,
+				colors: unitType.colors || []   // API returns 'colors' (lowercase) as array of hex strings
 			}));
 
 			return {
@@ -63,14 +64,18 @@ export default class UnitTypeDB {
 
 	static async SaveUnitType(unitTypeData, method_type) {
 		try {
-			// Prepare the data to send based on method type
+			// Prepare the data to send – the API expects:
+			// - POST: { Name, Colour, colors }
+			// - PUT:  { ID, Name, Colour, colors }
 			const requestData = method_type === 'POST' ? {
 				Name: unitTypeData.name,
-				Colour: unitTypeData.colour
+				Colour: unitTypeData.colour,
+				colors: unitTypeData.colors || []
 			} : {
-				ID: unitTypeData.ID, // Make sure this matches what your API expects
+				ID: unitTypeData.id,      // uppercase ID as API expects
 				Name: unitTypeData.name,
-				Colour: unitTypeData.colour
+				Colour: unitTypeData.colour,
+				colors: unitTypeData.colors || []
 			};
 
 			const response = await SecureFrontendAuthHelper.authenticatedFetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/unit_type`, {

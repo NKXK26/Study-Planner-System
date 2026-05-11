@@ -2,506 +2,225 @@
 import { useEffect, useState, useRef } from 'react';
 import UnitTypeDB from '@app/class/UnitType/UnitTypeDB';
 import Button from '../../../components/button.js';
-import Tooltip from '../../../components/Tooltip.js';
 import InfoTooltip from '../../../components/InfoTooltip.js';
 import { useLightDarkMode } from '@app/context/LightDarkMode';
 import { useRole } from '@app/context/RoleContext';
 
-// Function to check if a unit type is restricted (cannot be edited or deleted)
 const isRestrictedUnitType = (unitTypeName) => {
-	const restrictedTypes = ['core', 'major', 'elective', 'mpu']; //if the unit type names are listed here, there are restricted, means cant be deleted, they are protected by the system
-	return restrictedTypes.includes(unitTypeName.toLowerCase());
+	const restrictedTypes = ['core', 'major', 'elective', 'mpu'];
+	return restrictedTypes.includes(unitTypeName?.toLowerCase());
 };
 
 const Form = ({ onClose, mode, unitTypeId, RefreshList, HandleOpenForm, unitType }) => {
 	const { can } = useRole();
 	const { theme } = useLightDarkMode();
-	const [unitTypeData, setUnitTypeData] = useState({
-		id: '',
-		name: '',
-		colour: '#000000'
-	});
-
-	const [originalData, setOriginalData] = useState({
-		id: '',
-		name: '',
-		colour: '#000000'
-	});
-
+	const [unitTypeData, setUnitTypeData] = useState({ id: '', name: '', colour: '#000000', colors: [] });
+	const [originalData, setOriginalData] = useState({ id: '', name: '', colour: '#000000', colors: [] });
 	const [isLoading, setIsLoading] = useState(mode === 'VIEW' || mode === 'EDIT');
 	const [isSaveLoading, setIsSaveLoading] = useState(false);
-	const [isDeleteLoading, setIsDeleteLoading] = useState(false)
-
-
+	const [isDeleteLoading, setIsDeleteLoading] = useState(false);
 
 	useEffect(() => {
 		if ((mode === 'VIEW' || mode === 'EDIT') && unitType) {
-			try {
-				if (unitType) {
-					const unitTypeDataObj = {
-						id: unitType.id,
-						name: unitType.name,
-						colour: unitType.colour
-					};
-					setUnitTypeData(unitTypeDataObj);
-					setOriginalData(unitTypeDataObj); // Store original data for comparison
-				} else {
-					window.Swal.fire({
-						title: 'Error',
-						text: `Unit type with ID: ${unitTypeId} not found`,
-						icon: 'error',
-						confirmButtonText: 'OK'
-					});
-					onClose();
-				}
-			} catch (error) {
-				window.Swal.fire({
-					title: 'Error',
-					text: 'Failed to fetch unit type data',
-					icon: 'error',
-					confirmButtonText: 'OK'
-				});
-			} finally {
-				setIsLoading(false);
-			}
+			const data = {
+				id: unitType.id ?? unitTypeId,
+				name: unitType.name,
+				colour: unitType.colour || '#000000',
+				colors: unitType.colors || []
+			};
+			setUnitTypeData(data);
+			setOriginalData(data);
+			setIsLoading(false);
 		} else if (mode === 'ADD') {
 			setIsLoading(false);
+		} else if ((mode === 'VIEW' || mode === 'EDIT') && unitTypeId && !unitType) {
+			(async () => {
+				try {
+					const res = await UnitTypeDB.FetchUnitTypes({ ids: [unitTypeId] });
+					const data = res.data?.[0];
+					if (data) {
+						const unitData = {
+							id: data.id,
+							name: data.name,
+							colour: data.colour || '#000000',
+							colors: data.colors || []
+						};
+						setUnitTypeData(unitData);
+						setOriginalData(unitData);
+					} else throw new Error('Not found');
+				} catch (err) {
+					window.Swal.fire({ title: 'Error', text: 'Failed to load unit type', icon: 'error' }).then(() => onClose());
+				} finally {
+					setIsLoading(false);
+				}
+			})();
 		}
-	}, [unitType, mode, onClose]);
+	}, [unitType, mode, unitTypeId, onClose]);
 
 	const SubmitForm = async (e) => {
-		setIsSaveLoading(true);
 		e.preventDefault();
 
-		// Use current state instead of FormData for more reliable data
-		const unitType = {
+		// For EDIT mode, we must have a valid ID from the prop
+		if (mode === 'EDIT' && !unitTypeId) {
+			window.Swal.fire({ title: 'Error', text: 'Unit type ID is missing. Cannot save.', icon: 'error' });
+			return;
+		}
+		setIsSaveLoading(true);
+
+		const payload = {
 			name: unitTypeData.name,
-			colour: unitTypeData.colour
+			colour: unitTypeData.colour,
+			colors: unitTypeData.colors
 		};
 
-		// For restricted types in EDIT mode, handle differently
+		// For restricted types, name cannot change
 		if (mode === 'EDIT' && isRestrictedUnitType(originalData.name)) {
-			// Always use the original name for restricted types
-			unitType.name = originalData.name;
-
-			// Check if color actually changed
-			const colorChanged = unitTypeData.colour !== originalData.colour;
-
-			console.log('Original color:', originalData.colour);
-			console.log('Current color:', unitTypeData.colour);
-			console.log('Color changed:', colorChanged);
-
-			// If no changes were made, show a message
-			if (!colorChanged) {
-				console.log('Color changed from', originalData.colour, 'to', unitTypeData.colour);
-				window.Swal.fire({
-					title: 'No Changes',
-					text: 'No changes were made to the unit type.',
-					icon: 'info',
-					confirmButtonText: 'OK'
-				});
-				setIsSaveLoading(false);
-				return;
-			}
-
-			// If color changed, allow the submission
-			console.log('Color changed from', originalData.colour, 'to', unitTypeData.colour);
+			payload.name = originalData.name;
 		}
 
-		// For non-restricted types, check if any changes were made
+		// For non‑restricted types, check if any change was made
 		if (mode === 'EDIT' && !isRestrictedUnitType(originalData.name)) {
-			setIsSaveLoading(false);
 			const nameChanged = unitTypeData.name !== originalData.name;
-			const colorChanged = unitTypeData.colour !== originalData.colour;
-
-			if (!nameChanged && !colorChanged) {
-				window.Swal.fire({
-					title: 'No Changes',
-					text: 'No changes were made to the unit type.',
-					icon: 'info',
-					confirmButtonText: 'OK'
-				});
+			const colorsChanged = JSON.stringify(unitTypeData.colors) !== JSON.stringify(originalData.colors);
+			if (!nameChanged && !colorsChanged) {
+				window.Swal.fire({ title: 'No Changes', text: 'No changes were made.', icon: 'info' });
 				setIsSaveLoading(false);
 				return;
 			}
 		}
 
 		// Validation
-		const errors = [];
-		if (!unitType.name) {
-			errors.push("Name is required!");
-		}
-
-		if (errors.length > 0) {
+		if (!payload.name) {
+			window.Swal.fire({ title: 'Validation Error', text: 'Name is required!', icon: 'error' });
 			setIsSaveLoading(false);
-
-			window.Swal.fire({
-				title: 'Validation Error',
-				text: errors.join('\n'),
-				icon: 'error',
-				confirmButtonText: 'OK'
-			});
 			return;
 		}
 
-		try {
-			const method_type = mode === 'ADD' ? 'POST' : 'PUT';
-			const dataToSend = {
-				...unitType,
-				...(mode === 'EDIT' && { ID: unitTypeData.id }) // Only include ID for edits
-			};
+		const dataToSend = { ...payload };
+		if (mode === 'EDIT') dataToSend.id = unitTypeId; // Use the prop directly
+		console.log('Saving unit type with ID:', unitTypeId, 'data:', dataToSend);
 
-			await UnitTypeDB.SaveUnitType(dataToSend, method_type);
-			setIsSaveLoading(false);
-			window.Swal.fire({
-				title: 'Success',
-				text: `Unit type ${mode === 'ADD' ? 'added' : 'updated'} successfully`,
-				icon: 'success',
-				confirmButtonText: 'OK'
-			});
+		try {
+			await UnitTypeDB.SaveUnitType(dataToSend, mode === 'ADD' ? 'POST' : 'PUT');
+			window.Swal.fire({ title: 'Success', text: `Unit type ${mode === 'ADD' ? 'added' : 'updated'} successfully`, icon: 'success' });
 			onClose();
 			RefreshList();
-		} catch (error) {
+		} catch (err) {
+			console.error(err);
+			window.Swal.fire({ title: 'Error', text: err.message || 'Failed to save', icon: 'error' });
+		} finally {
 			setIsSaveLoading(false);
-			window.Swal.fire({
-				title: 'Error',
-				text: error.message,
-				icon: 'error',
-				confirmButtonText: 'OK'
-			});
+		}
+	};
+
+	const handleDeleteColor = async (color) => {
+		const result = await window.Swal.fire({
+			title: 'Remove Color', text: `Remove ${color}?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Yes'
+		});
+		if (result.isConfirmed) {
+			setUnitTypeData(prev => ({ ...prev, colors: prev.colors.filter(c => c !== color) }));
 		}
 	};
 
 	const HandleConfirmDelete = async () => {
 		setIsDeleteLoading(true);
-		// Check if unit type is restricted
 		if (isRestrictedUnitType(unitTypeData.name)) {
-			await window.Swal.fire({
-				title: 'Cannot Delete',
-				text: `"${unitTypeData.name}" is a system unit type and cannot be deleted.`,
-				icon: 'warning',
-				confirmButtonText: 'OK'
-			});
+			await window.Swal.fire({ title: 'Cannot Delete', text: 'System unit type cannot be deleted.', icon: 'warning' });
+			setIsDeleteLoading(false);
 			return;
 		}
-
-
 		try {
 			const res = await UnitTypeDB.deleteUnitType(unitTypeData.id);
 			if (res.success) {
-				await window.Swal.fire({
-					title: 'Deleted!',
-					text: 'Unit type has been deleted successfully.',
-					icon: 'success',
-					confirmButtonText: 'OK'
-				});
-				setIsDeleteLoading(false);
+				await window.Swal.fire({ title: 'Deleted!', text: 'Unit type deleted.', icon: 'success' });
 				RefreshList();
 				onClose();
-			} else {
-				await window.Swal.fire({
-					title: 'Error',
-					text: res.message || 'Failed to delete unit type',
-					icon: 'error',
-					confirmButtonText: 'OK'
-				});
-			}
+			} else throw new Error(res.message);
+		} catch (err) {
+			window.Swal.fire({ title: 'Error', text: err.message, icon: 'error' });
+		} finally {
 			setIsDeleteLoading(false);
-		} catch (error) {
-			if (
-				error.message === 'This unit type is being used and cannot be deleted'
-			) {
-				await window.Swal.fire({
-					title: 'Cannot Delete',
-					text: 'This unit type is being used and cannot be deleted.',
-					icon: 'warning',
-					confirmButtonText: 'OK'
-				});
-			} else {
-				await window.Swal.fire({
-					title: 'Error',
-					text: error.message || 'An error occurred while deleting the unit type',
-					icon: 'error',
-					confirmButtonText: 'OK'
-				});
-			}
 		}
 	};
 
 	const form_heading_text = `${mode.charAt(0).toUpperCase() + mode.slice(1).toLowerCase()} Unit Type`;
 	const is_read_only = mode === "VIEW";
 	const is_restricted = isRestrictedUnitType(unitTypeData.name);
-
 	const formRef = useRef(null);
 
-	// Add click outside handler
 	useEffect(() => {
-		const handleClickOutside = (event) => {
+		const handleClickOutside = (e) => {
 			const confirmDialog = document.querySelector('.swal2-container');
-			if (confirmDialog && confirmDialog.contains(event.target)) {
-				return;
-			}
-
-			if (formRef.current && !formRef.current.contains(event.target)) {
-				onClose();
-			}
+			if (confirmDialog && confirmDialog.contains(e.target)) return;
+			if (formRef.current && !formRef.current.contains(e.target)) onClose();
 		};
-
 		document.addEventListener('mousedown', handleClickOutside);
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside);
-		};
+		return () => document.removeEventListener('mousedown', handleClickOutside);
 	}, [onClose]);
 
 	return (
-		<>
-			<div className="VED-wrapper">
-				<div ref={formRef} className="VED-container">
-					{/* Header */}
-					<div className="VED-header">
-						<h1 className='VED-title'>
-							{form_heading_text}
-							{/* Dynamic InfoTooltip - Edit the content below for each mode */}
-							<InfoTooltip
-								content={
-									mode === 'VIEW'
-										? "Currently viewing the Unit Type"
-										: mode === 'EDIT'
-											? "Currently editting the Unit Type"
-											: mode === 'ADD'
-												? "Adding a new Unit Type"
-												: "Unit Type management form" // Default fallback text
-								}
-								position="bottom"
-								className="ml-2"
-							/>
-						</h1>
-						<button
-							onClick={onClose}
-							className="VED-close-btn"
-						>
-							<svg width="24" height="24" stroke="currentColor" strokeWidth="2">
-								<line x1="18" y1="6" x2="6" y2="18" />
-								<line x1="6" y1="6" x2="18" y2="18" />
-							</svg>
-						</button>
-					</div>
-
-					{isLoading ? (
-						<div className="flex justify-center items-center h-64 w-128">
-							<p className={theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}>Loading unit type data...</p>
-						</div>
-					) : (
-						<form
-							onSubmit={SubmitForm}
-							onKeyDown={(e) => {
-								if (e.key === 'Enter') {
-									e.preventDefault();
-									SubmitForm(e);
-								}
-							}}
-							className="p-6 flex flex-col h-full"
-						>
-							<div className="flex md:flex-row flex-col">
-								{/* Left Column */}
-								<div className="flex-1 pr-6">
-									{/* Name Field */}
-									<div className="mb-4">
-										<label htmlFor="name" className="label-text-alt">
-											Name:
-											<InfoTooltip
-												content={is_restricted
-													? "System unit types (Core, Major, Elective, MPU) cannot be renamed as they are prime Unit Types."
-													: "Enter a descriptive name for this unit type. This will be used to categorize units in the system."
-												}
-												position="right"
-												className="ml-1"
-											/>
-											{is_restricted && mode === 'EDIT' && (
-												<span className="ml-2 text-xs text-blue-600">(Protected)</span>
-											)}
-										</label>
-										<input
-											type="text"
-											name="name"
-											id="name"
-											value={unitTypeData.name}
-											onChange={(e) => setUnitTypeData({ ...unitTypeData, name: e.target.value })}
-											className="form-input"
-											required
-											disabled={is_read_only || (is_restricted && mode === 'EDIT')}
-										/>
-										{is_restricted && mode === 'EDIT' && (
-											<p className="text-xs text-blue-600 mt-1">
-												This is a system unit type. Only the color can be modified.
-											</p>
-										)}
-									</div>
-									{/* Color Field */}
-									<div className="mb-4">
-										<label htmlFor="colour" className="label-text-alt">
-											Color:
-											<InfoTooltip
-												content="Select a color to visually identify this unit type throughout the system. This helps in quickly distinguishing unit categories."
-												position="right"
-												className="ml-1"
-											/>
-											{is_restricted && mode === 'EDIT' && (
-												<span className="ml-2 text-xs text-blue-600">(Editable)</span>
-											)}
-										</label>
-										<div className="flex items-center gap-4">
-											<input
-												type="color"
-												name="colour"
-												id="colour"
-												value={unitTypeData.colour}
-												onChange={(e) => setUnitTypeData({ ...unitTypeData, colour: e.target.value })}
-												className={`w-12 h-12 p-1 border border-gray-300 rounded-md ${is_read_only ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-												disabled={is_read_only}
-												style={{
-													opacity: is_read_only ? 0.5 : 1,
-													cursor: is_read_only ? 'not-allowed' : 'pointer'
-												}}
-											/>
-											<div className="flex items-center gap-2">
-												<span className="font-mono">{unitTypeData.colour}</span>
-											</div>
-										</div>
-										{is_restricted && mode === 'EDIT' && (
-											<p className="text-xs text-blue-600 mt-1">
-												You can change the color of system unit types.
-											</p>
-										)}
+		<div className="VED-wrapper">
+			<div ref={formRef} className="VED-container">
+				<div className="VED-header">
+					<h1 className='VED-title'>{form_heading_text}<InfoTooltip content="..." position="bottom" className="ml-2" /></h1>
+					<button onClick={onClose} className="VED-close-btn"><svg width="24" height="24" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>
+				</div>
+				{isLoading ? (
+					<div className="flex justify-center items-center h-64"><p className={theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}>Loading...</p></div>
+				) : (
+					<form onSubmit={SubmitForm} onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()} className="p-6 flex flex-col h-full">
+						<div className="flex md:flex-row flex-col">
+							<div className="flex-1 pr-6">
+								<div className="mb-4">
+									<label htmlFor="name" className="label-text-alt">Name:</label>
+									<input type="text" id="name" value={unitTypeData.name} onChange={e => setUnitTypeData({ ...unitTypeData, name: e.target.value })} className="form-input" required disabled={is_read_only || (is_restricted && mode === 'EDIT')} />
+									{is_restricted && mode === 'EDIT' && <p className="text-xs text-blue-600 mt-1">System unit type – only colors can be modified.</p>}
+								</div>
+								<div className="mb-4">
+									<label className="label-text-alt">Primary Color:</label>
+									<div className="flex items-center gap-2 mt-1">
+										<div className="w-8 h-8 rounded-full border border-gray-400" style={{ backgroundColor: unitTypeData.colour }}></div>
+										<span className="font-mono">{unitTypeData.colour}</span>
 									</div>
 								</div>
+								<div className="mb-4">
+									<label className="label-text-alt">Alternative Colors:</label>
+									<div className="space-y-2 mt-1">
+										{unitTypeData.colors.length === 0 ? <p className="text-xs text-gray-400">No alternative colors defined.</p> : null}
+										{unitTypeData.colors.map((c, idx) => (
+											<div key={idx} className="flex items-center gap-2 p-1 border rounded">
+												<div className="w-6 h-6 rounded border" style={{ backgroundColor: c }}></div>
+												<code className="text-xs font-mono flex-1">{c}</code>
+												{!is_read_only && <button type="button" onClick={() => handleDeleteColor(c)} className="text-red-500 hover:text-red-700"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}
+											</div>
+										))}
+									</div>
+									{!is_read_only && <p className="text-xs text-gray-400 mt-2">To add alternative colors, use the <strong>"Upload Study Planner Design"</strong> tool.</p>}
+								</div>
 							</div>
-
-							{/* Action Buttons */}
-							<div className="mt-6 flex justify-end space-x-4">
-								{mode === "VIEW" ? (
-									<>
-										<button
-											type="button"
-											onClick={onClose}
-											className={`mx-3 px-4 py-2 rounded-xl cursor-pointer ${theme === 'dark'
-												? 'bg-gray-700 text-gray-100 hover:bg-gray-600'
-												: 'bg-white text-gray-900 border-2 border-gray-300 hover:bg-gray-50'
-												}`}
-										>
-											Close
-										</button>
-										{can("unit_type", "update") && (
-											<button
-												type="button"
-												onClick={() => {
-													onClose();
-													HandleOpenForm('EDIT', unitTypeData.id, unitType);
-												}}
-												className="bg-[#dc2d27] text-white mx-3 px-4 py-2 rounded-xl cursor-pointer hover:bg-red-700"
-											>
-												Edit Unit Type
-											</button>
-										)}
-									</>
-								) : (
-									<>
-										<Button
-											type="button"
-											onClick={onClose}
-											variant="cancel"
-										>
-											Cancel
-										</Button>
-										{can("unit_type", "delete") && mode === "EDIT" && !is_restricted && (
-
-											<button
-												type="button"
-												onClick={async () => {
-													const result = await window.Swal.fire({
-														title: 'Delete Unit Type',
-														text: 'Are you sure you want to delete this unit type? This action cannot be undone.',
-														icon: 'warning',
-														showCancelButton: true,
-														confirmButtonColor: '#d33',
-														cancelButtonColor: '#3085d6',
-														confirmButtonText: 'Yes, delete it!',
-														cancelButtonText: 'No, cancel'
-													});
-
-													if (result.isConfirmed) {
-														await HandleConfirmDelete();
-													}
-												}}
-												className="bg-[#dc2d27] text-white mx-3 px-4 py-2 rounded-xl cursor-pointer hover:bg-red-700"
-											>
-												{
-													isDeleteLoading ? (
-														<span className="flex items-center space-x-2">
-															<svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-																<circle
-																	className="opacity-25"
-																	cx="12"
-																	cy="12"
-																	r="10"
-																	stroke="currentColor"
-																	strokeWidth="4"
-																	fill="none"
-																/>
-																<path
-																	className="opacity-75"
-																	fill="currentColor"
-																	d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-																/>
-															</svg>
-															<span>Deleting...</span>
-														</span>
-													) : (
-														<>Delete Unit</>
-													)
-												}
-											</button>
-										)}
-										{(mode === "ADD" && can("unit_type", "create")) ||
-											(mode === "EDIT" && can("unit_type", "update")) ? (
-											<Button
-												type="submit"
-												variant="submit"
-												className="px-4 py-2 text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-70"
-											>
-												{isSaveLoading ? (
-													<span className="flex items-center space-x-2">
-														<svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-															<circle
-																className="opacity-25"
-																cx="12"
-																cy="12"
-																r="10"
-																stroke="currentColor"
-																strokeWidth="4"
-																fill="none"
-															/>
-															<path
-																className="opacity-75"
-																fill="currentColor"
-																d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-															/>
-														</svg>
-														<span>Saving...</span>
-													</span>
-												) : (
-													<span>{mode === "ADD" ? "Add Unit Type" : "Save Changes"}</span>
-												)}
-											</Button>
-										) : null}
-									</>
-								)}
-							</div>
-						</form>
-					)}
-				</div>
+						</div>
+						<div className="mt-6 flex justify-end space-x-4">
+							{mode === "VIEW" ? (
+								<>
+									<button type="button" onClick={onClose} className="bg-white text-gray-900 border-2 border-gray-300 hover:bg-gray-50 px-4 py-2 rounded-xl">Close</button>
+									{can("unit_type", "update") && (
+										<button type="button" onClick={() => { onClose(); HandleOpenForm('EDIT', unitTypeData.id, unitTypeData); }} className="bg-[#dc2d27] text-white px-4 py-2 rounded-xl">Edit Unit Type</button>
+									)}
+								</>
+							) : (
+								<>
+									<Button type="button" onClick={onClose} variant="cancel">Cancel</Button>
+									{can("unit_type", "delete") && mode === "EDIT" && !is_restricted && (
+										<button type="button" onClick={async () => { const result = await window.Swal.fire({ title: 'Delete Unit Type', text: 'Are you sure?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Yes' }); if (result.isConfirmed) await HandleConfirmDelete(); }} className="bg-[#dc2d27] text-white px-4 py-2 rounded-xl">{isDeleteLoading ? 'Deleting...' : 'Delete Unit Type'}</button>
+									)}
+									<Button type="submit" variant="submit" disabled={isSaveLoading}>{isSaveLoading ? 'Saving...' : (mode === "ADD" ? "Add Unit Type" : "Save Changes")}</Button>
+								</>
+							)}
+						</div>
+					</form>
+				)}
 			</div>
-		</>
+		</div>
 	);
 };
 
