@@ -155,8 +155,72 @@ export default function CompareStudyPlannerPage() {
 	};
 
 	const exportToExcel = () => {
-		// ... keep your existing export logic unchanged ...
-		// (omitted for brevity – it remains the same as in the original component)
+		if (!matchedPlanners.length || !studentInfo) {
+			alert('No data to export');
+			return;
+		}
+
+		setExporting(true);
+		try {
+			const workbook = XLSX.utils.book_new();
+
+			// 1. Student Info sheet
+			const studentRows = [
+				['Student Information'],
+				['Student ID', studentInfo.studentId],
+				['Completed Units (Passed)', studentInfo.completedUnitsCount],
+				['Total Credits Earned', studentInfo.totalCredits],
+				[''],
+				['Completed Units List'],
+				['Unit Code', 'Unit Name', 'Credits']
+			];
+			studentInfo.completedUnitsList?.forEach(unit => {
+				studentRows.push([unit.code, unit.name, unit.creditPoints]);
+			});
+			const studentSheet = XLSX.utils.aoa_to_sheet(studentRows);
+			XLSX.utils.book_append_sheet(workbook, studentSheet, 'Student Info');
+
+			// 2. Top Planners sheet
+			const plannerRows = [
+				['Rank', 'Planner Name', 'Planner ID', 'Created', 'Matching Units', 'Matched Credits', '% of Student\'s Completed', '% of Planner\'s Units']
+			];
+			matchedPlanners.forEach((planner, idx) => {
+				plannerRows.push([
+					idx + 1,
+					planner.plannerName,
+					planner.plannerId,
+					new Date(planner.createdAt).toLocaleDateString(),
+					planner.overlapCount,
+					planner.totalMatchedCredits,
+					planner.matchStudentPct.toFixed(1) + '%',
+					planner.matchPlannerPct.toFixed(1) + '%'
+				]);
+			});
+			const plannerSheet = XLSX.utils.aoa_to_sheet(plannerRows);
+			XLSX.utils.book_append_sheet(workbook, plannerSheet, 'Top Planners');
+
+			// 3. Detailed matching units for each planner (optional, one sheet per planner)
+			matchedPlanners.forEach((planner, idx) => {
+				const matchingRows = [
+					[`Matched Units for ${planner.plannerName}`],
+					['Unit Code', 'Unit Name', 'Credits']
+				];
+				planner.matchingUnits.forEach(unit => {
+					matchingRows.push([unit.code, unit.name, unit.creditPoints]);
+				});
+				const sheet = XLSX.utils.aoa_to_sheet(matchingRows);
+				const sheetName = `Planner_${idx + 1}_Matches`.slice(0, 31); // Excel sheet name max 31 chars
+				XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+			});
+
+			// Generate Excel file
+			XLSX.writeFile(workbook, `study_planner_comparison_${studentInfo.studentId}.xlsx`);
+		} catch (err) {
+			console.error('Export error:', err);
+			alert('Failed to export Excel. Check console for details.');
+		} finally {
+			setExporting(false);
+		}
 	};
 
 	const handleSearch = async (e) => {

@@ -1,7 +1,7 @@
 const path = require('path')
 const fs = require('fs')
 
-const SCHEMA_VERSION = 2 // ← bump this every time you change your schema
+const SCHEMA_VERSION = 3
 
 async function runDbSetup() {
   const { app } = require('electron')

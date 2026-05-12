@@ -6,7 +6,6 @@ import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
 import UnitDB from '@app/class/Unit/UnitDB';
 import Draggable from 'react-draggable';
 import { useRef } from 'react';
-
 const UploadPlannerPage = () => {
     const [plannerName, setPlannerName] = useState('');
     const [lastAutoPlannerName, setLastAutoPlannerName] = useState('');
@@ -30,6 +29,7 @@ const UploadPlannerPage = () => {
     const [showPdfPreview, setShowPdfPreview] = useState(true);
     const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
     const nodeRef = useRef(null);
+    const [size, setSize] = useState({ width: 500, height: 'calc(70vh)' });
     // Debug modal states
     const [showDebugModal, setShowDebugModal] = useState(false);
     const [debugData, setDebugData] = useState([]);
@@ -501,7 +501,7 @@ const UploadPlannerPage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-5xl mx-auto bg-white rounded-xl shadow p-8">
+            <div className={`max-w-5xl mx-auto bg-white rounded-xl shadow p-8 transition-all duration-300 ${showPdfPreview ? 'mr-[540px]' : ''}`}>
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
                     <div>
                         <h1 className="text-3xl font-bold mb-2">Upload Study Planner</h1>
