@@ -1,8 +1,20 @@
 'use client';
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import CytoscapeComponent from 'react-cytoscapejs';
+import cytoscape from 'cytoscape';
 
-// ─── Tree View Components ──────────────────────────────────────────────────
+// Helper to collect all unit codes from the prerequisite tree
+function collectTreeNodes(tree, set = new Set()) {
+    if (!tree) return set;
+    set.add(tree.UnitCode);
+    if (tree.prerequisites) {
+        tree.prerequisites.forEach(child => collectTreeNodes(child, set));
+    }
+    return set;
+}
+
+// ─── Tree View Components (unchanged) ──────────────────────────────────────
 
 function TreeNode({ node, depth = 0 }) {
     const [collapsed, setCollapsed] = useState(false);
@@ -64,16 +76,6 @@ function countNodes(node) {
     return 1 + node.prerequisites.reduce((sum, p) => sum + countNodes(p), 0);
 }
 
-// Helper to collect all unit codes from the prerequisite tree (recursive)
-function collectTreeNodes(tree, set = new Set()) {
-    if (!tree) return set;
-    set.add(tree.UnitCode);
-    if (tree.prerequisites) {
-        tree.prerequisites.forEach(child => collectTreeNodes(child, set));
-    }
-    return set;
-}
-
 // ─── Main Page ─────────────────────────────────────────────────────────────
 
 export default function PrerequisiteChainPage() {
@@ -86,12 +88,14 @@ export default function PrerequisiteChainPage() {
     const [loading, setLoading] = useState(false);
     const [loadingUnits, setLoadingUnits] = useState(true);
     const [error, setError] = useState(null);
-    const [fullGraphUrl, setFullGraphUrl] = useState(null);
-    const [loadingFullGraph, setLoadingFullGraph] = useState(false);
+    const [graphData, setGraphData] = useState(null);
+    const [graphHighlight, setGraphHighlight] = useState([]);
+    const [graphLoading, setGraphLoading] = useState(false);
+    const [cy, setCy] = useState(null);
 
     useEffect(() => {
         fetchUnits();
-        fetchFullGraph(); // initial full graph (no highlights)
+        fetchGraphData();
     }, []);
 
     async function fetchUnits() {
@@ -103,25 +107,25 @@ export default function PrerequisiteChainPage() {
         finally { setLoadingUnits(false); }
     }
 
-    // Fetch full graph with optional highlight parameter (comma-separated unit codes)
-    async function fetchFullGraph(highlight = null) {
-        setLoadingFullGraph(true);
+    async function fetchGraphData(highlightCodes = null) {
+        setGraphLoading(true);
         try {
             let url = '/api/prerequisite-graph';
-            if (highlight) {
-                url += `?highlight=${encodeURIComponent(highlight)}`;
+            if (highlightCodes && highlightCodes.length) {
+                url += `?highlight=${encodeURIComponent(highlightCodes.join(','))}`;
             }
             const res = await fetch(url, { headers: { 'x-dev-override': 'true' } });
             const data = await res.json();
             if (data.success) {
-                setFullGraphUrl(data.graphUrl);
+                setGraphData({ nodes: data.nodes, edges: data.edges });
+                setGraphHighlight(data.highlight || []);
             } else {
-                console.warn('Full graph generation failed:', data.message);
+                console.warn('Graph data failed:', data.message);
             }
         } catch (err) {
-            console.error('Failed to load full graph:', err);
+            console.error('Failed to load graph data:', err);
         } finally {
-            setLoadingFullGraph(false);
+            setGraphLoading(false);
         }
     }
 
@@ -138,13 +142,10 @@ export default function PrerequisiteChainPage() {
             const data = await res.json();
             if (data.success) {
                 setResult(data.data);
-                // Collect all unit codes from the tree and dependent units
                 const allNodesInTree = collectTreeNodes(data.data.tree);
-                // Add all units that require this unit (dependents)
                 data.data.requiredBy.forEach(u => allNodesInTree.add(u.UnitCode));
-                const highlightCodes = Array.from(allNodesInTree).join(',');
-                // Regenerate the full graph with these codes highlighted
-                await fetchFullGraph(highlightCodes);
+                const highlightCodes = Array.from(allNodesInTree);
+                await fetchGraphData(highlightCodes);
             } else {
                 setError(data.message);
             }
@@ -161,17 +162,105 @@ export default function PrerequisiteChainPage() {
     const nodeCount = result ? countNodes(result.tree) : 0;
     const hasMinCPRequired = result?.tree?.minCPRequired && result.tree.minCPRequired > 0;
 
+    // Cytoscape styles – includes edge highlighting
+    const stylesheet = [
+        {
+            selector: 'node',
+            style: {
+                'label': 'data(displayLabel)',
+                'background-color': '#3b82f6',
+                'color': '#ffffff',
+                'font-size': '9px',
+                'width': '100px',
+                'height': '50px',
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'text-wrap': 'wrap',
+                'text-max-width': '80px',
+                'shape': 'ellipse',
+                'border-width': 1,
+                'border-color': '#1e3a8a',
+            },
+        },
+        {
+            selector: 'node.highlighted',
+            style: {
+                'background-color': '#ff9800',
+                'border-color': '#e65100',
+            },
+        },
+        {
+            selector: 'edge',
+            style: {
+                'width': 1.5,
+                'line-color': '#94a3b8',
+                'target-arrow-color': '#94a3b8',
+                'target-arrow-shape': 'triangle',
+                'arrow-scale': 0.8,
+                'curve-style': 'bezier',
+            },
+        },
+        {
+            selector: 'edge.highlighted-edge',
+            style: {
+                'line-color': '#ff9800',
+                'target-arrow-color': '#ff9800',
+                'width': 3,
+            },
+        },
+    ];
+
+    const layout = { name: 'cose', idealEdgeLength: 100, nodeRepulsion: 4000, gravity: 0.1 };
+
+    const elements = graphData ? [
+        ...graphData.nodes.map(node => ({
+            data: {
+                id: node.id,
+                label: node.label,
+                displayLabel: `${node.label}\n${node.name.length > 25 ? node.name.slice(0, 22) + '…' : node.name}`,
+                fullName: node.name
+            }
+        })),
+        ...graphData.edges.map(edge => ({ data: { source: edge.source, target: edge.target } })),
+    ] : [];
+
+    // Apply highlighting: nodes + edges between highlighted nodes
+    useEffect(() => {
+        if (cy) {
+            // First remove all highlight classes
+            cy.nodes().removeClass('highlighted');
+            cy.edges().removeClass('highlighted-edge');
+
+            // Highlight nodes
+            cy.nodes().forEach(node => {
+                const nodeLabel = node.data('label');
+                if (graphHighlight.includes(nodeLabel)) {
+                    node.addClass('highlighted');
+                }
+            });
+
+            // Highlight edges where both source and target are highlighted
+            cy.edges().forEach(edge => {
+                const source = edge.source();
+                const target = edge.target();
+                if (source.hasClass('highlighted') && target.hasClass('highlighted')) {
+                    edge.addClass('highlighted-edge');
+                }
+            });
+        }
+    }, [cy, graphHighlight]);
+
     return (
         <div className="p-6 max-w-full mx-auto">
             <button onClick={() => router.back()} className="text-sm text-blue-600 hover:underline mb-4 inline-block">← Back</button>
 
             <h1 className="text-2xl font-bold mb-1">Prerequisite Chain Viewer</h1>
             <p className="text-sm text-gray-500 mb-6">
-                Search for a unit to see its chain (left). Full prerequisite graph is shown on the right – nodes related to the searched unit are highlighted in orange.
+                Search for a unit to see its chain (left). Full prerequisite graph is shown on the right – nodes and edges related to the searched unit are highlighted in orange.
             </p>
 
             <div className="flex flex-col lg:flex-row gap-6">
-                {/* LEFT SIDE: TREE VIEW */}
+                {/* LEFT SIDE: TREE VIEW (unchanged) */}
                 <div className="lg:w-2/5">
                     <div className="flex gap-3 mb-2">
                         <input
@@ -300,31 +389,36 @@ export default function PrerequisiteChainPage() {
                     )}
                 </div>
 
-                {/* RIGHT SIDE: FULL GRAPH */}
+                {/* RIGHT SIDE: CYTOPLASM GRAPH */}
                 <div className="lg:w-3/5">
                     <div className="sticky top-4">
-                        <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Full Prerequisite Graph (All Units)</h2>
+                        <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Full Prerequisite Graph</h2>
                         <div className="border rounded-lg overflow-hidden bg-white shadow-sm" style={{ height: 'calc(100vh - 200px)' }}>
-                            {loadingFullGraph && (
+                            {graphLoading && (
                                 <div className="h-full flex items-center justify-center text-gray-500">
-                                    Generating full graph...
+                                    Loading graph data...
                                 </div>
                             )}
-                            {!loadingFullGraph && !fullGraphUrl && (
+                            {!graphLoading && !graphData && (
                                 <div className="h-full flex items-center justify-center text-gray-500">
                                     Graph not available.
                                 </div>
                             )}
-                            {fullGraphUrl && (
-                                <iframe
-                                    src={fullGraphUrl}
-                                    title="Full Prerequisite Graph"
-                                    className="w-full h-full border-0"
+                            {graphData && graphData.nodes.length > 0 && (
+                                <CytoscapeComponent
+                                    elements={elements}
+                                    stylesheet={stylesheet}
+                                    layout={layout}
+                                    style={{ width: '100%', height: '100%' }}
+                                    cy={(cyInstance) => setCy(cyInstance)}
+                                    wheelSensitivity={0.2}
+                                    minZoom={0.2}
+                                    maxZoom={2}
                                 />
                             )}
                         </div>
                         <p className="text-xs text-gray-400 mt-2 text-center">
-                            Interactive graph – drag, zoom, click. Orange nodes belong to the prerequisite tree of the selected unit.
+                            Interactive graph – drag, zoom, click. Orange nodes and edges belong to the prerequisite tree of the selected unit.
                         </p>
                     </div>
                 </div>
