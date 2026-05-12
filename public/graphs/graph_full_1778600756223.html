@@ -1,0 +1,127 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 800px;
+                 background-color: #ffffff;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#ff9800", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS10009", "label": "COS10009\nIntroduction to Programmi\u2026", "shape": "dot", "size": 10, "title": "Introduction to Programming"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS10011", "label": "COS10011\nCreating Web Applications", "shape": "dot", "size": 10, "title": "Creating Web Applications"}, {"color": "#ff9800", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS20007", "label": "COS20007\nObject Oriented Programmi\u2026", "shape": "dot", "size": 10, "title": "Object Oriented Programming"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS20015", "label": "COS20015\nFundamental of Data Manag\u2026", "shape": "dot", "size": 10, "title": "Fundamental of Data Management"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS20083", "label": "COS20083\nAdvanced Data Analytics", "shape": "dot", "size": 10, "title": "Advanced Data Analytics"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS20031", "label": "COS20031\nComputing Technology Desi\u2026", "shape": "dot", "size": 10, "title": "Computing Technology Design Project"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS10004", "label": "COS10004\nComputer Systems", "shape": "dot", "size": 10, "title": "Computer Systems"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30020", "label": "COS30020\nAdvanced Web Development", "shape": "dot", "size": 10, "title": "Advanced Web Development"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30049", "label": "COS30049\nComputing Technology Inno\u2026", "shape": "dot", "size": 10, "title": "Computing Technology Innovation Project"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30045", "label": "COS30045\nData Visualisation", "shape": "dot", "size": 10, "title": "Data Visualisation"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS40007", "label": "COS40007\nArtificial Intelligence f\u2026", "shape": "dot", "size": 10, "title": "Artificial Intelligence for Engineering"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30015", "label": "COS30015\nIT Security", "shape": "dot", "size": 10, "title": "IT Security"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "SWE20004", "label": "SWE20004\nTechnical Software Develo\u2026", "shape": "dot", "size": 10, "title": "Technical Software Development"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "TNE10006", "label": "TNE10006\nNetworks and Switching", "shape": "dot", "size": 10, "title": "Networks and Switching"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS20030", "label": "COS20030\nMalware Analysis", "shape": "dot", "size": 10, "title": "Malware Analysis"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "TNE20002", "label": "TNE20002\nNetwork Routing Principle\u2026", "shape": "dot", "size": 10, "title": "Network Routing Principles"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "TNE30009", "label": "TNE30009\nNetwork Security \u0026 Resili\u2026", "shape": "dot", "size": 10, "title": "Network Security \u0026 Resilience"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "ICT30010", "label": "ICT30010\neForensic Fundamentals", "shape": "dot", "size": 10, "title": "eForensic Fundamentals"}, {"color": "#ff9800", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30008", "label": "COS30008\nData Structures and Patte\u2026", "shape": "dot", "size": 10, "title": "Data Structures and Patterns"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "SWE20001", "label": "SWE20001\nManaging Software Project\u2026", "shape": "dot", "size": 10, "title": "Managing Software Projects"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "SWE30009", "label": "SWE30009\nSoftware Testing and Reli\u2026", "shape": "dot", "size": 10, "title": "Software Testing and Reliability"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "SWE30011", "label": "SWE30011\nIoT Programming", "shape": "dot", "size": 10, "title": "IoT Programming"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30017", "label": "COS30017\nSoftware Development for \u2026", "shape": "dot", "size": 10, "title": "Software Development for Mobile Devices"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30041", "label": "COS30041\nCreating Secure and Scala\u2026", "shape": "dot", "size": 10, "title": "Creating Secure and Scalable Software"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "SWE40001", "label": "SWE40001\nSoftware Engineering Proj\u2026", "shape": "dot", "size": 10, "title": "Software Engineering Project A"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30043", "label": "COS30043\nInterface Design and Deve\u2026", "shape": "dot", "size": 10, "title": "Interface Design and Development"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30019", "label": "COS30019\nIntroduction to Artificia\u2026", "shape": "dot", "size": 10, "title": "Introduction to Artificial Intelligence"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "SWE30003", "label": "SWE30003\nSoftware Architecture and\u2026", "shape": "dot", "size": 10, "title": "Software Architecture and Design"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS40003", "label": "COS40003\nConcurrent Programming", "shape": "dot", "size": 10, "title": "Concurrent Programming"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30018", "label": "COS30018\nIntelligent Systems", "shape": "dot", "size": 10, "title": "Intelligent Systems"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "SWE30012", "label": "SWE30012\nIoT Launcher Project", "shape": "dot", "size": 10, "title": "IoT Launcher Project"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "INF30020", "label": "INF30020\nInformation Systems Risk \u2026", "shape": "dot", "size": 10, "title": "Information Systems Risk and Security"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS20028", "label": "COS20028\nBig Data Architecture and\u2026", "shape": "dot", "size": 10, "title": "Big Data Architecture and Application"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS10026", "label": "COS10026\nWeb Technology Project", "shape": "dot", "size": 10, "title": "Web Technology Project"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS10022", "label": "COS10022\nData Science Principles", "shape": "dot", "size": 10, "title": "Data Science Principles"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30081", "label": "COS30081\nFundamentals of Natural L\u2026", "shape": "dot", "size": 10, "title": "Fundamentals of Natural Language Processing"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS40005", "label": "COS40005\nComputing Technology Proj\u2026", "shape": "dot", "size": 10, "title": "Computing Technology Project A"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS40006", "label": "COS40006\nComputing Technology Proj\u2026", "shape": "dot", "size": 10, "title": "Computing Technology Project B"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "SWE40002", "label": "SWE40002\nSoftware Engineering Proj\u2026", "shape": "dot", "size": 10, "title": "Software Engineering Project B"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS20001", "label": "COS20001\nUser-Centred Design", "shape": "dot", "size": 10, "title": "User-Centred Design"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS30082", "label": "COS30082\nApplied Machine Learning", "shape": "dot", "size": 10, "title": "Applied Machine Learning"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "SWE40006", "label": "SWE40006\nSoftware Deployment and E\u2026", "shape": "dot", "size": 10, "title": "Software Deployment and Evolution"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "TNE30012", "label": "TNE30012\nSecure Remote Access Netw\u2026", "shape": "dot", "size": 10, "title": "Secure Remote Access Networks"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "INF10003", "label": "INF10003\nIntroduction to Business \u2026", "shape": "dot", "size": 10, "title": "Introduction to Business Information Systems"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "ENG10004", "label": "ENG10004\nDigital and Data Systems", "shape": "dot", "size": 10, "title": "Digital and Data Systems"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS10028", "label": "COS10028\nIntroduction to Programmi\u2026", "shape": "dot", "size": 10, "title": "Introduction to Programming"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "COS20019", "label": "COS20019\nCloud Computing Architect\u2026", "shape": "dot", "size": 10, "title": "Cloud Computing Architecture"}, {"color": "#3b82f6", "creditPoints": 12.5, "font": {"color": "black"}, "id": "ICT30005", "label": "ICT30005\nProfessional Issues in In\u2026", "shape": "dot", "size": 10, "title": "Professional Issues in Information Technology"}]);
+                  edges = new vis.DataSet([{"from": "COS10009", "to": "COS10011", "width": 1}, {"from": "COS10009", "to": "COS20007", "width": 1}, {"from": "COS10009", "to": "COS20015", "width": 1}, {"from": "COS10009", "to": "COS20083", "width": 1}, {"from": "COS10009", "to": "COS20031", "width": 1}, {"from": "COS10009", "to": "COS10004", "width": 1}, {"from": "COS10009", "to": "COS30020", "width": 1}, {"from": "COS10009", "to": "COS30049", "width": 1}, {"from": "COS10009", "to": "COS30045", "width": 1}, {"from": "COS10009", "to": "COS40007", "width": 1}, {"from": "COS10009", "to": "COS30015", "width": 1}, {"from": "COS10009", "to": "SWE20004", "width": 1}, {"from": "TNE10006", "to": "COS20030", "width": 1}, {"from": "TNE10006", "to": "COS30015", "width": 1}, {"from": "TNE10006", "to": "TNE20002", "width": 1}, {"from": "TNE10006", "to": "TNE30009", "width": 1}, {"from": "TNE10006", "to": "ICT30010", "width": 1}, {"from": "COS20007", "to": "COS30008", "width": 1}, {"from": "COS20007", "to": "SWE20001", "width": 1}, {"from": "COS20007", "to": "SWE30009", "width": 1}, {"from": "COS20007", "to": "SWE30011", "width": 1}, {"from": "COS20007", "to": "COS30017", "width": 1}, {"from": "COS20007", "to": "COS30041", "width": 1}, {"from": "COS20007", "to": "SWE40001", "width": 1}, {"from": "COS20007", "to": "COS30043", "width": 1}, {"from": "COS20007", "to": "COS30019", "width": 1}, {"from": "COS20007", "to": "SWE30003", "width": 1}, {"from": "COS20007", "to": "COS40003", "width": 1}, {"from": "COS20007", "to": "COS30018", "width": 1}, {"from": "COS20007", "to": "SWE30012", "width": 1}, {"from": "COS20007", "to": "INF30020", "width": 1}, {"from": "COS20007", "to": "COS20028", "width": 1}, {"from": "COS10011", "to": "SWE30011", "width": 1}, {"from": "COS10011", "to": "COS30041", "width": 1}, {"from": "COS10011", "to": "COS30015", "width": 1}, {"from": "COS10011", "to": "COS10026", "width": 1}, {"from": "COS10022", "to": "COS20083", "width": 1}, {"from": "COS10022", "to": "COS20028", "width": 1}, {"from": "COS20015", "to": "COS30081", "width": 1}, {"from": "COS40005", "to": "COS40006", "width": 1}, {"from": "SWE30011", "to": "SWE30012", "width": 1}, {"from": "SWE40001", "to": "SWE40002", "width": 1}, {"from": "COS20001", "to": "COS20028", "width": 1}, {"from": "COS30019", "to": "COS30082", "width": 1}, {"from": "COS30019", "to": "COS30081", "width": 1}, {"from": "COS20031", "to": "SWE40006", "width": 1}, {"from": "COS10026", "to": "COS30020", "width": 1}, {"from": "COS10026", "to": "COS30043", "width": 1}, {"from": "COS10026", "to": "COS30049", "width": 1}, {"from": "COS10026", "to": "COS20031", "width": 1}, {"from": "COS10026", "to": "COS30015", "width": 1}, {"from": "COS10026", "to": "SWE30011", "width": 1}, {"from": "SWE30003", "to": "SWE40006", "width": 1}, {"from": "TNE20002", "to": "TNE30012", "width": 1}, {"from": "INF10003", "to": "INF30020", "width": 1}, {"from": "SWE20004", "to": "INF30020", "width": 1}, {"from": "ENG10004", "to": "SWE20004", "width": 1}, {"from": "COS10028", "to": "SWE20004", "width": 1}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {"nodes": {"shape": "box", "margin": 5, "font": {"size": 11}}, "edges": {"arrows": {"to": {"enabled": true}}}, "physics": {"enabled": true, "solver": "forceAtlas2Based"}};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>
