@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ConditionalRequireAuth } from '@components/helper';
 import { useRole } from '@app/context/RoleContext';
 import AccessDenied from '@components/AccessDenied';
@@ -52,6 +52,7 @@ export default function CompareStudyPlannerPage() {
 	const [showRecommendations, setShowRecommendations] = useState(false);
 	const [showUnitTypeDebug, setShowUnitTypeDebug] = useState(false);
 	const hasAccess = isSuperadmin() || can('planner', 'read');
+	const [selectedSpecialisationPlanner, setSelectedSpecialisationPlanner] = useState(null);
 
 	const fetchStudentCompletedUnits = async (studentId) => {
 		try {
@@ -209,11 +210,10 @@ export default function CompareStudyPlannerPage() {
 					matchingRows.push([unit.code, unit.name, unit.creditPoints]);
 				});
 				const sheet = XLSX.utils.aoa_to_sheet(matchingRows);
-				const sheetName = `Planner_${idx + 1}_Matches`.slice(0, 31); // Excel sheet name max 31 chars
+				const sheetName = `Planner_${idx + 1}_Matches`.slice(0, 31);
 				XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
 			});
 
-			// Generate Excel file
 			XLSX.writeFile(workbook, `study_planner_comparison_${studentInfo.studentId}.xlsx`);
 		} catch (err) {
 			console.error('Export error:', err);
@@ -384,7 +384,6 @@ export default function CompareStudyPlannerPage() {
 										</div>
 									)}
 
-									{/* Student Info (simplified – no global type breakdown) */}
 									{studentInfo && (
 										<div className="card-bg p-6 rounded-theme shadow-theme mb-8 bg-gradient-to-r from-blue-50 to-indigo-50">
 											<h2 className="text-lg font-semibold heading-text mb-4 flex items-center gap-2">
@@ -424,7 +423,6 @@ export default function CompareStudyPlannerPage() {
 										</div>
 									)}
 
-									{/* Planner results */}
 									{searched && !error && matchedPlanners.length === 0 && studentInfo ? (
 										<div className="card-bg p-12 rounded-theme shadow-theme text-center">
 											<ChartBarIcon className="h-16 w-16 text-muted mx-auto mb-4 opacity-50" />
@@ -534,7 +532,9 @@ export default function CompareStudyPlannerPage() {
 						<UnitRecommendations
 							isOpen={showRecommendations}
 							onClose={() => setShowRecommendations(false)}
-							planner={matchedPlanners[0]}
+							planner={selectedSpecialisationPlanner || matchedPlanners[0]}
+							availablePlanners={matchedPlanners.map(p => ({ ...p, name: p.plannerName }))}
+							onSwitchPlanner={(planner) => setSelectedSpecialisationPlanner(planner)}
 							completedUnits={completedUnits}
 							studentInfo={studentInfo}
 						/>

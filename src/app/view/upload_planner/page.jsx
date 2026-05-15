@@ -45,8 +45,18 @@ const UploadPlannerPage = () => {
     // Helper: find unit type ID by exact colour match from colour mappings
     function findMatchingUnitTypeFromMappings(exactHex, mappings) {
         const normalizedHex = exactHex.toLowerCase();
-        const found = mappings.find(m => m.color.toLowerCase() === normalizedHex);
-        return found ? found.unitTypeId : null;
+        for (const m of mappings) {
+            // Check primary colour
+            if (m.color && m.color.toLowerCase() === normalizedHex) {
+                return m.unitTypeId;
+            }
+            // Check alternative colours (if any)
+            if (m.colors && Array.isArray(m.colors)) {
+                const foundAlt = m.colors.find(c => c.toLowerCase() === normalizedHex);
+                if (foundAlt) return m.unitTypeId;
+            }
+        }
+        return null;
     }
 
     const normalizeCode = (str) => {
@@ -191,11 +201,74 @@ const UploadPlannerPage = () => {
                 text += `${pageText}\n\n`;
             }
 
-            setExtractedText(text);
-            let normalized = text.replace(/([A-Z]{2,4}\d{3})\n(\d{2})/gi, '$1$2');
-            normalized = normalized.replace(/([A-Z]{2,4})\n(\d{5})/gi, '$1$2');
+            let normalized = text.toUpperCase();
+            normalized = normalized.replace(/\r\n?/g, '\n');
+            normalized = normalized.replace(/[\f\v\u2028\u2029]/g, '\n');
+
+            let changed = true;
+            let pass = 0;
+            const MAX_PASSES = 10;
+            let lines = normalized.split('\n');
+
+            while (changed && pass < MAX_PASSES) {
+                changed = false;
+                const newLines = [...lines];
+                for (let i = 0; i < newLines.length - 1; i++) {
+                    let current = newLines[i];
+                    let next = newLines[i + 1];
+                    if (!current || !next) continue;
+
+                    current = current.replace(/[^A-Z0-9]+$/, '');
+                    next = next.replace(/^[^A-Z0-9]+/, '');
+
+                    const partialMatch = current.match(/([A-Z]{2,4}\d{0,4})$/);
+                    if (partialMatch) {
+                        const partial = partialMatch[1];
+                        // Next starts with 1-5 digits (allow single digit case)
+                        const digitsMatch = next.match(/^(\d{1,5})/);
+                        if (digitsMatch) {
+                            const digits = digitsMatch[1];
+                            const fullCode = partial + digits;
+                            // Validate: 2-4 letters + exactly 5 digits total
+                            if (/^[A-Z]{2,4}\d{5}$/.test(fullCode)) {
+                                // Replace the partial part and merge
+                                newLines[i] = current.slice(0, -partial.length) + fullCode;
+                                // Remove the consumed digits from the next line
+                                newLines[i + 1] = next.slice(digits.length);
+                                changed = true;
+                                continue;
+                            }
+                        }
+                    }
+
+                    const lettersMatch = current.match(/([A-Z]{2,4})$/);
+                    if (lettersMatch && !partialMatch) {
+                        const letters = lettersMatch[1];
+                        const digitsMatch = next.match(/^(\d{1,5})/);
+                        if (digitsMatch) {
+                            const digits = digitsMatch[1];
+                            const fullCode = letters + digits;
+                            if (/^[A-Z]{2,4}\d{5}$/.test(fullCode)) {
+                                newLines[i] = current.slice(0, -letters.length) + fullCode;
+                                newLines[i + 1] = next.slice(digits.length);
+                                changed = true;
+                                continue;
+                            }
+                        }
+                    }
+                }
+                lines = newLines;
+                pass++;
+            }
+            normalized = lines.join('\n');
+
+            // 3. Remove any punctuation inside codes (e.g., "COS300-49" -> "COS30049")
+            normalized = normalized.replace(/([A-Z]{2,4})[^A-Z0-9]+(\d{5})/gi, '$1$2');
+
+            // 4. Merge codes separated by whitespace (including newlines that were not caught in iterative loop)
             normalized = normalized.replace(/([A-Z]{2,4})\s+(\d{5})/gi, '$1$2');
 
+            setExtractedText(normalized);
             const extractedUnits = extractUnitsFromText(normalized);
             setUnits(extractedUnits);
 
@@ -219,30 +292,67 @@ const UploadPlannerPage = () => {
         const matches = [...text.matchAll(unitRegex)];
         const units = [];
 
+        // Patterns that indicate we should stop capturing the unit name
+        const stopPatterns = [
+            /^SEMESTER\s+\d+/im,
+            /^YEAR\s+\w+/im,
+            /^ELECTIVE\s+\d+/im,
+            /^UNIT\s+CODE/im,
+            /^PRE-?REQUISITES/im,
+            /^NOTES/im,
+            /^COURSE\s+INFORMATION/im,
+            /^HOW\s+TO\s+USE/im,
+            /^\s*$/ // blank line
+        ];
+
         for (let i = 0; i < matches.length; i++) {
             const current = matches[i];
             const next = matches[i + 1];
-
             const code = current[1];
-            const start = current.index + code.length;
-            const end = next ? next.index : text.length;
+            let start = current.index + code.length;
+            // Default end is the start of the next code, or the end of text
+            let end = next ? next.index : text.length;
 
-            let name = text.slice(start, end).trim();
+            // Extract the raw slice
+            let rawName = text.slice(start, end);
 
-            name = name
-                .replace(/Semester\s+\d/gi, '')
+            // If the next code is far away (more than 500 chars), try to stop earlier
+            if (end - start > 500) {
+                // Find the earliest occurrence of any stop pattern within the next 500 chars
+                const earlyStop = rawName.search(new RegExp(stopPatterns.map(p => p.source).join('|'), 'i'));
+                if (earlyStop !== -1 && earlyStop < 500) {
+                    rawName = rawName.substring(0, earlyStop);
+                } else {
+                    // Otherwise truncate to 300 chars
+                    rawName = rawName.substring(0, 300);
+                }
+            }
+
+            // Clean the name
+            let name = rawName
+                .replace(/Semester\s+\d+/gi, '')
                 .replace(/Year\s+\w+/gi, '')
-                .replace(/Elective\s+\d/gi, '')
-                .replace(/Nil/gi, '')
+                .replace(/Elective\s+\d+/gi, '')
+                .replace(/\bNil\b/gi, '')
                 .replace(/Co-?requisite:.*/gi, '')
-                .replace(/Pre-?requisites?.*/gi, '')
+                .replace(/Pre-?requisites?:.*/gi, '')
+                .replace(/\[.*?\]/g, '')
                 .replace(/\s{2,}/g, ' ')
                 .trim();
 
-            if (!name || name.length < 3) continue;
+            if (name.length < 3) continue;
+
+            // Skip offering lines
+            const skipPatterns = [
+                /\b(only|semester|year|elective|pre-?requisites?|co-?requisite?|nil|credit|points|availability|offered)\b/i,
+                /^\s*\d+\s*$/
+            ];
+            const shouldSkip = skipPatterns.some(p => p.test(name)) && name.length < 30;
+            if (shouldSkip) continue;
 
             units.push({ code, name });
         }
+
         return units;
     };
 
@@ -319,22 +429,18 @@ const UploadPlannerPage = () => {
         try {
             const formData = new FormData();
             formData.append('file', pdfFile);
-
             const response = await fetch('/api/pdf-debug', {
                 method: 'POST',
                 body: formData,
             });
-
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.error || 'Failed to extract colours');
             }
-
             const colorBlocks = await response.json();
 
-            // 🔁 Change 1: colorMap now stores { typeId, colorHex }
-            const colorMap = {}; // { code: { typeId, colorHex } }
-
+            // Only consider blocks that are exactly a unit code (no extra text)
+            const colorMap = {}; // code -> { typeId, colorHex }
             for (const block of colorBlocks) {
                 const raw = block.text.trim();
                 const codeMatch = raw.match(/^([A-Z]{2,4}\d{5})$/);
@@ -342,19 +448,18 @@ const UploadPlannerPage = () => {
                     const code = normalizeCode(codeMatch[1]);
                     const extractedHex = block.color.toLowerCase();
                     const typeId = findMatchingUnitTypeFromMappings(extractedHex, colorMappings);
-                    if (typeId && !colorMap[code]) {
-                        // 🔁 Change 2: store both typeId and colour
+                    if (typeId !== null && !colorMap[code]) {
                         colorMap[code] = { typeId, colorHex: extractedHex };
                     }
                 }
             }
 
             if (Object.keys(colorMap).length === 0) {
-                setError('No coloured unit codes found in the PDF that match any defined colour mapping. Please check the colour mappings in Unit Type Management.');
+                setError('No coloured unit codes found in the PDF. Ensure the PDF has coloured unit codes and mappings exist.');
                 return;
             }
 
-            // 🔁 Change 3: also update selectedUnitColors
+            // Apply mappings to displayed matchedUnits
             const newTypes = { ...selectedUnitTypes };
             const newColors = { ...selectedUnitColors };
             for (const unit of matchedUnits) {
@@ -365,9 +470,9 @@ const UploadPlannerPage = () => {
                 }
             }
             setSelectedUnitTypes(newTypes);
-            setSelectedUnitColors(newColors);   // store the actual PDF colour
+            setSelectedUnitColors(newColors);
 
-            setMessage('Unit types have been auto‑populated by matching PDF colours to the colour mappings (exact match).');
+            setMessage('Unit types auto‑populated by matching code colours (primary/alternative).');
         } catch (err) {
             console.error('Auto-populate error', err);
             setError(`Auto-populate failed: ${err.message}`);
