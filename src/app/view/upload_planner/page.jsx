@@ -39,7 +39,6 @@ const UploadPlannerPage = () => {
         { id: 2, name: 'Core', colour: '#c5d9f0', colors: [] },
         { id: 1, name: 'Elective', colour: '#d5e2bb', colors: [] },
         { id: 3, name: 'Major', colour: '#fce9d9', colors: [] },
-        { id: 4, name: 'MPU', colour: '#e5b8b7', colors: [] },
         { id: 17, name: 'WIL', colour: '#b1a0c6', colors: [] },
     ];
     // Helper: find unit type ID by exact colour match from colour mappings
@@ -410,76 +409,92 @@ const UploadPlannerPage = () => {
     };
 
     // Auto‑populate using exact colour matching from the /api/unit-type-color endpoint
-    const handleAutoPopulate = async () => {
-        if (!pdfFile) {
-            setError('No PDF file to analyze.');
+const handleAutoPopulate = async () => {
+    if (!pdfFile) {
+        setError('No PDF file to analyze.');
+        return;
+    }
+    if (colorMappings.length === 0) {
+        await fetchColourMappings();
+        if (colorMappings.length === 0) {
+            setError('No colour mappings defined. Please upload a study planner design first in Unit Type Management.');
             return;
         }
-        if (colorMappings.length === 0) {
-            await fetchColourMappings();
-            if (colorMappings.length === 0) {
-                setError('No colour mappings defined. Please upload a study planner design first in Unit Type Management.');
-                return;
+    }
+
+    setIsAutoPopulating(true);
+    setError(null);
+
+    try {
+        const formData = new FormData();
+        formData.append('file', pdfFile);
+        const response = await fetch('/api/pdf-debug', {
+            method: 'POST',
+            body: formData,
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to extract colours');
+        }
+        const colorBlocks = await response.json();
+
+        // Pass 1: exact unit code matches (full block = code)
+        const colorMap = {};
+        for (const block of colorBlocks) {
+            const raw = block.text.trim();
+            const codeMatch = raw.match(/^([A-Z]{2,4}\d{5})$/);
+            if (codeMatch) {
+                const code = normalizeCode(codeMatch[1]);
+                const extractedHex = block.color.toLowerCase();
+                const typeId = findMatchingUnitTypeFromMappings(extractedHex, colorMappings);
+                if (typeId !== null && !colorMap[code]) {
+                    colorMap[code] = { typeId, colorHex: extractedHex };
+                }
             }
         }
 
-        setIsAutoPopulating(true);
-        setError(null);
-
-        try {
-            const formData = new FormData();
-            formData.append('file', pdfFile);
-            const response = await fetch('/api/pdf-debug', {
-                method: 'POST',
-                body: formData,
-            });
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Failed to extract colours');
-            }
-            const colorBlocks = await response.json();
-
-            // Only consider blocks that are exactly a unit code (no extra text)
-            const colorMap = {}; // code -> { typeId, colorHex }
-            for (const block of colorBlocks) {
-                const raw = block.text.trim();
-                const codeMatch = raw.match(/^([A-Z]{2,4}\d{5})$/);
+        // Pass 2: WIL‑coloured blocks that contain a unit code anywhere (e.g., "ICT20016* Optional")
+        for (const block of colorBlocks) {
+            const raw = block.text.trim();
+            const extractedHex = block.color.toLowerCase();
+            const typeId = findMatchingUnitTypeFromMappings(extractedHex, colorMappings);
+            if (typeId === 17) { // WIL type ID
+                const codeMatch = raw.match(/([A-Z]{2,4}\d{5})/i);
                 if (codeMatch) {
                     const code = normalizeCode(codeMatch[1]);
-                    const extractedHex = block.color.toLowerCase();
-                    const typeId = findMatchingUnitTypeFromMappings(extractedHex, colorMappings);
-                    if (typeId !== null && !colorMap[code]) {
-                        colorMap[code] = { typeId, colorHex: extractedHex };
+                    if (!colorMap[code]) {
+                        colorMap[code] = { typeId: 17, colorHex: extractedHex };
                     }
                 }
             }
-
-            if (Object.keys(colorMap).length === 0) {
-                setError('No coloured unit codes found in the PDF. Ensure the PDF has coloured unit codes and mappings exist.');
-                return;
-            }
-
-            // Apply mappings to displayed matchedUnits
-            const newTypes = { ...selectedUnitTypes };
-            const newColors = { ...selectedUnitColors };
-            for (const unit of matchedUnits) {
-                const normCode = normalizeCode(unit.unit_code);
-                if (colorMap[normCode]) {
-                    newTypes[unit.id] = colorMap[normCode].typeId;
-                    newColors[unit.id] = colorMap[normCode].colorHex;
-                }
-            }
-            setSelectedUnitTypes(newTypes);
-            setSelectedUnitColors(newColors);
-
-            setMessage('Unit types auto‑populated by matching code colours (primary/alternative).');
-        } catch (err) {
-            console.error('Auto-populate error', err);
-            setError(`Auto-populate failed: ${err.message}`);
-        } finally {
-            setIsAutoPopulating(false);
         }
-    };
+
+        if (Object.keys(colorMap).length === 0) {
+            setError('No coloured unit codes found in the PDF. Ensure the PDF has coloured unit codes and mappings exist.');
+            return;
+        }
+
+        // Apply mappings to displayed matchedUnits
+        const newTypes = { ...selectedUnitTypes };
+        const newColors = { ...selectedUnitColors };
+        for (const unit of matchedUnits) {
+            const normCode = normalizeCode(unit.unit_code);
+            if (colorMap[normCode]) {
+                newTypes[unit.id] = colorMap[normCode].typeId;
+                newColors[unit.id] = colorMap[normCode].colorHex;
+            }
+        }
+        setSelectedUnitTypes(newTypes);
+        setSelectedUnitColors(newColors);
+
+        setMessage('Unit types auto‑populated by matching code colours (primary/alternative). WIL placements detected from loose code patterns.');
+    } catch (err) {
+        console.error('Auto-populate error', err);
+        setError(`Auto-populate failed: ${err.message}`);
+    } finally {
+        setIsAutoPopulating(false);
+    }
+};
     // Debug: show coloured blocks from the PDF
     const handleDebugColors = async () => {
         if (!pdfFile) {

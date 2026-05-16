@@ -86,7 +86,62 @@ export async function GET(req) {
         data: transformed,
     });
 }
+export async function DELETE(req) {
+    const authResult = await validateAuthenticatedRequest(req);
+    if (authResult.error) return authResult.error;
 
+    const url = new URL(req.url);
+    const plannerId = url.searchParams.get('id');
+
+    if (!plannerId) {
+        return NextResponse.json(
+            { success: false, message: 'Missing planner ID query parameter' },
+            { status: 400 }
+        );
+    }
+
+    const id = parseInt(plannerId, 10);
+    if (isNaN(id)) {
+        return NextResponse.json(
+            { success: false, message: 'Invalid planner ID' },
+            { status: 400 }
+        );
+    }
+
+    try {
+        // Check if planner exists
+        const existing = await prisma.studyPlanner.findUnique({
+            where: { id },
+        });
+
+        if (!existing) {
+            return NextResponse.json(
+                { success: false, message: 'Study planner not found' },
+                { status: 404 }
+            );
+        }
+
+        // Delete the planner (cascade delete should remove associated StudyPlannerUnit records)
+        await prisma.studyPlanner.delete({
+            where: { id },
+        });
+
+        return NextResponse.json({
+            success: true,
+            message: 'Study planner deleted successfully',
+        });
+    } catch (error) {
+        console.error('❌ DELETE error:', error);
+        return NextResponse.json(
+            {
+                success: false,
+                message: 'Failed to delete study planner',
+                details: error.message,
+            },
+            { status: 500 }
+        );
+    }
+}
 export async function POST(req) {
     const authResult = await validateAuthenticatedRequest(req);
     if (authResult.error) {

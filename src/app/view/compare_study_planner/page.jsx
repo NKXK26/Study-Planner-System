@@ -9,36 +9,6 @@ import { MagnifyingGlassIcon, CheckCircleIcon, AcademicCapIcon, ChartBarIcon, Do
 import * as XLSX from 'xlsx';
 import UnitRecommendations from '../unit_suggestion/UnitRecommendations';
 
-// Helper to map unit type ID to category name – kept for use in per‑planner context if needed
-const getUnitCategoryById = (typeId) => {
-	switch (typeId) {
-		case 2: return 'core';
-		case 1: return 'elective';
-		case 3: return 'major';
-		case 4: return 'mpu';
-		case 17: return 'wil';
-		default: return 'elective';
-	}
-};
-
-// Determine unit category from unit object (using unitTypeId or unitType relation)
-// Kept for potential future use (e.g., inside planner details)
-const getUnitCategory = (unit) => {
-	let typeId = null;
-	if (unit.unitTypeId !== undefined) typeId = unit.unitTypeId;
-	else if (unit.unit_type_id !== undefined) typeId = unit.unit_type_id;
-	else if (unit.unitType?.ID !== undefined) typeId = unit.unitType.ID;
-	else if (unit.unitType?.id !== undefined) typeId = unit.unitType.id;
-	else if (unit.unitType?.Name) {
-		const name = unit.unitType.Name.toLowerCase();
-		if (name === 'core') return 'core';
-		if (name === 'elective') return 'elective';
-		if (name === 'major') return 'major';
-		return 'elective';
-	}
-	return typeId !== null ? getUnitCategoryById(typeId) : 'elective';
-};
-
 export default function CompareStudyPlannerPage() {
 	const { can, isSuperadmin } = useRole();
 	const [studentId, setStudentId] = useState('');
@@ -410,13 +380,9 @@ export default function CompareStudyPlannerPage() {
 												</summary>
 												<div className="flex flex-wrap gap-2 mt-3 max-h-64 overflow-y-auto p-2 bg-white rounded-md">
 													{completedUnits.map(unit => (
-														<span
-															key={unit.id}
-															title={`${unit.name || ''} (${unit.creditPoints} credits)`}
-															className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200 cursor-help"
-														>
-															{unit.code}
-														</span>
+														<div key={unit.id} className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+															{unit.code} – {unit.name}
+														</div>
 													))}
 												</div>
 											</details>

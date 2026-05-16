@@ -15,7 +15,6 @@ function sortUnits(units) {
     return [...units].sort((a, b) => {
         const ai = TYPE_ORDER.indexOf(a.unitTypeId ?? -1);
         const bi = TYPE_ORDER.indexOf(b.unitTypeId ?? -1);
-        // Unknown types go to the end
         const aOrder = ai === -1 ? TYPE_ORDER.length : ai;
         const bOrder = bi === -1 ? TYPE_ORDER.length : bi;
         return aOrder - bOrder;
@@ -31,6 +30,7 @@ export default function StudyPlannerEditPage() {
     const [units, setUnits] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [deletingPlanner, setDeletingPlanner] = useState(false);
     const [error, setError] = useState(null);
     const [successMsg, setSuccessMsg] = useState(null);
 
@@ -46,11 +46,9 @@ export default function StudyPlannerEditPage() {
             const data = await res.json();
             if (data.success) {
                 setPlanner(data.data);
-
                 const sorted = sortUnits(data.data.units);
                 setUnits(sorted.map(u => ({ ...u })));
 
-                // Unique unit types from the planner's units
                 const types = data.data.units
                     .filter(u => u.unitType !== null)
                     .map(u => u.unitType)
@@ -82,6 +80,12 @@ export default function StudyPlannerEditPage() {
         });
     }
 
+    function handleRemoveUnit(joinId) {
+        if (confirm('Remove this unit from the planner? It will be deleted when you save.')) {
+            setUnits(prev => prev.filter(u => u.joinId !== joinId));
+        }
+    }
+
     async function handleSave() {
         setSaving(true);
         setSuccessMsg(null);
@@ -103,7 +107,6 @@ export default function StudyPlannerEditPage() {
             const data = await res.json();
             if (data.success) {
                 setSuccessMsg('Saved successfully!');
-                // Re-sort after save response
                 const sorted = sortUnits(data.data.units.map(u => ({ ...u })));
                 setUnits(sorted);
             } else {
@@ -116,7 +119,28 @@ export default function StudyPlannerEditPage() {
         }
     }
 
-    // Group units by type for section headers
+    async function handleDeletePlanner() {
+        if (!confirm('Delete this entire study planner? This action cannot be undone.')) return;
+        setDeletingPlanner(true);
+        try {
+            const res = await fetch(`/api/study-planner?id=${id}`, {
+                method: 'DELETE',
+                headers: { 'x-dev-override': 'true' },
+            });
+            const data = await res.json();
+            if (data.success) {
+                router.push('/view/study-planner');
+            } else {
+                alert(data.message || 'Delete failed');
+                setDeletingPlanner(false);
+            }
+        } catch {
+            alert('Failed to delete planner');
+            setDeletingPlanner(false);
+        }
+    }
+
+    // Group units by type
     const groupedUnits = TYPE_ORDER.reduce((acc, typeId) => {
         const group = units.filter(u => u.unitTypeId === typeId);
         if (group.length > 0) acc.push({ typeId, units: group });
@@ -137,13 +161,22 @@ export default function StudyPlannerEditPage() {
     if (error && !planner) return <div className="p-6 text-red-500">{error}</div>;
 
     return (
-        <div className="p-6 max-w-4xl mx-auto">
-            <button
-                onClick={() => router.push('/view/study-planner')}
-                className="text-sm text-blue-600 hover:underline mb-4 inline-block"
-            >
-                ← Back to list
-            </button>
+        <div className="p-6 max-w-5xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+                <button
+                    onClick={() => router.push('/view/study-planner')}
+                    className="text-sm text-blue-600 hover:underline"
+                >
+                    ← Back to list
+                </button>
+                <button
+                    onClick={handleDeletePlanner}
+                    disabled={deletingPlanner}
+                    className="px-3 py-1.5 bg-red-50 text-red-600 rounded-md text-sm hover:bg-red-100 disabled:opacity-50"
+                >
+                    {deletingPlanner ? 'Deleting...' : 'Delete Planner'}
+                </button>
+            </div>
 
             <h1 className="text-2xl font-bold mb-1">{planner?.name}</h1>
             <p className="text-sm text-gray-500 mb-6">
@@ -161,15 +194,15 @@ export default function StudyPlannerEditPage() {
                             <th className="px-4 py-3 font-medium text-gray-600">Name</th>
                             <th className="px-4 py-3 font-medium text-gray-600">Credits</th>
                             <th className="px-4 py-3 font-medium text-gray-600">Unit Type</th>
+                            <th className="px-4 py-3 font-medium text-gray-600 w-12"></th>
                         </tr>
                     </thead>
                     <tbody className="divide-y">
                         {groupedUnits.map(({ typeId, units: group }) => (
                             <React.Fragment key={`group-${typeId}`}>
-                                {/* Section header row */}
                                 <tr key={`header-${typeId}`}>
                                     <td
-                                        colSpan={4}
+                                        colSpan={5}
                                         className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500"
                                         style={{
                                             backgroundColor: typeId ? TYPE_ID_TO_COLOR[typeId] + 'aa' : '#f3f4f6',
@@ -178,8 +211,6 @@ export default function StudyPlannerEditPage() {
                                         {typeLabel[typeId]} ({group.length})
                                     </td>
                                 </tr>
-
-                                {/* Unit rows */}
                                 {group.map(unit => (
                                     <tr
                                         key={unit.joinId}
@@ -206,6 +237,17 @@ export default function StudyPlannerEditPage() {
                                                 ))}
                                             </select>
                                         </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <button
+                                                onClick={() => handleRemoveUnit(unit.joinId)}
+                                                className="text-red-500 hover:text-red-700"
+                                                title="Remove from planner"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </React.Fragment>
@@ -214,13 +256,15 @@ export default function StudyPlannerEditPage() {
                 </table>
             </div>
 
-            <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
-            >
-                {saving ? 'Saving...' : 'Save Changes'}
-            </button>
+            <div className="flex gap-3">
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
+                >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+            </div>
         </div>
     );
 }
