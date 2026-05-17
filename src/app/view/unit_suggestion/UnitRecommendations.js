@@ -232,19 +232,29 @@ function optimizeFinalSemester(schedule) {
 }
 
 // ─────────────────────────────────────────────
-// CATEGORY BADGE
+// CATEGORY BADGE (minimal)
 // ─────────────────────────────────────────────
 
 const CategoryBadge = ({ category }) => {
-  const map = {
-    core: 'bg-blue-50 text-blue-700 border-blue-200',
-    elective: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    major: 'bg-purple-50 text-purple-700 border-purple-200',
-    mpu: 'bg-orange-50 text-orange-700 border-orange-200',
-    wil: 'bg-pink-50 text-pink-700 border-pink-200'
-  };
   const label = { core: 'Core', elective: 'Elective', major: 'Major', mpu: 'MPU', wil: 'WIL' };
-  return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${map[category] || map.elective}`}>{label[category] || category}</span>;
+
+  // Color mappings
+  const colorMap = {
+    core: 'bg-blue-100 text-blue-800 border-blue-200',
+    major: 'bg-purple-100 text-purple-800 border-purple-200',
+    elective: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    wil: 'bg-pink-100 text-pink-800 border-pink-200',
+    mpu: 'bg-amber-100 text-amber-800 border-amber-200',
+  };
+
+  const defaultStyle = 'bg-gray-100 text-gray-700 border-gray-200';
+  const style = colorMap[category] || defaultStyle;
+
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${style}`}>
+      {label[category] || category}
+    </span>
+  );
 };
 
 // ─────────────────────────────────────────────
@@ -307,17 +317,18 @@ const PanelUnitCard = ({ unit, status, onDragStart, isDragging, onRemove, catego
         ${isDragging ? 'opacity-40 border-dashed border-gray-300 bg-gray-50' : ''}
         ${status === 'completed' ? 'bg-green-50 border-green-200 hover:border-green-300' :
           status === 'scheduled' ? 'bg-blue-50 border-blue-200 hover:border-blue-300' :
-            'border-gray-200 bg-white hover:border-emerald-300 hover:shadow-sm hover:bg-emerald-50/30'}
+            'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}
       `}
     >
-      <Bars3Icon className="h-3.5 w-3.5 text-gray-300 flex-shrink-0 mt-0.5 group-hover:text-emerald-400" />
+      <Bars3Icon className="h-3.5 w-3.5 text-gray-300 flex-shrink-0 mt-0.5 group-hover:text-gray-500" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
           <span className="font-mono font-semibold text-gray-800 text-xs">{code}</span>
           <CategoryBadge category={category} />
           {status === 'completed' && <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">✓ Completed</span>}
-          {status === 'scheduled' && <span className="text-xs text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">📅 Scheduled</span>}
+          {status === 'scheduled' && <span className="text-xs text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">Scheduled</span>}
           {isMapped && <span className="text-xs text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">Mapped</span>}
+          {unit.doubleCount && <span className="text-xs text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">2x</span>}
           <span className="text-xs text-emerald-600 font-semibold ml-auto">{unit.CreditPoints || 12.5}CP</span>
         </div>
         {unit.Name && <p className="text-xs text-gray-500 leading-snug">{unit.Name}</p>}
@@ -329,9 +340,9 @@ const PanelUnitCard = ({ unit, status, onDragStart, isDragging, onRemove, catego
         <button
           onClick={e => {
             e.stopPropagation();
-            onRemove(unit); // Pass the unit
+            onRemove(unit);
           }}
-          className="..."
+          className="ml-1 opacity-0 group-hover:opacity-100 p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50"
         >
           <XMarkIcon className="h-3.5 w-3.5" />
         </button>
@@ -343,19 +354,19 @@ const PanelUnitCard = ({ unit, status, onDragStart, isDragging, onRemove, catego
 const ExternalUnitCard = ({ unit, onMapToCategory }) => {
   const [showMenu, setShowMenu] = useState(false);
   const categories = [
-    { id: 'core', label: 'Core', color: 'blue' },
-    { id: 'major', label: 'Major', color: 'purple' },
-    { id: 'elective', label: 'Elective', color: 'emerald' },
-    { id: 'wil', label: 'WIL', color: 'pink' }
+    { id: 'core', label: 'Core' },
+    { id: 'major', label: 'Major' },
+    { id: 'elective', label: 'Elective' },
+    { id: 'wil', label: 'WIL' }
   ];
 
   const handleMap = (category) => {
     onMapToCategory(category, unit);
-    setShowMenu(false); // close menu after mapping
+    setShowMenu(false);
   };
 
   return (
-    <div className="relative bg-white rounded-lg border border-amber-200 p-3 hover:shadow-md transition-shadow cursor-pointer">
+    <div className="relative bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-shadow cursor-pointer">
       <div onClick={() => setShowMenu(!showMenu)}>
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -366,17 +377,17 @@ const ExternalUnitCard = ({ unit, onMapToCategory }) => {
             </div>
             {unit.name && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{unit.name}</p>}
           </div>
-          <ChevronRightIcon className={`h-4 w-4 text-amber-600 transition-transform flex-shrink-0 ml-2 ${showMenu ? 'rotate-90' : ''}`} />
+          <ChevronRightIcon className={`h-4 w-4 text-gray-400 transition-transform flex-shrink-0 ml-2 ${showMenu ? 'rotate-90' : ''}`} />
         </div>
       </div>
 
       {showMenu && (
-        <div className="mt-3 pt-2 border-t border-amber-200 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-3 pt-2 border-t border-gray-200 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
           {categories.map(cat => (
             <button
               key={cat.id}
               onClick={() => handleMap(cat.id)}
-              className={`text-xs px-3 py-1.5 rounded-md bg-${cat.color}-100 text-${cat.color}-700 hover:bg-${cat.color}-200 transition-colors font-medium`}
+              className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors font-medium"
             >
               Map to {cat.label}
             </button>
@@ -387,14 +398,14 @@ const ExternalUnitCard = ({ unit, onMapToCategory }) => {
   );
 };
 
-// Semester drop zone with visual hint
+// Semester drop zone
 const SemesterDropZone = ({ sem, semIdx, onDragEnter, onDrop, isDragOver }) => (
   <div
     onDragEnter={() => onDragEnter({ semIdx, unitIdx: sem.units.length })}
     onDragOver={e => e.preventDefault()}
     onDrop={() => onDrop({ semIdx, unitIdx: sem.units.length })}
     className={`mt-2 border-2 border-dashed rounded-lg p-2 text-center text-xs transition-all
-      ${isDragOver ? 'border-emerald-500 bg-emerald-100 text-emerald-600' : 'border-gray-200 text-gray-400 hover:border-emerald-300 hover:text-emerald-500 hover:bg-emerald-50/40'}`}
+      ${isDragOver ? 'border-emerald-500 bg-emerald-100 text-emerald-600' : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-500 hover:bg-gray-50'}`}
   >
     <PlusIcon className="h-3.5 w-3.5 inline mr-1" /> Drop unit here
   </div>
@@ -418,15 +429,12 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
   const [unrecognisedUnits, setUnrecognisedUnits] = useState([]);
   const [fieldPlanners, setFieldPlanners] = useState([]);
   const [selectedFieldPlanner, setSelectedFieldPlanner] = useState(null);
-  // Mapped external units: core, major, elective, wil
   const [mappedExternalUnits, setMappedExternalUnits] = useState({ core: [], major: [], elective: [], wil: [] });
-  // Drag state
   const [dragSource, setDragSource] = useState(null);
   const [dragTarget, setDragTarget] = useState(null);
   const [dragOverPanel, setDragOverPanel] = useState(null);
 
-  // Helper: get all planner units with their status (completed, scheduled, pending)
-  // Also include WIL units from planner
+  // Original getPlannerUnitsWithStatus (matching by code)
   const getPlannerUnitsWithStatus = useCallback(() => {
     if (!selectedFieldPlanner) return { core: [], major: [], elective: [], wil: [] };
     const plannerUnits = selectedFieldPlanner.units || [];
@@ -464,7 +472,6 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
       else if (cat === 'wil') wil.push(item);
     });
 
-    // Add mapped external units
     const addMapped = (arr, mapArray, category) => {
       mapArray.forEach(extUnit => {
         arr.push({
@@ -475,6 +482,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
           CreditPoints: extUnit.creditPoints || 12.5,
           Name: extUnit.name,
           UnitCode: extUnit.code,
+          doubleCount: extUnit.doubleCount,
         });
       });
     };
@@ -486,7 +494,6 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
     return { core, major, elective, wil };
   }, [selectedFieldPlanner, completedUnits, editableSchedule, mappedExternalUnits]);
 
-  // Drag handlers
   const handleDragStart = (info) => setDragSource(info);
   const handleDragEnter = (target) => setDragTarget(target);
 
@@ -544,7 +551,6 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
 
   const handleDropOnPanel = (panelCategory) => {
     if (!dragSource) return;
-    // If dragging from schedule, unschedule the unit
     if (dragSource.semIdx !== undefined) {
       const newSchedule = editableSchedule.map(sem => {
         const newUnits = sem.units.filter((_, idx) => !(dragSource.semIdx === sem.idx && dragSource.unitIdx === idx));
@@ -558,21 +564,24 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
   };
 
   const handleMapExternalToCategory = (category, externalUnit) => {
+    let unitToAdd = { ...externalUnit };
+    if (category === 'wil' && externalUnit.code?.toUpperCase() === 'ICT20016') {
+      unitToAdd.doubleCount = true;
+      unitToAdd.creditPoints = (externalUnit.creditPoints || 12.5) * 2;
+    }
     setUnrecognisedUnits(prev => prev.filter(u => u.code !== externalUnit.code));
     setMappedExternalUnits(prev => ({
       ...prev,
-      [category]: [...prev[category], externalUnit]
+      [category]: [...prev[category], unitToAdd]
     }));
   };
 
   const handleRemoveMappedUnit = (category, unitToRemove) => {
-    // Add back to unrecognisedUnits
     setUnrecognisedUnits(prev => {
       const alreadyExists = prev.some(u => u.code === unitToRemove.code);
       if (!alreadyExists) return [...prev, unitToRemove];
       return prev;
     });
-    // Remove from mappedExternalUnits by filtering on code
     setMappedExternalUnits(prev => ({
       ...prev,
       [category]: prev[category].filter(u => u.code !== unitToRemove.code)
@@ -587,7 +596,6 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
     setEditableSchedule(newSchedule.filter(s => s.units.length > 0));
   };
 
-  // Helper functions for progress
   const scorePlannerByCompletedUnits = (planner, completedUnits) => {
     const plannerUnitCodes = new Set((planner.units || []).map(u => extractUnitCode(u.UnitCode).toUpperCase()));
     return (completedUnits || []).filter(u => plannerUnitCodes.has(u.code?.toUpperCase())).length;
@@ -732,7 +740,115 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
       });
     } catch (e) { console.error(e); } finally { setScheduleLoading(false); }
   };
-  // Recalculate progress when mapped external units change
+
+  // NEW: Regenerate schedule based on current mapped external units (without resetting them)
+  const regenerateFromMapped = () => {
+    if (!selectedFieldPlanner) return;
+    setScheduleLoading(true);
+    try {
+      const planner = selectedFieldPlanner;
+      const plannerUnits = planner.units || [];
+      if (!plannerUnits.length) { setScheduleLoading(false); return; }
+
+      const plannerUnitTypeMap = new Map();
+      plannerUnits.forEach(u => plannerUnitTypeMap.set(extractUnitCode(u.UnitCode), getUnitCategory(u)));
+
+      // Build completed units map from original completedUnits
+      const completedUnitsMap = new Map();
+      (completedUnits || []).forEach(u => {
+        const code = u.code?.toUpperCase();
+        if (code) {
+          completedUnitsMap.set(code, u);
+          completedUnitsMap.set(getNormalizedUnitCode(code), u);
+        }
+      });
+
+      // Also add mapped external units as "completed" for the purpose of determining missing units
+      const addMappedToMap = (arr, category) => {
+        arr.forEach(extUnit => {
+          const code = extUnit.code?.toUpperCase();
+          if (code) {
+            completedUnitsMap.set(code, extUnit);
+            completedUnitsMap.set(getNormalizedUnitCode(code), extUnit);
+          }
+        });
+      };
+      addMappedToMap(mappedExternalUnits.core, 'core');
+      addMappedToMap(mappedExternalUnits.major, 'major');
+      addMappedToMap(mappedExternalUnits.elective, 'elective');
+      addMappedToMap(mappedExternalUnits.wil, 'wil');
+
+      // Calculate completed counts including mapped units
+      let completedCore = 0, completedElective = 0, completedMajor = 0;
+      // Original completed units
+      (completedUnits || []).forEach(u => {
+        const code = u.code?.toUpperCase();
+        if (plannerUnitTypeMap.has(code) || plannerUnitTypeMap.has(getNormalizedUnitCode(code))) {
+          const actualCode = plannerUnitTypeMap.has(code) ? code : getNormalizedUnitCode(code);
+          const cat = plannerUnitTypeMap.get(actualCode);
+          if (cat === 'core') completedCore++;
+          else if (cat === 'elective') completedElective++;
+          else if (cat === 'major') completedMajor++;
+        }
+      });
+      // Mapped core/major/elective/wil (WIL adds to elective, with double for ICT20016)
+      completedCore += mappedExternalUnits.core.length;
+      completedMajor += mappedExternalUnits.major.length;
+      let extraElectiveFromWil = 0;
+      mappedExternalUnits.wil.forEach(unit => {
+        if (unit.doubleCount) extraElectiveFromWil += 2;
+        else extraElectiveFromWil += 1;
+      });
+      completedElective += mappedExternalUnits.elective.length + extraElectiveFromWil;
+
+      const totalCredits = (completedUnits || []).reduce((s, u) => s + (u.creditPoints || 0), 0) +
+        [...mappedExternalUnits.core, ...mappedExternalUnits.major, ...mappedExternalUnits.elective, ...mappedExternalUnits.wil].reduce((s, u) => s + (u.creditPoints || 0), 0);
+      const totalUnitsCompleted = completedUnitsMap.size;
+
+      const prereqMap = new Map();
+      plannerUnits.forEach(u => {
+        const code = extractUnitCode(u.UnitCode);
+        const parsed = parsePrerequisites(u.Prerequisites || '');
+        prereqMap.set(code, ['unit', 'and', 'or'].includes(parsed.type) ? parsed.conditions.filter(c => c.type === 'unit').map(c => c.code) : []);
+      });
+
+      const unitsWithPrereqs = plannerUnits.map(u => ({ ...u, prerequisites: prereqMap.get(extractUnitCode(u.UnitCode)) || [] }));
+      const missingUnits = unitsWithPrereqs.filter(u => {
+        const code = extractUnitCode(u.UnitCode);
+        return !completedUnitsMap.has(code) && !completedUnitsMap.has(getNormalizedUnitCode(code));
+      });
+
+      const required = 8;
+      const needCore = Math.max(0, required - completedCore);
+      const needElective = Math.max(0, required - completedElective);
+      const needMajor = Math.max(0, required - completedMajor);
+
+      let mcnt = 0, ecnt = 0, majcnt = 0;
+      missingUnits.forEach(u => { const c = getUnitCategory(u); if (c === 'core') mcnt++; else if (c === 'elective') ecnt++; else if (c === 'major') majcnt++; });
+      if (mcnt < needCore) setCategoryWarning(`⚠️ Only ${mcnt} core unit(s) remaining, but ${needCore} more needed.`);
+      else if (ecnt < needElective) setCategoryWarning(`⚠️ Only ${ecnt} elective(s) remaining, but ${needElective} more needed.`);
+      else if (majcnt < needMajor) setCategoryWarning(`⚠️ Only ${majcnt} major unit(s) remaining, but ${needMajor} more needed.`);
+
+      let { schedule } = scheduleRemainingUnits(missingUnits, completedUnitsMap, totalCredits, currentYear, currentSemester, totalUnitsCompleted, needCore, needElective, needMajor);
+      schedule = optimizeFinalSemester(schedule);
+      setEditableSchedule(schedule);
+      setRecommendations(prev => ({
+        ...prev,
+        totalCompleted: completedCore + completedElective + completedMajor,
+        totalCredits,
+        completedPercent: ((completedCore + completedElective + completedMajor) / 24) * 100,
+        creditsToGraduate: Math.max(0, 300 - totalCredits),
+        unitsToGraduate: needCore + needElective + needMajor,
+        categoryRequirements: {
+          core: { completed: completedCore, required, missing: needCore },
+          major: { completed: completedMajor, required, missing: needMajor },
+          elective: { completed: completedElective, required, missing: needElective },
+        },
+      }));
+    } catch (e) { console.error(e); } finally { setScheduleLoading(false); }
+  };
+
+  // Progress recalculation (fixed infinite loop)
   useEffect(() => {
     if (!selectedFieldPlanner || !completedUnits || !recommendations) return;
 
@@ -742,7 +858,6 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
 
     let completedCore = 0, completedElective = 0, completedMajor = 0;
 
-    // Count original completed units
     (completedUnits || []).forEach(u => {
       const code = u.code?.toUpperCase();
       if (plannerUnitTypeMap.has(code) || plannerUnitTypeMap.has(getNormalizedUnitCode(code))) {
@@ -754,13 +869,17 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
       }
     });
 
-    // Add mapped external units
+    let extraElectiveFromWil = 0;
+    mappedExternalUnits.wil.forEach(unit => {
+      if (unit.doubleCount) extraElectiveFromWil += 2;
+      else extraElectiveFromWil += 1;
+    });
     completedCore += mappedExternalUnits.core.length;
     completedMajor += mappedExternalUnits.major.length;
-    completedElective += mappedExternalUnits.elective.length;
+    completedElective += mappedExternalUnits.elective.length + extraElectiveFromWil;
 
     const totalCredits = (completedUnits || []).reduce((s, u) => s + (u.creditPoints || 0), 0) +
-      [...mappedExternalUnits.core, ...mappedExternalUnits.major, ...mappedExternalUnits.elective].reduce((s, u) => s + (u.creditPoints || 0), 0);
+      [...mappedExternalUnits.core, ...mappedExternalUnits.major, ...mappedExternalUnits.elective, ...mappedExternalUnits.wil].reduce((s, u) => s + (u.creditPoints || 0), 0);
 
     const required = 8;
     const needCore = Math.max(0, required - completedCore);
@@ -778,10 +897,12 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
         elective: { completed: completedElective, required, missing: needElective },
       },
     }));
-  }, [mappedExternalUnits, selectedFieldPlanner, completedUnits, recommendations]);
+  }, [mappedExternalUnits, selectedFieldPlanner, completedUnits]); // ✅ fixed
+
   if (!isOpen) return null;
 
   const { core: coreUnits, major: majorUnits, elective: electiveUnits, wil: wilUnits } = getPlannerUnitsWithStatus();
+  const allExternalMapped = unrecognisedUnits.length === 0;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-2" onClick={onClose}>
@@ -815,35 +936,34 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
 
           {/* Progress card */}
           {studentInfo && recommendations && (
-            <div className="bg-emerald-50 rounded-xl p-4 mb-4 border border-emerald-200">
+            <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
               <div className="flex items-center gap-2 mb-3">
-                <UserGroupIcon className="h-5 w-5 text-emerald-600" />
-                <h3 className="font-semibold text-emerald-800">Graduation Progress</h3>
-                <span className="text-xs text-gray-400 bg-white border border-emerald-200 px-2 py-0.5 rounded-full ml-auto">{recommendations.plannerName}</span>
+                <UserGroupIcon className="h-5 w-5 text-gray-600" />
+                <h3 className="font-semibold text-gray-800">Graduation Progress</h3>
+                <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full ml-auto">{recommendations.plannerName}</span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
                 <div><span className="text-gray-500 text-xs">Student ID</span><p className="font-semibold">{studentInfo.studentId}</p></div>
-                <div><span className="text-gray-500 text-xs">Position</span>{(() => { const count = completedUnits?.length || 0; const sems = Math.floor(count / 4); const sem = Math.max(1, sems); const yr = Math.floor((sem - 1) / 2) + 1; return <p className="font-semibold text-blue-600">Y{yr} S{sem}</p>; })()}</div>
+                <div><span className="text-gray-500 text-xs">Position</span>{(() => { const count = completedUnits?.length || 0; const sems = Math.floor(count / 4); const sem = Math.max(1, sems); const yr = Math.floor((sem - 1) / 2) + 1; return <p className="font-semibold text-emerald-600">Y{yr} S{sem}</p>; })()}</div>
                 <div><span className="text-gray-500 text-xs">Units</span><p className="font-semibold text-emerald-600">{recommendations.totalCompleted}/24</p></div>
                 <div><span className="text-gray-500 text-xs">Credits</span><p className="font-semibold text-emerald-600">{recommendations.totalCredits}/300</p></div>
               </div>
-              {/* Reordered: Core, Major, Elective */}
               <div className="grid grid-cols-3 gap-2 text-xs mb-3">
-                <div className="bg-white rounded-lg p-2 text-center">
+                <div className="bg-white rounded-lg p-2 text-center border border-gray-100">
                   <span className="text-gray-500 capitalize">core</span>
                   <p className="font-bold">{recommendations.categoryRequirements.core.completed}/{recommendations.categoryRequirements.core.required}</p>
                   <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
                     <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${(recommendations.categoryRequirements.core.completed / recommendations.categoryRequirements.core.required) * 100}%` }} />
                   </div>
                 </div>
-                <div className="bg-white rounded-lg p-2 text-center">
+                <div className="bg-white rounded-lg p-2 text-center border border-gray-100">
                   <span className="text-gray-500 capitalize">major</span>
                   <p className="font-bold">{recommendations.categoryRequirements.major.completed}/{recommendations.categoryRequirements.major.required}</p>
                   <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
                     <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${(recommendations.categoryRequirements.major.completed / recommendations.categoryRequirements.major.required) * 100}%` }} />
                   </div>
                 </div>
-                <div className="bg-white rounded-lg p-2 text-center">
+                <div className="bg-white rounded-lg p-2 text-center border border-gray-100">
                   <span className="text-gray-500 capitalize">elective</span>
                   <p className="font-bold">{recommendations.categoryRequirements.elective.completed}/{recommendations.categoryRequirements.elective.required}</p>
                   <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
@@ -858,23 +978,23 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
               )}
               <div>
                 <div className="flex justify-between text-xs text-gray-500 mb-1"><span>Overall progress (24 units)</span><span>{recommendations.completedPercent?.toFixed(1)}%</span></div>
-                <div className="w-full bg-emerald-200 rounded-full h-2"><div className="bg-emerald-600 h-2 rounded-full transition-all" style={{ width: `${recommendations.completedPercent || 0}%` }} /></div>
+                <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-emerald-600 h-2 rounded-full transition-all" style={{ width: `${recommendations.completedPercent || 0}%` }} /></div>
               </div>
             </div>
           )}
 
-          {/* Four panels: Core, Major, Elective, WIL */}
+          {/* Four panels - neutral gray design */}
           {selectedFieldPlanner && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               {/* Core Panel */}
               <div
-                className={`bg-blue-50 rounded-xl border border-blue-200 p-3 flex flex-col transition-all ${dragOverPanel === 'core' ? 'ring-2 ring-blue-400 bg-blue-100' : ''}`}
+                className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === 'core' ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
                 onDragOver={e => { e.preventDefault(); setDragOverPanel('core'); }}
                 onDragLeave={() => setDragOverPanel(null)}
                 onDrop={() => { handleDropOnPanel('core'); setDragOverPanel(null); }}
               >
-                <h4 className="font-semibold text-blue-800 text-sm mb-2 flex items-center gap-1">
-                  Core <span className="text-xs font-normal text-blue-600 ml-auto">{coreUnits.length} units</span>
+                <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
+                  Core <span className="text-xs font-normal text-gray-500 ml-auto">{coreUnits.length} units</span>
                 </h4>
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
                   {coreUnits.map((unit, idx) => (
@@ -889,18 +1009,18 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                     />
                   ))}
                 </div>
-                <div className="mt-2 text-xs text-blue-500 text-center border-t border-blue-200 pt-2">⬅️ Drop to unschedule</div>
+                <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
               </div>
 
               {/* Major Panel */}
               <div
-                className={`bg-purple-50 rounded-xl border border-purple-200 p-3 flex flex-col transition-all ${dragOverPanel === 'major' ? 'ring-2 ring-purple-400 bg-purple-100' : ''}`}
+                className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === 'major' ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
                 onDragOver={e => { e.preventDefault(); setDragOverPanel('major'); }}
                 onDragLeave={() => setDragOverPanel(null)}
                 onDrop={() => { handleDropOnPanel('major'); setDragOverPanel(null); }}
               >
-                <h4 className="font-semibold text-purple-800 text-sm mb-2 flex items-center gap-1">
-                  Major <span className="text-xs font-normal text-purple-600 ml-auto">{majorUnits.length} units</span>
+                <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
+                  Major <span className="text-xs font-normal text-gray-500 ml-auto">{majorUnits.length} units</span>
                 </h4>
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
                   {majorUnits.map((unit, idx) => (
@@ -915,18 +1035,18 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                     />
                   ))}
                 </div>
-                <div className="mt-2 text-xs text-purple-500 text-center border-t border-purple-200 pt-2">⬅️ Drop to unschedule</div>
+                <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
               </div>
 
               {/* Elective Panel */}
               <div
-                className={`bg-emerald-50 rounded-xl border border-emerald-200 p-3 flex flex-col transition-all ${dragOverPanel === 'elective' ? 'ring-2 ring-emerald-400 bg-emerald-100' : ''}`}
+                className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === 'elective' ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
                 onDragOver={e => { e.preventDefault(); setDragOverPanel('elective'); }}
                 onDragLeave={() => setDragOverPanel(null)}
                 onDrop={() => { handleDropOnPanel('elective'); setDragOverPanel(null); }}
               >
-                <h4 className="font-semibold text-emerald-800 text-sm mb-2 flex items-center gap-1">
-                  ⚡ Elective <span className="text-xs font-normal text-emerald-600 ml-auto">{electiveUnits.length} units</span>
+                <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
+                  Elective <span className="text-xs font-normal text-gray-500 ml-auto">{electiveUnits.length} units</span>
                 </h4>
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
                   {electiveUnits.map((unit, idx) => (
@@ -941,18 +1061,18 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                     />
                   ))}
                 </div>
-                <div className="mt-2 text-xs text-emerald-500 text-center border-t border-emerald-200 pt-2">⬅️ Drop to unschedule</div>
+                <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
               </div>
 
               {/* WIL Panel */}
               <div
-                className={`bg-pink-50 rounded-xl border border-pink-200 p-3 flex flex-col transition-all ${dragOverPanel === 'wil' ? 'ring-2 ring-pink-400 bg-pink-100' : ''}`}
+                className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === 'wil' ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
                 onDragOver={e => { e.preventDefault(); setDragOverPanel('wil'); }}
                 onDragLeave={() => setDragOverPanel(null)}
                 onDrop={() => { handleDropOnPanel('wil'); setDragOverPanel(null); }}
               >
-                <h4 className="font-semibold text-pink-800 text-sm mb-2 flex items-center gap-1">
-                  WIL <span className="text-xs font-normal text-pink-600 ml-auto">{wilUnits.length} units</span>
+                <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
+                  WIL <span className="text-xs font-normal text-gray-500 ml-auto">{wilUnits.length} units</span>
                 </h4>
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
                   {wilUnits.map((unit, idx) => (
@@ -967,16 +1087,16 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                     />
                   ))}
                 </div>
-                <div className="mt-2 text-xs text-pink-500 text-center border-t border-pink-200 pt-2">⬅️ Drop to unschedule</div>
+                <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
               </div>
             </div>
           )}
 
-          {/* Completed External Panel - always visible, no hide/show */}
-          <div className="mb-4 bg-amber-50 rounded-xl border border-amber-200 p-3">
-            <h4 className="font-semibold text-amber-800 text-sm mb-2 flex items-center gap-1">
+          {/* Completed External Panel with Generate button */}
+          <div className="mb-4 bg-gray-50 rounded-xl border border-gray-200 p-3">
+            <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
               ✅ Completed (External)
-              <span className="text-xs font-normal">{unrecognisedUnits.length} units</span>
+              <span className="text-xs font-normal text-gray-500 ml-auto">{unrecognisedUnits.length} units</span>
             </h4>
             {unrecognisedUnits.length > 0 ? (
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -989,12 +1109,35 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-amber-500 text-center py-2">
+              <p className="text-xs text-gray-500 text-center py-2">
                 All external units have been mapped. You can now generate your custom planner.
               </p>
             )}
-            <p className="text-xs text-amber-500 mt-2">
-              Click the arrow on any external unit to map it to Core, Major, Elective, or WIL.
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={regenerateFromMapped}
+                disabled={!allExternalMapped || scheduleLoading}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2
+                  ${allExternalMapped && !scheduleLoading
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+              >
+                {scheduleLoading ? (
+                  <>
+                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <ArrowPathIcon className="h-4 w-4" />
+                    Generate Study Plan
+                  </>
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Click the arrow on any external unit to map it to Core, Major, Elective, or WIL. After mapping all, click Generate to create your personalised study plan.
             </p>
           </div>
 
@@ -1022,7 +1165,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
             <div className="text-center py-12"><ArrowPathIcon className="h-10 w-10 text-emerald-500 animate-spin mx-auto mb-3" /><p className="text-gray-500">{plannersLoading ? 'Fetching planners…' : 'Building your schedule…'}</p></div>
           ) : editableSchedule.length === 0 ? (
             <div className="text-center py-12">
-              <div className="bg-emerald-100 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center"><CheckCircleIcon className="h-10 w-10 text-emerald-600" /></div>
+              <div className="bg-gray-100 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center"><CheckCircleIcon className="h-10 w-10 text-emerald-600" /></div>
               <p className="text-gray-700 text-lg font-medium">🎓 All requirements met!</p>
               <p className="text-gray-500 mt-2">You've completed all 8 Core, 8 Elective, and 8 Major units.</p>
             </div>
@@ -1048,9 +1191,9 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                 <div className="space-y-3">
                   {editableSchedule.map((sem, semIdx) => (
                     <div key={semIdx} className="border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="bg-amber-50 px-4 py-2.5 border-b border-amber-200 flex justify-between items-center">
-                        <h4 className="font-semibold text-amber-800 text-sm">Year {sem.year}, Semester {sem.semester}</h4>
-                        <span className="text-xs text-amber-600">{sem.unitCount} unit(s) · {sem.totalCredits} CP</span>
+                      <div className="bg-gray-100 px-4 py-2.5 border-b border-gray-200 flex justify-between items-center">
+                        <h4 className="font-semibold text-gray-800 text-sm">Year {sem.year}, Semester {sem.semester}</h4>
+                        <span className="text-xs text-gray-600">{sem.unitCount} unit(s) · {sem.totalCredits} CP</span>
                       </div>
                       <div className="p-3 bg-white space-y-1.5">
                         {sem.units.map((unit, unitIdx) => (
