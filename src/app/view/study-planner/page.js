@@ -7,7 +7,8 @@ export default function StudyPlannerListPage() {
     const [planners, setPlanners] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [deletingId, setDeletingId] = useState(null); // track which planner is being deleted
+    const [deletingId, setDeletingId] = useState(null);
+    const [search, setSearch] = useState(''); // Search state
 
     useEffect(() => {
         fetchPlanners();
@@ -40,7 +41,6 @@ export default function StudyPlannerListPage() {
             });
             const data = await res.json();
             if (data.success) {
-                // Remove the deleted planner from the local state
                 setPlanners(prev => prev.filter(p => p.id !== id));
             } else {
                 alert(data.message || 'Failed to delete planner');
@@ -51,6 +51,11 @@ export default function StudyPlannerListPage() {
             setDeletingId(null);
         }
     }
+
+    // Filter planners based on search input
+    const filteredPlanners = planners.filter(planner =>
+        planner.name.toLowerCase().includes(search.toLowerCase())
+    );
 
     if (loading) return <div className="p-6">Loading...</div>;
     if (error) return <div className="p-6 text-red-500">{error}</div>;
@@ -66,11 +71,45 @@ export default function StudyPlannerListPage() {
                     + Upload New Planner
                 </button>
             </div>
-            {planners.length === 0 ? (
-                <p className="text-gray-500">No study planners found.</p>
+
+            {/* Search Bar */}
+            <div className="mb-6">
+                <div className="relative">
+                    <input
+                        type="text"
+                        placeholder="Search by planner name..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    {/* Search Icon */}
+                    <svg
+                        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    {/* Clear Button */}
+                    {search && (
+                        <button
+                            onClick={() => setSearch('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                            ✕
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {filteredPlanners.length === 0 ? (
+                <p className="text-gray-500">
+                    {search ? 'No planners match your search.' : 'No study planners found.'}
+                </p>
             ) : (
                 <div className="space-y-3">
-                    {planners.map(planner => (
+                    {filteredPlanners.map(planner => (
                         <div
                             key={planner.id}
                             className="flex items-center justify-between border rounded-lg p-4 bg-white shadow-sm"

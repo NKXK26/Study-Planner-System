@@ -13,7 +13,11 @@ import {
   ArrowsRightLeftIcon,
   ExclamationTriangleIcon,
   ChevronRightIcon,
+  WrenchScrewdriverIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
+import UnitPoolToolbox from '@/app/view/unit_suggestion/UnitPoolToolbox';
+import { generateStudyPlannerPdf } from '@/app/view/unit_suggestion/Exportstudyplannerpdf';
 
 // ─────────────────────────────────────────────
 // UNIT EQUIVALENCE
@@ -232,13 +236,11 @@ function optimizeFinalSemester(schedule) {
 }
 
 // ─────────────────────────────────────────────
-// CATEGORY BADGE (minimal)
+// CATEGORY BADGE
 // ─────────────────────────────────────────────
 
 const CategoryBadge = ({ category }) => {
   const label = { core: 'Core', elective: 'Elective', major: 'Major', mpu: 'MPU', wil: 'WIL' };
-
-  // Color mappings
   const colorMap = {
     core: 'bg-blue-100 text-blue-800 border-blue-200',
     major: 'bg-purple-100 text-purple-800 border-purple-200',
@@ -246,10 +248,8 @@ const CategoryBadge = ({ category }) => {
     wil: 'bg-pink-100 text-pink-800 border-pink-200',
     mpu: 'bg-amber-100 text-amber-800 border-amber-200',
   };
-
   const defaultStyle = 'bg-gray-100 text-gray-700 border-gray-200';
   const style = colorMap[category] || defaultStyle;
-
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${style}`}>
       {label[category] || category}
@@ -267,10 +267,17 @@ const DraggableUnitCard = ({ unit, semIdx, unitIdx, onDragStart, onDragEnter, on
   return (
     <div
       draggable
-      onDragStart={() => onDragStart({ semIdx, unitIdx, unit, fromPanel: false })}
+      onDragStart={(e) => {
+        // Support both internal state DnD and native dataTransfer (for toolbox compat)
+        e.dataTransfer.setData('application/json', JSON.stringify({ unit, fromToolbox: false }));
+        onDragStart({ semIdx, unitIdx, unit, fromPanel: false });
+      }}
       onDragEnter={() => onDragEnter({ semIdx, unitIdx })}
       onDragOver={e => e.preventDefault()}
-      onDrop={() => onDrop({ semIdx, unitIdx })}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop({ semIdx, unitIdx });
+      }}
       className={`
         group relative flex items-center gap-2 px-3 py-2 rounded-lg border cursor-grab active:cursor-grabbing
         transition-all duration-150 select-none
@@ -302,7 +309,7 @@ const DraggableUnitCard = ({ unit, semIdx, unitIdx, onDragStart, onDragEnter, on
   );
 };
 
-// Panel unit card (for planner units and mapped external units)
+// Panel unit card
 const PanelUnitCard = ({ unit, status, onDragStart, isDragging, onRemove, category }) => {
   const code = extractUnitCode(unit.UnitCode || unit.code || '');
   const isMapped = unit.isMappedExternal;
@@ -338,10 +345,7 @@ const PanelUnitCard = ({ unit, status, onDragStart, isDragging, onRemove, catego
       </div>
       {onRemove && isMapped && (
         <button
-          onClick={e => {
-            e.stopPropagation();
-            onRemove(unit);
-          }}
+          onClick={e => { e.stopPropagation(); onRemove(unit); }}
           className="ml-1 opacity-0 group-hover:opacity-100 p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50"
         >
           <XMarkIcon className="h-3.5 w-3.5" />
@@ -359,12 +363,7 @@ const ExternalUnitCard = ({ unit, onMapToCategory }) => {
     { id: 'elective', label: 'Elective' },
     { id: 'wil', label: 'WIL' }
   ];
-
-  const handleMap = (category) => {
-    onMapToCategory(category, unit);
-    setShowMenu(false);
-  };
-
+  const handleMap = (category) => { onMapToCategory(category, unit); setShowMenu(false); };
   return (
     <div className="relative bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-shadow cursor-pointer">
       <div onClick={() => setShowMenu(!showMenu)}>
@@ -380,15 +379,10 @@ const ExternalUnitCard = ({ unit, onMapToCategory }) => {
           <ChevronRightIcon className={`h-4 w-4 text-gray-400 transition-transform flex-shrink-0 ml-2 ${showMenu ? 'rotate-90' : ''}`} />
         </div>
       </div>
-
       {showMenu && (
         <div className="mt-3 pt-2 border-t border-gray-200 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
           {categories.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => handleMap(cat.id)}
-              className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors font-medium"
-            >
+            <button key={cat.id} onClick={() => handleMap(cat.id)} className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors font-medium">
               Map to {cat.label}
             </button>
           ))}
@@ -398,12 +392,31 @@ const ExternalUnitCard = ({ unit, onMapToCategory }) => {
   );
 };
 
-// Semester drop zone
-const SemesterDropZone = ({ sem, semIdx, onDragEnter, onDrop, isDragOver }) => (
+// ─────────────────────────────────────────────
+// SEMESTER DROP ZONE — handles BOTH internal DnD
+// and native dataTransfer drops from the toolbox
+// ─────────────────────────────────────────────
+
+const SemesterDropZone = ({ sem, semIdx, onDragEnter, onDrop, onNativeDrop, isDragOver }) => (
   <div
     onDragEnter={() => onDragEnter({ semIdx, unitIdx: sem.units.length })}
     onDragOver={e => e.preventDefault()}
-    onDrop={() => onDrop({ semIdx, unitIdx: sem.units.length })}
+    onDrop={(e) => {
+      e.preventDefault();
+      // Check for native toolbox drop first
+      try {
+        const raw = e.dataTransfer.getData('application/json');
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (data.fromToolbox && data.unit) {
+            onNativeDrop(semIdx, sem.units.length, data.unit);
+            return;
+          }
+        }
+      } catch (_) { }
+      // Fall back to internal state DnD
+      onDrop({ semIdx, unitIdx: sem.units.length });
+    }}
     className={`mt-2 border-2 border-dashed rounded-lg p-2 text-center text-xs transition-all
       ${isDragOver ? 'border-emerald-500 bg-emerald-100 text-emerald-600' : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-500 hover:bg-gray-50'}`}
   >
@@ -434,36 +447,53 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
   const [dragTarget, setDragTarget] = useState(null);
   const [dragOverPanel, setDragOverPanel] = useState(null);
 
-  // Original getPlannerUnitsWithStatus (matching by code)
+  // ── toolbox visibility state ──
+  const [showToolbox, setShowToolbox] = useState(false);
+
+  // ── PDF export ──
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const handleExportPdf = useCallback(async () => {
+    if (!editableSchedule.length) return;
+    setPdfLoading(true);
+    try {
+      const studentId = studentInfo?.studentId ?? 'student';
+      const plannerSlug = (recommendations?.plannerName ?? 'planner')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+      await generateStudyPlannerPdf({
+        editableSchedule,
+        recommendations,
+        studentInfo,
+        completedUnits,
+        filename: `study-planner-${studentId}-${plannerSlug}.pdf`,
+      });
+    } catch (err) {
+      console.error('PDF export failed:', err);
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [editableSchedule, recommendations, studentInfo, completedUnits]);
+
   const getPlannerUnitsWithStatus = useCallback(() => {
     if (!selectedFieldPlanner) return { core: [], major: [], elective: [], wil: [] };
     const plannerUnits = selectedFieldPlanner.units || [];
-
     const completedCodeSet = new Set();
     (completedUnits || []).forEach(u => {
       const code = u.code?.toUpperCase();
-      if (code) {
-        completedCodeSet.add(code);
-        completedCodeSet.add(getNormalizedUnitCode(code));
-      }
+      if (code) { completedCodeSet.add(code); completedCodeSet.add(getNormalizedUnitCode(code)); }
     });
-
     const scheduledCodeSet = new Set();
     editableSchedule.flatMap(s => s.units).forEach(u => {
       const code = extractUnitCode(u.UnitCode || '');
       scheduledCodeSet.add(code);
       scheduledCodeSet.add(getNormalizedUnitCode(code));
     });
-
     const core = [], major = [], elective = [], wil = [];
     plannerUnits.forEach(unit => {
       const code = extractUnitCode(unit.UnitCode);
       let status = 'pending';
-      if (completedCodeSet.has(code) || completedCodeSet.has(getNormalizedUnitCode(code))) {
-        status = 'completed';
-      } else if (scheduledCodeSet.has(code) || scheduledCodeSet.has(getNormalizedUnitCode(code))) {
-        status = 'scheduled';
-      }
+      if (completedCodeSet.has(code) || completedCodeSet.has(getNormalizedUnitCode(code))) status = 'completed';
+      else if (scheduledCodeSet.has(code) || scheduledCodeSet.has(getNormalizedUnitCode(code))) status = 'scheduled';
       const cat = getUnitCategory(unit);
       const item = { ...unit, status, isMappedExternal: false, originalCategory: cat };
       if (cat === 'core') core.push(item);
@@ -471,36 +501,39 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
       else if (cat === 'elective') elective.push(item);
       else if (cat === 'wil') wil.push(item);
     });
-
     const addMapped = (arr, mapArray, category) => {
       mapArray.forEach(extUnit => {
-        arr.push({
-          ...extUnit,
-          status: 'pending',
-          isMappedExternal: true,
-          originalCategory: category,
-          CreditPoints: extUnit.creditPoints || 12.5,
-          Name: extUnit.name,
-          UnitCode: extUnit.code,
-          doubleCount: extUnit.doubleCount,
-        });
+        arr.push({ ...extUnit, status: 'pending', isMappedExternal: true, originalCategory: category, CreditPoints: extUnit.creditPoints || 12.5, Name: extUnit.name, UnitCode: extUnit.code, doubleCount: extUnit.doubleCount });
       });
     };
     addMapped(core, mappedExternalUnits.core, 'core');
     addMapped(major, mappedExternalUnits.major, 'major');
     addMapped(elective, mappedExternalUnits.elective, 'elective');
     addMapped(wil, mappedExternalUnits.wil, 'wil');
-
     return { core, major, elective, wil };
   }, [selectedFieldPlanner, completedUnits, editableSchedule, mappedExternalUnits]);
 
   const handleDragStart = (info) => setDragSource(info);
   const handleDragEnter = (target) => setDragTarget(target);
 
+  // ── NEW: handle a native drop from the toolbox into a semester slot ──
+  const handleNativeDropIntoSemester = useCallback((semIdx, insertAt, rawUnit) => {
+    setEditableSchedule(prev => {
+      const newSchedule = prev.map(s => ({ ...s, units: [...s.units] }));
+      const sem = newSchedule[semIdx];
+      if (!sem) return prev;
+      sem.units.splice(insertAt, 0, { ...rawUnit });
+      sem.unitCount = sem.units.length;
+      sem.totalCredits = sem.units.reduce((s, u) => s + (u.CreditPoints || 12.5), 0);
+      return newSchedule;
+    });
+    setDragSource(null);
+    setDragTarget(null);
+  }, []);
+
   const handleDrop = (target) => {
     if (!dragSource) return;
     const newSchedule = editableSchedule.map(s => ({ ...s, units: [...s.units] }));
-
     if (dragSource.fromPanel) {
       const { semIdx, unitIdx } = target;
       if (semIdx === undefined || semIdx === null) return;
@@ -518,13 +551,10 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
       const dstSemIdx = target.semIdx;
       const dstUnitIdx = target.unitIdx;
       if (srcSemIdx === undefined || dstSemIdx === undefined) return;
-
       const srcSem = newSchedule[srcSemIdx];
       const dstSem = newSchedule[dstSemIdx];
       if (!srcSem || !dstSem) return;
-
       const [movedUnit] = srcSem.units.splice(srcUnitIdx, 1);
-
       if (srcSemIdx === dstSemIdx) {
         const adjustedIdx = dstUnitIdx > srcUnitIdx ? dstUnitIdx - 1 : dstUnitIdx;
         srcSem.units.splice(Math.max(0, adjustedIdx), 0, movedUnit);
@@ -536,14 +566,12 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
           dstSem.units.push(movedUnit);
         }
       }
-
       [srcSem, dstSem].forEach(s => {
         s.unitCount = s.units.length;
         s.totalCredits = s.units.reduce((acc, u) => acc + (u.CreditPoints || 12.5), 0);
       });
       setEditableSchedule(newSchedule.filter(s => s.units.length > 0));
     }
-
     setDragSource(null);
     setDragTarget(null);
     setDragOverPanel(null);
@@ -570,10 +598,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
       unitToAdd.creditPoints = (externalUnit.creditPoints || 12.5) * 2;
     }
     setUnrecognisedUnits(prev => prev.filter(u => u.code !== externalUnit.code));
-    setMappedExternalUnits(prev => ({
-      ...prev,
-      [category]: [...prev[category], unitToAdd]
-    }));
+    setMappedExternalUnits(prev => ({ ...prev, [category]: [...prev[category], unitToAdd] }));
   };
 
   const handleRemoveMappedUnit = (category, unitToRemove) => {
@@ -582,10 +607,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
       if (!alreadyExists) return [...prev, unitToRemove];
       return prev;
     });
-    setMappedExternalUnits(prev => ({
-      ...prev,
-      [category]: prev[category].filter(u => u.code !== unitToRemove.code)
-    }));
+    setMappedExternalUnits(prev => ({ ...prev, [category]: prev[category].filter(u => u.code !== unitToRemove.code) }));
   };
 
   const handleRemoveUnit = (semIdx, unitIdx) => {
@@ -667,19 +689,13 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
     try {
       const plannerUnits = planner.units || [];
       if (!plannerUnits.length) { setScheduleLoading(false); return; }
-
       const plannerUnitTypeMap = new Map();
       plannerUnits.forEach(u => plannerUnitTypeMap.set(extractUnitCode(u.UnitCode), getUnitCategory(u)));
-
       const completedUnitsMap = new Map();
       (completedUnits || []).forEach(u => {
         const code = u.code?.toUpperCase();
-        if (code) {
-          completedUnitsMap.set(code, u);
-          completedUnitsMap.set(getNormalizedUnitCode(code), u);
-        }
+        if (code) { completedUnitsMap.set(code, u); completedUnitsMap.set(getNormalizedUnitCode(code), u); }
       });
-
       let completedCore = 0, completedElective = 0, completedMajor = 0;
       const uncounted = [];
       (completedUnits || []).forEach(u => {
@@ -693,34 +709,28 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
         } else uncounted.push({ code, name: u.name || u.unitName || '' });
       });
       setUnrecognisedUnits(uncounted);
-
       const totalCredits = (completedUnits || []).reduce((s, u) => s + (u.creditPoints || 0), 0);
       const totalUnitsCompleted = completedUnitsMap.size;
-
       const prereqMap = new Map();
       plannerUnits.forEach(u => {
         const code = extractUnitCode(u.UnitCode);
         const parsed = parsePrerequisites(u.Prerequisites || '');
         prereqMap.set(code, ['unit', 'and', 'or'].includes(parsed.type) ? parsed.conditions.filter(c => c.type === 'unit').map(c => c.code) : []);
       });
-
       const unitsWithPrereqs = plannerUnits.map(u => ({ ...u, prerequisites: prereqMap.get(extractUnitCode(u.UnitCode)) || [] }));
       const missingUnits = unitsWithPrereqs.filter(u => {
         const code = extractUnitCode(u.UnitCode);
         return !completedUnitsMap.has(code) && !completedUnitsMap.has(getNormalizedUnitCode(code));
       });
-
       const required = 8;
       const needCore = Math.max(0, required - completedCore);
       const needElective = Math.max(0, required - completedElective);
       const needMajor = Math.max(0, required - completedMajor);
-
       let mcnt = 0, ecnt = 0, majcnt = 0;
       missingUnits.forEach(u => { const c = getUnitCategory(u); if (c === 'core') mcnt++; else if (c === 'elective') ecnt++; else if (c === 'major') majcnt++; });
       if (mcnt < needCore) setCategoryWarning(`⚠️ Only ${mcnt} core unit(s) remaining, but ${needCore} more needed.`);
       else if (ecnt < needElective) setCategoryWarning(`⚠️ Only ${ecnt} elective(s) remaining, but ${needElective} more needed.`);
       else if (majcnt < needMajor) setCategoryWarning(`⚠️ Only ${majcnt} major unit(s) remaining, but ${needMajor} more needed.`);
-
       let { schedule } = scheduleRemainingUnits(missingUnits, completedUnitsMap, totalCredits, currentYear, currentSemester, totalUnitsCompleted, needCore, needElective, needMajor);
       schedule = optimizeFinalSemester(schedule);
       setEditableSchedule(schedule);
@@ -741,7 +751,6 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
     } catch (e) { console.error(e); } finally { setScheduleLoading(false); }
   };
 
-  // NEW: Regenerate schedule based on current mapped external units (without resetting them)
   const regenerateFromMapped = () => {
     if (!selectedFieldPlanner) return;
     setScheduleLoading(true);
@@ -749,38 +758,24 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
       const planner = selectedFieldPlanner;
       const plannerUnits = planner.units || [];
       if (!plannerUnits.length) { setScheduleLoading(false); return; }
-
       const plannerUnitTypeMap = new Map();
       plannerUnits.forEach(u => plannerUnitTypeMap.set(extractUnitCode(u.UnitCode), getUnitCategory(u)));
-
-      // Build completed units map from original completedUnits
       const completedUnitsMap = new Map();
       (completedUnits || []).forEach(u => {
         const code = u.code?.toUpperCase();
-        if (code) {
-          completedUnitsMap.set(code, u);
-          completedUnitsMap.set(getNormalizedUnitCode(code), u);
-        }
+        if (code) { completedUnitsMap.set(code, u); completedUnitsMap.set(getNormalizedUnitCode(code), u); }
       });
-
-      // Also add mapped external units as "completed" for the purpose of determining missing units
-      const addMappedToMap = (arr, category) => {
+      const addMappedToMap = (arr) => {
         arr.forEach(extUnit => {
           const code = extUnit.code?.toUpperCase();
-          if (code) {
-            completedUnitsMap.set(code, extUnit);
-            completedUnitsMap.set(getNormalizedUnitCode(code), extUnit);
-          }
+          if (code) { completedUnitsMap.set(code, extUnit); completedUnitsMap.set(getNormalizedUnitCode(code), extUnit); }
         });
       };
-      addMappedToMap(mappedExternalUnits.core, 'core');
-      addMappedToMap(mappedExternalUnits.major, 'major');
-      addMappedToMap(mappedExternalUnits.elective, 'elective');
-      addMappedToMap(mappedExternalUnits.wil, 'wil');
-
-      // Calculate completed counts including mapped units
+      addMappedToMap(mappedExternalUnits.core);
+      addMappedToMap(mappedExternalUnits.major);
+      addMappedToMap(mappedExternalUnits.elective);
+      addMappedToMap(mappedExternalUnits.wil);
       let completedCore = 0, completedElective = 0, completedMajor = 0;
-      // Original completed units
       (completedUnits || []).forEach(u => {
         const code = u.code?.toUpperCase();
         if (plannerUnitTypeMap.has(code) || plannerUnitTypeMap.has(getNormalizedUnitCode(code))) {
@@ -791,44 +786,34 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
           else if (cat === 'major') completedMajor++;
         }
       });
-      // Mapped core/major/elective/wil (WIL adds to elective, with double for ICT20016)
       completedCore += mappedExternalUnits.core.length;
       completedMajor += mappedExternalUnits.major.length;
       let extraElectiveFromWil = 0;
-      mappedExternalUnits.wil.forEach(unit => {
-        if (unit.doubleCount) extraElectiveFromWil += 2;
-        else extraElectiveFromWil += 1;
-      });
+      mappedExternalUnits.wil.forEach(unit => { extraElectiveFromWil += unit.doubleCount ? 2 : 1; });
       completedElective += mappedExternalUnits.elective.length + extraElectiveFromWil;
-
       const totalCredits = (completedUnits || []).reduce((s, u) => s + (u.creditPoints || 0), 0) +
         [...mappedExternalUnits.core, ...mappedExternalUnits.major, ...mappedExternalUnits.elective, ...mappedExternalUnits.wil].reduce((s, u) => s + (u.creditPoints || 0), 0);
       const totalUnitsCompleted = completedUnitsMap.size;
-
       const prereqMap = new Map();
       plannerUnits.forEach(u => {
         const code = extractUnitCode(u.UnitCode);
         const parsed = parsePrerequisites(u.Prerequisites || '');
         prereqMap.set(code, ['unit', 'and', 'or'].includes(parsed.type) ? parsed.conditions.filter(c => c.type === 'unit').map(c => c.code) : []);
       });
-
       const unitsWithPrereqs = plannerUnits.map(u => ({ ...u, prerequisites: prereqMap.get(extractUnitCode(u.UnitCode)) || [] }));
       const missingUnits = unitsWithPrereqs.filter(u => {
         const code = extractUnitCode(u.UnitCode);
         return !completedUnitsMap.has(code) && !completedUnitsMap.has(getNormalizedUnitCode(code));
       });
-
       const required = 8;
       const needCore = Math.max(0, required - completedCore);
       const needElective = Math.max(0, required - completedElective);
       const needMajor = Math.max(0, required - completedMajor);
-
       let mcnt = 0, ecnt = 0, majcnt = 0;
       missingUnits.forEach(u => { const c = getUnitCategory(u); if (c === 'core') mcnt++; else if (c === 'elective') ecnt++; else if (c === 'major') majcnt++; });
       if (mcnt < needCore) setCategoryWarning(`⚠️ Only ${mcnt} core unit(s) remaining, but ${needCore} more needed.`);
       else if (ecnt < needElective) setCategoryWarning(`⚠️ Only ${ecnt} elective(s) remaining, but ${needElective} more needed.`);
       else if (majcnt < needMajor) setCategoryWarning(`⚠️ Only ${majcnt} major unit(s) remaining, but ${needMajor} more needed.`);
-
       let { schedule } = scheduleRemainingUnits(missingUnits, completedUnitsMap, totalCredits, currentYear, currentSemester, totalUnitsCompleted, needCore, needElective, needMajor);
       schedule = optimizeFinalSemester(schedule);
       setEditableSchedule(schedule);
@@ -848,16 +833,12 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
     } catch (e) { console.error(e); } finally { setScheduleLoading(false); }
   };
 
-  // Progress recalculation (fixed infinite loop)
   useEffect(() => {
     if (!selectedFieldPlanner || !completedUnits || !recommendations) return;
-
     const plannerUnits = selectedFieldPlanner.units || [];
     const plannerUnitTypeMap = new Map();
     plannerUnits.forEach(u => plannerUnitTypeMap.set(extractUnitCode(u.UnitCode), getUnitCategory(u)));
-
     let completedCore = 0, completedElective = 0, completedMajor = 0;
-
     (completedUnits || []).forEach(u => {
       const code = u.code?.toUpperCase();
       if (plannerUnitTypeMap.has(code) || plannerUnitTypeMap.has(getNormalizedUnitCode(code))) {
@@ -868,24 +849,17 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
         else if (cat === 'major') completedMajor++;
       }
     });
-
     let extraElectiveFromWil = 0;
-    mappedExternalUnits.wil.forEach(unit => {
-      if (unit.doubleCount) extraElectiveFromWil += 2;
-      else extraElectiveFromWil += 1;
-    });
+    mappedExternalUnits.wil.forEach(unit => { extraElectiveFromWil += unit.doubleCount ? 2 : 1; });
     completedCore += mappedExternalUnits.core.length;
     completedMajor += mappedExternalUnits.major.length;
     completedElective += mappedExternalUnits.elective.length + extraElectiveFromWil;
-
     const totalCredits = (completedUnits || []).reduce((s, u) => s + (u.creditPoints || 0), 0) +
       [...mappedExternalUnits.core, ...mappedExternalUnits.major, ...mappedExternalUnits.elective, ...mappedExternalUnits.wil].reduce((s, u) => s + (u.creditPoints || 0), 0);
-
     const required = 8;
     const needCore = Math.max(0, required - completedCore);
     const needElective = Math.max(0, required - completedElective);
     const needMajor = Math.max(0, required - completedMajor);
-
     setRecommendations(prev => ({
       ...prev,
       totalCompleted: completedCore + completedElective + completedMajor,
@@ -897,7 +871,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
         elective: { completed: completedElective, required, missing: needElective },
       },
     }));
-  }, [mappedExternalUnits, selectedFieldPlanner, completedUnits]); // ✅ fixed
+  }, [mappedExternalUnits, selectedFieldPlanner, completedUnits]);
 
   if (!isOpen) return null;
 
@@ -905,328 +879,284 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
   const allExternalMapped = unrecognisedUnits.length === 0;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-2" onClick={onClose}>
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full h-full flex flex-col overflow-hidden"
-        style={{ maxWidth: '1600px', maxHeight: '95vh' }}
-        onClick={e => e.stopPropagation()}
-        onDragEnd={() => { setDragSource(null); setDragTarget(null); setDragOverPanel(null); }}
-      >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 rounded-t-2xl flex-shrink-0">
-          <div className="flex justify-between items-center mb-2">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/20 p-2 rounded-xl"><CalendarIcon className="h-6 w-6" /></div>
-              <div>
-                <h2 className="text-xl font-bold">Study Planner</h2>
-                <p className="text-emerald-100 text-xs">{plannersLoading ? 'Loading planners…' : `${allPlanners.length} planner(s) available`}</p>
-              </div>
-            </div>
-            <button onClick={onClose} className="bg-white/20 hover:bg-white/30 rounded-full p-2"><XMarkIcon className="h-5 w-5" /></button>
-          </div>
-        </div>
+    <>
+      {/* ── Toolbox floats above everything, rendered outside the modal ── */}
+      <UnitPoolToolbox
+        isOpen={showToolbox}
+        onClose={() => setShowToolbox(false)}
+      />
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-5">
-          {plannersError && (
-            <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm flex items-center gap-2">
-              <ExclamationTriangleIcon className="h-4 w-4" /> {plannersError}
-            </div>
-          )}
-
-          {/* Progress card */}
-          {studentInfo && recommendations && (
-            <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
-              <div className="flex items-center gap-2 mb-3">
-                <UserGroupIcon className="h-5 w-5 text-gray-600" />
-                <h3 className="font-semibold text-gray-800">Graduation Progress</h3>
-                <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full ml-auto">{recommendations.plannerName}</span>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
-                <div><span className="text-gray-500 text-xs">Student ID</span><p className="font-semibold">{studentInfo.studentId}</p></div>
-                <div><span className="text-gray-500 text-xs">Position</span>{(() => { const count = completedUnits?.length || 0; const sems = Math.floor(count / 4); const sem = Math.max(1, sems); const yr = Math.floor((sem - 1) / 2) + 1; return <p className="font-semibold text-emerald-600">Y{yr} S{sem}</p>; })()}</div>
-                <div><span className="text-gray-500 text-xs">Units</span><p className="font-semibold text-emerald-600">{recommendations.totalCompleted}/24</p></div>
-                <div><span className="text-gray-500 text-xs">Credits</span><p className="font-semibold text-emerald-600">{recommendations.totalCredits}/300</p></div>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-xs mb-3">
-                <div className="bg-white rounded-lg p-2 text-center border border-gray-100">
-                  <span className="text-gray-500 capitalize">core</span>
-                  <p className="font-bold">{recommendations.categoryRequirements.core.completed}/{recommendations.categoryRequirements.core.required}</p>
-                  <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
-                    <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${(recommendations.categoryRequirements.core.completed / recommendations.categoryRequirements.core.required) * 100}%` }} />
-                  </div>
-                </div>
-                <div className="bg-white rounded-lg p-2 text-center border border-gray-100">
-                  <span className="text-gray-500 capitalize">major</span>
-                  <p className="font-bold">{recommendations.categoryRequirements.major.completed}/{recommendations.categoryRequirements.major.required}</p>
-                  <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
-                    <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${(recommendations.categoryRequirements.major.completed / recommendations.categoryRequirements.major.required) * 100}%` }} />
-                  </div>
-                </div>
-                <div className="bg-white rounded-lg p-2 text-center border border-gray-100">
-                  <span className="text-gray-500 capitalize">elective</span>
-                  <p className="font-bold">{recommendations.categoryRequirements.elective.completed}/{recommendations.categoryRequirements.elective.required}</p>
-                  <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
-                    <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${(recommendations.categoryRequirements.elective.completed / recommendations.categoryRequirements.elective.required) * 100}%` }} />
-                  </div>
+      <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-2" onClick={onClose}>
+        <div
+          className="bg-white rounded-2xl shadow-2xl w-full h-full flex flex-col overflow-hidden mt-16"
+          style={{ maxWidth: '1600px', maxHeight: '95vh' }}
+          onClick={e => e.stopPropagation()}
+          onDragEnd={() => { setDragSource(null); setDragTarget(null); setDragOverPanel(null); }}
+        >
+          {/* Header */}
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 rounded-t-2xl flex-shrink-0">
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-xl"><CalendarIcon className="h-6 w-6" /></div>
+                <div>
+                  <h2 className="text-xl font-bold">Study Planner</h2>
+                  <p className="text-emerald-100 text-xs">{plannersLoading ? 'Loading planners…' : `${allPlanners.length} planner(s) available`}</p>
                 </div>
               </div>
-              {categoryWarning && (
-                <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg p-2 text-sm text-amber-700 flex items-start gap-2">
-                  <ExclamationTriangleIcon className="h-4 w-4 mt-0.5" />{categoryWarning}
-                </div>
-              )}
-              <div>
-                <div className="flex justify-between text-xs text-gray-500 mb-1"><span>Overall progress (24 units)</span><span>{recommendations.completedPercent?.toFixed(1)}%</span></div>
-                <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-emerald-600 h-2 rounded-full transition-all" style={{ width: `${recommendations.completedPercent || 0}%` }} /></div>
-              </div>
-            </div>
-          )}
-
-          {/* Four panels - neutral gray design */}
-          {selectedFieldPlanner && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              {/* Core Panel */}
-              <div
-                className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === 'core' ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
-                onDragOver={e => { e.preventDefault(); setDragOverPanel('core'); }}
-                onDragLeave={() => setDragOverPanel(null)}
-                onDrop={() => { handleDropOnPanel('core'); setDragOverPanel(null); }}
-              >
-                <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
-                  Core <span className="text-xs font-normal text-gray-500 ml-auto">{coreUnits.length} units</span>
-                </h4>
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
-                  {coreUnits.map((unit, idx) => (
-                    <PanelUnitCard
-                      key={`core-${idx}-${unit.UnitCode || unit.code}`}
-                      unit={unit}
-                      status={unit.status}
-                      category="core"
-                      onDragStart={handleDragStart}
-                      isDragging={dragSource?.fromPanel && extractUnitCode(dragSource.unit?.UnitCode) === extractUnitCode(unit.UnitCode)}
-                      onRemove={unit.isMappedExternal ? (u) => handleRemoveMappedUnit('core', u) : null}
-                    />
-                  ))}
-                </div>
-                <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
-              </div>
-
-              {/* Major Panel */}
-              <div
-                className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === 'major' ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
-                onDragOver={e => { e.preventDefault(); setDragOverPanel('major'); }}
-                onDragLeave={() => setDragOverPanel(null)}
-                onDrop={() => { handleDropOnPanel('major'); setDragOverPanel(null); }}
-              >
-                <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
-                  Major <span className="text-xs font-normal text-gray-500 ml-auto">{majorUnits.length} units</span>
-                </h4>
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
-                  {majorUnits.map((unit, idx) => (
-                    <PanelUnitCard
-                      key={`major-${idx}-${unit.UnitCode || unit.code}`}
-                      unit={unit}
-                      status={unit.status}
-                      category="major"
-                      onDragStart={handleDragStart}
-                      isDragging={dragSource?.fromPanel && extractUnitCode(dragSource.unit?.UnitCode) === extractUnitCode(unit.UnitCode)}
-                      onRemove={unit.isMappedExternal ? (u) => handleRemoveMappedUnit('major', u) : null}
-                    />
-                  ))}
-                </div>
-                <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
-              </div>
-
-              {/* Elective Panel */}
-              <div
-                className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === 'elective' ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
-                onDragOver={e => { e.preventDefault(); setDragOverPanel('elective'); }}
-                onDragLeave={() => setDragOverPanel(null)}
-                onDrop={() => { handleDropOnPanel('elective'); setDragOverPanel(null); }}
-              >
-                <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
-                  Elective <span className="text-xs font-normal text-gray-500 ml-auto">{electiveUnits.length} units</span>
-                </h4>
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
-                  {electiveUnits.map((unit, idx) => (
-                    <PanelUnitCard
-                      key={`elective-${idx}-${unit.UnitCode || unit.code}`}
-                      unit={unit}
-                      status={unit.status}
-                      category="elective"
-                      onDragStart={handleDragStart}
-                      isDragging={dragSource?.fromPanel && extractUnitCode(dragSource.unit?.UnitCode) === extractUnitCode(unit.UnitCode)}
-                      onRemove={unit.isMappedExternal ? (u) => handleRemoveMappedUnit('elective', u) : null}
-                    />
-                  ))}
-                </div>
-                <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
-              </div>
-
-              {/* WIL Panel */}
-              <div
-                className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === 'wil' ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
-                onDragOver={e => { e.preventDefault(); setDragOverPanel('wil'); }}
-                onDragLeave={() => setDragOverPanel(null)}
-                onDrop={() => { handleDropOnPanel('wil'); setDragOverPanel(null); }}
-              >
-                <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
-                  WIL <span className="text-xs font-normal text-gray-500 ml-auto">{wilUnits.length} units</span>
-                </h4>
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
-                  {wilUnits.map((unit, idx) => (
-                    <PanelUnitCard
-                      key={`wil-${idx}-${unit.UnitCode || unit.code}`}
-                      unit={unit}
-                      status={unit.status}
-                      category="wil"
-                      onDragStart={handleDragStart}
-                      isDragging={dragSource?.fromPanel && extractUnitCode(dragSource.unit?.UnitCode) === extractUnitCode(unit.UnitCode)}
-                      onRemove={unit.isMappedExternal ? (u) => handleRemoveMappedUnit('wil', u) : null}
-                    />
-                  ))}
-                </div>
-                <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
-              </div>
-            </div>
-          )}
-
-          {/* Completed External Panel with Generate button */}
-          <div className="mb-4 bg-gray-50 rounded-xl border border-gray-200 p-3">
-            <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
-              ✅ Completed (External)
-              <span className="text-xs font-normal text-gray-500 ml-auto">{unrecognisedUnits.length} units</span>
-            </h4>
-            {unrecognisedUnits.length > 0 ? (
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {unrecognisedUnits.map((unit, idx) => (
-                  <ExternalUnitCard
-                    key={`ext-${idx}`}
-                    unit={unit}
-                    onMapToCategory={handleMapExternalToCategory}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-gray-500 text-center py-2">
-                All external units have been mapped. You can now generate your custom planner.
-              </p>
-            )}
-            <div className="mt-3 flex justify-end">
-              <button
-                onClick={regenerateFromMapped}
-                disabled={!allExternalMapped || scheduleLoading}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2
-                  ${allExternalMapped && !scheduleLoading
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
-              >
-                {scheduleLoading ? (
-                  <>
-                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <ArrowPathIcon className="h-4 w-4" />
-                    Generate Study Plan
-                  </>
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Click the arrow on any external unit to map it to Core, Major, Elective, or WIL. After mapping all, click Generate to create your personalised study plan.
-            </p>
-          </div>
-
-          {/* Field planner selector */}
-          {fieldPlanners.length > 1 && (
-            <div className="mb-4 flex flex-wrap gap-2 items-center">
-              <span className="text-xs text-gray-500">Study field:</span>
-              {fieldPlanners.map(item => (
+              <div className="flex items-center gap-2">
+                {/* Unit Toolbox toggle */}
                 <button
-                  key={item.field}
-                  onClick={() => { setSelectedFieldPlanner(item.planner); setRecommendations(null); generateScheduleForPlanner(item.planner); }}
-                  className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${selectedFieldPlanner?.name === item.planner.name
-                    ? 'bg-emerald-600 text-white border-emerald-600'
-                    : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'
+                  onClick={() => setShowToolbox(v => !v)}
+                  title="Toggle Unit Toolbox"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
+                    ${showToolbox
+                      ? 'bg-white text-emerald-700 shadow-sm'
+                      : 'bg-white/20 hover:bg-white/30 text-white'
                     }`}
                 >
-                  {item.field} ({item.score}/{completedUnits?.length || 0})
+                  <WrenchScrewdriverIcon className="h-4 w-4" />
+                  <span className="hidden sm:inline">Unit Toolbox</span>
                 </button>
-              ))}
-            </div>
-          )}
-
-          {/* Schedule display */}
-          {scheduleLoading || plannersLoading ? (
-            <div className="text-center py-12"><ArrowPathIcon className="h-10 w-10 text-emerald-500 animate-spin mx-auto mb-3" /><p className="text-gray-500">{plannersLoading ? 'Fetching planners…' : 'Building your schedule…'}</p></div>
-          ) : editableSchedule.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="bg-gray-100 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center"><CheckCircleIcon className="h-10 w-10 text-emerald-600" /></div>
-              <p className="text-gray-700 text-lg font-medium">🎓 All requirements met!</p>
-              <p className="text-gray-500 mt-2">You've completed all 8 Core, 8 Elective, and 8 Major units.</p>
-            </div>
-          ) : (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-emerald-600" />
-                  <h3 className="text-base font-bold text-gray-800">Full Study Plan</h3>
-                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{editableSchedule.length} semester(s)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 flex items-center gap-1">
-                    <ArrowsRightLeftIcon className="h-3.5 w-3.5" /> Drag units to reorder
-                  </span>
-                  <button onClick={() => setShowFullPlan(!showFullPlan)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-                    {showFullPlan ? 'Collapse' : 'Expand'}{showFullPlan ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
-                  </button>
-                </div>
+                <button onClick={onClose} className="bg-white/20 hover:bg-white/30 rounded-full p-2"><XMarkIcon className="h-5 w-5" /></button>
               </div>
+            </div>
+          </div>
 
-              {showFullPlan && (
-                <div className="space-y-3">
-                  {editableSchedule.map((sem, semIdx) => (
-                    <div key={semIdx} className="border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="bg-gray-100 px-4 py-2.5 border-b border-gray-200 flex justify-between items-center">
-                        <h4 className="font-semibold text-gray-800 text-sm">Year {sem.year}, Semester {sem.semester}</h4>
-                        <span className="text-xs text-gray-600">{sem.unitCount} unit(s) · {sem.totalCredits} CP</span>
-                      </div>
-                      <div className="p-3 bg-white space-y-1.5">
-                        {sem.units.map((unit, unitIdx) => (
-                          <DraggableUnitCard
-                            key={`${semIdx}-${unitIdx}-${unit.UnitCode}`}
-                            unit={unit}
-                            semIdx={semIdx}
-                            unitIdx={unitIdx}
-                            onDragStart={handleDragStart}
-                            onDragEnter={handleDragEnter}
-                            onDrop={handleDrop}
-                            isDragOver={dragTarget?.semIdx === semIdx && dragTarget?.unitIdx === unitIdx && dragSource && !dragSource.fromPanel}
-                            isSource={dragSource && !dragSource.fromPanel && dragSource.semIdx === semIdx && dragSource.unitIdx === unitIdx}
-                            onRemove={handleRemoveUnit}
-                          />
-                        ))}
-                        <SemesterDropZone
-                          sem={sem}
-                          semIdx={semIdx}
-                          onDragEnter={handleDragEnter}
-                          onDrop={handleDrop}
-                          isDragOver={dragTarget?.semIdx === semIdx && dragTarget?.unitIdx === sem.units.length && dragSource}
-                        />
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-5">
+            {plannersError && (
+              <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm flex items-center gap-2">
+                <ExclamationTriangleIcon className="h-4 w-4" /> {plannersError}
+              </div>
+            )}
+
+            {/* Progress card */}
+            {studentInfo && recommendations && (
+              <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <UserGroupIcon className="h-5 w-5 text-gray-600" />
+                  <h3 className="font-semibold text-gray-800">Graduation Progress</h3>
+                  <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full ml-auto">{recommendations.plannerName}</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+                  <div><span className="text-gray-500 text-xs">Student ID</span><p className="font-semibold">{studentInfo.studentId}</p></div>
+                  <div><span className="text-gray-500 text-xs">Position</span>{(() => { const count = completedUnits?.length || 0; const sems = Math.floor(count / 4); const sem = Math.max(1, sems); const yr = Math.floor((sem - 1) / 2) + 1; return <p className="font-semibold text-emerald-600">Y{yr} S{sem}</p>; })()}</div>
+                  <div><span className="text-gray-500 text-xs">Units</span><p className="font-semibold text-emerald-600">{recommendations.totalCompleted}/24</p></div>
+                  <div><span className="text-gray-500 text-xs">Credits</span><p className="font-semibold text-emerald-600">{recommendations.totalCredits}/300</p></div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs mb-3">
+                  {['core', 'major', 'elective'].map(cat => (
+                    <div key={cat} className="bg-white rounded-lg p-2 text-center border border-gray-100">
+                      <span className="text-gray-500 capitalize">{cat}</span>
+                      <p className="font-bold">{recommendations.categoryRequirements[cat].completed}/{recommendations.categoryRequirements[cat].required}</p>
+                      <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
+                        <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${(recommendations.categoryRequirements[cat].completed / recommendations.categoryRequirements[cat].required) * 100}%` }} />
                       </div>
                     </div>
                   ))}
                 </div>
+                {categoryWarning && (
+                  <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg p-2 text-sm text-amber-700 flex items-start gap-2">
+                    <ExclamationTriangleIcon className="h-4 w-4 mt-0.5" />{categoryWarning}
+                  </div>
+                )}
+                <div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1"><span>Overall progress (24 units)</span><span>{recommendations.completedPercent?.toFixed(1)}%</span></div>
+                  <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-emerald-600 h-2 rounded-full transition-all" style={{ width: `${recommendations.completedPercent || 0}%` }} /></div>
+                </div>
+              </div>
+            )}
+
+            {/* Four panels */}
+            {selectedFieldPlanner && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                {[
+                  { key: 'core', units: coreUnits },
+                  { key: 'major', units: majorUnits },
+                  { key: 'elective', units: electiveUnits },
+                  { key: 'wil', units: wilUnits },
+                ].map(({ key, units }) => (
+                  <div
+                    key={key}
+                    className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === key ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
+                    onDragOver={e => { e.preventDefault(); setDragOverPanel(key); }}
+                    onDragLeave={() => setDragOverPanel(null)}
+                    onDrop={() => { handleDropOnPanel(key); setDragOverPanel(null); }}
+                  >
+                    <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1 capitalize">
+                      {key} <span className="text-xs font-normal text-gray-500 ml-auto">{units.length} units</span>
+                    </h4>
+                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
+                      {units.map((unit, idx) => (
+                        <PanelUnitCard
+                          key={`${key}-${idx}-${unit.UnitCode || unit.code}`}
+                          unit={unit}
+                          status={unit.status}
+                          category={key}
+                          onDragStart={handleDragStart}
+                          isDragging={dragSource?.fromPanel && extractUnitCode(dragSource.unit?.UnitCode) === extractUnitCode(unit.UnitCode)}
+                          onRemove={unit.isMappedExternal ? (u) => handleRemoveMappedUnit(key, u) : null}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* External units panel */}
+            <div className="mb-4 bg-gray-50 rounded-xl border border-gray-200 p-3">
+              <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
+                ✅ Completed (External)
+                <span className="text-xs font-normal text-gray-500 ml-auto">{unrecognisedUnits.length} units</span>
+              </h4>
+              {unrecognisedUnits.length > 0 ? (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {unrecognisedUnits.map((unit, idx) => (
+                    <ExternalUnitCard key={`ext-${idx}`} unit={unit} onMapToCategory={handleMapExternalToCategory} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 text-center py-2">All external units have been mapped. You can now generate your custom planner.</p>
               )}
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={regenerateFromMapped}
+                  disabled={!allExternalMapped || scheduleLoading}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2
+                    ${allExternalMapped && !scheduleLoading ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                >
+                  {scheduleLoading ? <><ArrowPathIcon className="h-4 w-4 animate-spin" />Generating...</> : <><ArrowPathIcon className="h-4 w-4" />Generate Study Plan</>}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Click the arrow on any external unit to map it to Core, Major, Elective, or WIL. After mapping all, click Generate to create your personalised study plan.</p>
             </div>
-          )}
+
+            {/* Field planner selector */}
+            {fieldPlanners.length > 1 && (
+              <div className="mb-4 flex flex-wrap gap-2 items-center">
+                <span className="text-xs text-gray-500">Study field:</span>
+                {fieldPlanners.map(item => (
+                  <button
+                    key={item.field}
+                    onClick={() => { setSelectedFieldPlanner(item.planner); setRecommendations(null); generateScheduleForPlanner(item.planner); }}
+                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${selectedFieldPlanner?.name === item.planner.name ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'}`}
+                  >
+                    {item.field} ({item.score}/{completedUnits?.length || 0})
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Schedule */}
+            {scheduleLoading || plannersLoading ? (
+              <div className="text-center py-12"><ArrowPathIcon className="h-10 w-10 text-emerald-500 animate-spin mx-auto mb-3" /><p className="text-gray-500">{plannersLoading ? 'Fetching planners…' : 'Building your schedule…'}</p></div>
+            ) : editableSchedule.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="bg-gray-100 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center"><CheckCircleIcon className="h-10 w-10 text-emerald-600" /></div>
+                <p className="text-gray-700 text-lg font-medium">🎓 All requirements met!</p>
+                <p className="text-gray-500 mt-2">You've completed all 8 Core, 8 Elective, and 8 Major units.</p>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="h-5 w-5 text-emerald-600" />
+                    <h3 className="text-base font-bold text-gray-800">Full Study Plan</h3>
+                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{editableSchedule.length} semester(s)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 flex items-center gap-1">
+                      <ArrowsRightLeftIcon className="h-3.5 w-3.5" /> Drag units to reorder
+                    </span>
+                    <button onClick={() => setShowFullPlan(!showFullPlan)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+                      {showFullPlan ? 'Collapse' : 'Expand'}{showFullPlan ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {showFullPlan && (
+                  <div className="space-y-3">
+                    {editableSchedule.map((sem, semIdx) => (
+                      <div key={semIdx} className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="bg-gray-100 px-4 py-2.5 border-b border-gray-200 flex justify-between items-center">
+                          <h4 className="font-semibold text-gray-800 text-sm">Year {sem.year}, Semester {sem.semester}</h4>
+                          <span className="text-xs text-gray-600">{sem.unitCount} unit(s) · {sem.totalCredits} CP</span>
+                        </div>
+                        <div
+                          className="p-3 bg-white space-y-1.5"
+                          onDragOver={e => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            try {
+                              const raw = e.dataTransfer.getData('application/json');
+                              if (raw) {
+                                const data = JSON.parse(raw);
+                                if (data.fromToolbox && data.unit) {
+                                  handleNativeDropIntoSemester(semIdx, sem.units.length, data.unit);
+                                  return;
+                                }
+                              }
+                            } catch (_) { }
+                          }}
+                        >
+                          {sem.units.map((unit, unitIdx) => (
+                            <DraggableUnitCard
+                              key={`${semIdx}-${unitIdx}-${unit.UnitCode}`}
+                              unit={unit}
+                              semIdx={semIdx}
+                              unitIdx={unitIdx}
+                              onDragStart={handleDragStart}
+                              onDragEnter={handleDragEnter}
+                              onDrop={handleDrop}
+                              isDragOver={dragTarget?.semIdx === semIdx && dragTarget?.unitIdx === unitIdx && dragSource && !dragSource.fromPanel}
+                              isSource={dragSource && !dragSource.fromPanel && dragSource.semIdx === semIdx && dragSource.unitIdx === unitIdx}
+                              onRemove={handleRemoveUnit}
+                            />
+                          ))}
+                          <SemesterDropZone
+                            sem={sem}
+                            semIdx={semIdx}
+                            onDragEnter={handleDragEnter}
+                            onDrop={handleDrop}
+                            onNativeDrop={handleNativeDropIntoSemester}
+                            isDragOver={dragTarget?.semIdx === semIdx && dragTarget?.unitIdx === sem.units.length && dragSource}
+                          />
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* ── Bottom PDF export bar ── */}
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-200 mt-2">
+                      <p className="text-xs text-gray-400 flex items-center gap-1">
+                        <ArrowsRightLeftIcon className="h-3.5 w-3.5" />
+                        Drag units between semesters to customise, then export.
+                      </p>
+                      <button
+                        onClick={handleExportPdf}
+                        disabled={pdfLoading}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-all
+                          ${pdfLoading
+                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          }`}
+                      >
+                        {pdfLoading
+                          ? <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                          : <ArrowDownTrayIcon className="h-4 w-4" />
+                        }
+                        {pdfLoading ? 'Generating PDF…' : 'Save as PDF'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
