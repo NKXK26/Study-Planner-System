@@ -10,8 +10,8 @@ const ActionButton = ({
     type = "submit"
 }) => {
     const buttonStyles = {
-        'view': 'text-blue-600 hover:text-blue-900',
-        'edit': 'text-indigo-600 hover:text-indigo-900',
+        'view': 'text-gray-600 hover:text-gray-900',
+        'edit': 'text-[#dc2d27] hover:text-red-800',
         'delete': 'text-red-600 hover:text-red-900'
     };
 

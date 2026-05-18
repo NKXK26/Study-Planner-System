@@ -173,7 +173,7 @@ const UnitTypeListing = ({ params, error, HandleOpenForm, refreshList, unitTypes
                                         {can('unit_type', 'update') && (
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); HandleOpenForm('EDIT', unitType.id, unitType); }}
-                                                className="text-indigo-600 hover:text-indigo-900 cursor-pointer"
+                                                className="text-[#dc2d27] hover:text-red-800 cursor-pointer"
                                                 title="Edit unit type"
                                             >
                                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

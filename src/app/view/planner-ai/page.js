@@ -56,7 +56,7 @@ function UnitSelectorModal({ isOpen, onClose, onSelectUnit, units }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-indigo-500 to-blue-500">
+        <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-red-500 to-red-700">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold text-white">Select a Unit</h2>
             <button onClick={onClose} className="text-white/80 hover:text-white">✕</button>
@@ -79,11 +79,11 @@ function UnitSelectorModal({ isOpen, onClose, onSelectUnit, units }) {
                 <button
                   key={unit.id}
                   onClick={() => onSelectUnit(unit)}
-                  className="w-full text-left px-4 py-3 rounded-lg hover:bg-indigo-50 transition-colors border border-transparent hover:border-indigo-200"
+                  className="w-full text-left px-4 py-3 rounded-lg hover:bg-red-50 transition-colors border border-transparent hover:border-red-200"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-mono font-semibold text-indigo-600">{unit.code}</p>
+                      <p className="font-mono font-semibold text-red-600">{unit.code}</p>
                       <p className="text-sm text-gray-600">{unit.name}</p>
                     </div>
                     <p className="text-xs text-gray-400">{unit.credits} credits</p>
@@ -130,7 +130,7 @@ function PlannerSelectorModal({ isOpen, onClose, onSelectPlanner, planners, isCo
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl max-w-md w-full max-h-[70vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-indigo-500 to-blue-500">
+        <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-red-500 to-red-700">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold text-white">
               {isCompare ? 'Select Two Planners to Compare' : 'Select a Planner'}
@@ -159,8 +159,8 @@ function PlannerSelectorModal({ isOpen, onClose, onSelectPlanner, planners, isCo
                   key={planner.id}
                   onClick={() => handleSelect(planner)}
                   className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${isCompare && selectedPlanners.includes(planner.name)
-                    ? 'bg-indigo-100 border-indigo-300'
-                    : 'hover:bg-indigo-50'
+                    ? 'bg-red-100 border-red-300'
+                    : 'hover:bg-red-50'
                     }`}
                 >
                   <p className="font-semibold text-gray-800">{planner.name}</p>
@@ -177,7 +177,7 @@ function PlannerSelectorModal({ isOpen, onClose, onSelectPlanner, planners, isCo
             <button
               onClick={handleConfirm}
               disabled={selectedPlanners.length !== 2}
-              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition"
+              className="w-full py-2 bg-red-600 hover:bg-red-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg font-medium transition"
             >
               Compare Selected Planners
             </button>
@@ -362,7 +362,7 @@ export default function PlannerAIPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-red-50/20">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-20">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -441,7 +441,7 @@ export default function PlannerAIPage() {
                   className={`flex gap-2.5 ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   {!isUser && (
-                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
                       <span className="text-white text-xs font-bold">AI</span>
                     </div>
                   )}
@@ -449,7 +449,7 @@ export default function PlannerAIPage() {
                   <div className={`flex flex-col gap-1 max-w-[85%]`}>
                     <div
                       className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm ${isUser
-                        ? 'bg-indigo-600 text-white rounded-tr-sm'
+                        ? 'bg-red-600 text-white rounded-tr-sm'
                         : 'bg-gray-50 border border-gray-200 text-gray-700 rounded-tl-sm'
                         }`}
                       dangerouslySetInnerHTML={{
@@ -480,20 +480,20 @@ export default function PlannerAIPage() {
             {/* Typing indicator */}
             {isLoading && (
               <div className="flex gap-2.5">
-                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-sm">
+                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center flex-shrink-0 shadow-sm">
                   <span className="text-white text-xs font-bold">AI</span>
                 </div>
                 <div className="bg-gray-50 border border-gray-200 px-3.5 py-2.5 rounded-2xl rounded-tl-sm flex items-center gap-1 shadow-sm">
                   <div
-                    className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"
+                    className="w-1.5 h-1.5 bg-red-400 rounded-full animate-bounce"
                     style={{ animationDelay: '0ms' }}
                   />
                   <div
-                    className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"
+                    className="w-1.5 h-1.5 bg-red-400 rounded-full animate-bounce"
                     style={{ animationDelay: '150ms' }}
                   />
                   <div
-                    className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"
+                    className="w-1.5 h-1.5 bg-red-400 rounded-full animate-bounce"
                     style={{ animationDelay: '300ms' }}
                   />
                 </div>
@@ -511,7 +511,7 @@ export default function PlannerAIPage() {
                 key={cat.category}
                 onClick={() => setActiveCategory(cat.category)}
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeCategory === cat.category
-                  ? 'bg-white text-indigo-600 shadow-sm'
+                  ? 'bg-white text-red-600 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
@@ -529,7 +529,7 @@ export default function PlannerAIPage() {
                 key={idx}
                 onClick={() => handlePromptClick(prompt.text, prompt.type, prompt.template)}
                 disabled={isLoading || !ollamaOk}
-                className="text-left px-3 py-2 text-sm rounded-lg bg-white hover:bg-indigo-50 border border-gray-200 text-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="text-left px-3 py-2 text-sm rounded-lg bg-white hover:bg-red-50 border border-gray-200 text-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <span className="font-medium">{prompt.text}</span>
                 {prompt.placeholder && (
@@ -555,12 +555,12 @@ export default function PlannerAIPage() {
                   isLoading ? 'Thinking…' :
                     'Type your question… (Enter to send)'
               }
-              className="flex-1 bg-white border border-gray-200 focus:border-indigo-400 focus:bg-white rounded-xl px-4 py-3 text-sm resize-none outline-none transition-all text-gray-700 placeholder-gray-400 disabled:opacity-50"
+              className="flex-1 bg-white border border-gray-200 focus:border-red-400 focus:bg-white rounded-xl px-4 py-3 text-sm resize-none outline-none transition-all text-gray-700 placeholder-gray-400 disabled:opacity-50"
             />
             <button
               onClick={() => sendMessage()}
               disabled={!input.trim() || isLoading || !ollamaOk}
-              className="px-5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors shadow-sm self-stretch"
+              className="px-5 bg-red-600 hover:bg-red-500 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors shadow-sm self-stretch"
             >
               {isLoading ? (
                 <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin block" />

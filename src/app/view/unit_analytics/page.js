@@ -150,7 +150,7 @@ function StatCard({ label, value, sub, color, icon, trend }) {
     amber: 'border-l-amber-400',
     blue: 'border-l-blue-500',
     green: 'border-l-emerald-500',
-    purple: 'border-l-violet-500',
+    purple: 'border-l-gray-500',
     slate: 'border-l-slate-400',
   };
   return (
@@ -247,7 +247,7 @@ function YearsDistributionChart({ data }) {
             const y = height - padding.bottom - barHeight;
             return (
               <g key={i}>
-                <rect x={x} y={y} width={barWidth} height={barHeight} fill="#6366f1" rx="2">
+                <rect x={x} y={y} width={barWidth} height={barHeight} fill="#dc2d27" rx="2">
                   <title>{`${d.years} years: ${d.count} students`}</title>
                 </rect>
                 <text x={padding.left + i * step + step / 2} y={height - padding.bottom + 14} className="text-[9px] fill-gray-400" textAnchor="middle">
@@ -288,7 +288,7 @@ function GraduationSpeedView({ data }) {
       </div>
 
       {/* Insight banner */}
-      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl border border-indigo-100 p-4">
+      <div className="bg-gradient-to-r from-red-50 to-amber-50 rounded-xl border border-red-100 p-4">
         <div className="flex items-start gap-3">
           <div className="text-2xl">🎓</div>
           <div>
@@ -377,7 +377,7 @@ function GraduationSpeedView({ data }) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {(courseSpeedStats || []).map(c => (
-                <tr key={c.courseCode} className="hover:bg-indigo-50/30 transition-colors">
+                <tr key={c.courseCode} className="hover:bg-red-50/30 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs font-bold text-gray-700">{c.courseCode}</td>
                   <td className="px-4 py-3 text-gray-700 max-w-[260px] truncate text-xs">{c.courseName}</td>
                   <td className="px-4 py-3 text-center text-xs text-gray-500">{c.total}</td>
@@ -761,7 +761,7 @@ export default function UnitAnalyticsPage() {
                         <td className="px-4 py-3 text-center text-xs text-gray-500">{u.totalAttempts}</td>
                         <td className="px-4 py-3 text-center">
                           {u.repeatCount > 0 ? (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-600">{u.repeatCount}</span>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-600">{u.repeatCount}</span>
                           ) : (
                             <span className="text-gray-300">—</span>
                           )}

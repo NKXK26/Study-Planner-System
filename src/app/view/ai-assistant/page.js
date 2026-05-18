@@ -24,19 +24,19 @@ const WELCOME_MESSAGE = {
 // ── Markdown formatter ────────────────────────────────────────────────────────
 function formatMessage(content) {
   return content
-    .replace(/^### (.*?)$/gm, '<h4 class="text-indigo-700 font-semibold mt-4 mb-1.5 text-sm tracking-wide uppercase">$1</h4>')
+    .replace(/^### (.*?)$/gm, '<h4 class="text-red-700 font-semibold mt-4 mb-1.5 text-sm tracking-wide uppercase">$1</h4>')
     .replace(/^## (.*?)$/gm, '<h3 class="text-gray-800 font-bold mt-4 mb-2 text-base">$1</h3>')
     .replace(/^# (.*?)$/gm,  '<h2 class="text-gray-900 font-bold mt-4 mb-2 text-lg">$1</h2>')
     .replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 font-semibold">$1</strong>')
     .replace(/\*(.*?)\*/g,    '<em class="text-gray-500">$1</em>')
-    .replace(/`(.*?)`/g,      '<code class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-xs font-mono border border-indigo-100">$1</code>')
+    .replace(/`(.*?)`/g,      '<code class="bg-red-50 text-red-700 px-1.5 py-0.5 rounded text-xs font-mono border border-red-100">$1</code>')
     .replace(/\|(.+)\|/g, (match) => {
       const cells = match.split('|').filter(c => c.trim() !== '')
       if (cells.every(c => c.trim().match(/^[-:]+$/))) return ''
       const tds = cells.map(c =>
         `<td class="px-3 py-2 border border-gray-200 text-xs text-gray-600">${c.trim()}</td>`
       ).join('')
-      return `<tr class="even:bg-gray-50 hover:bg-indigo-50/40 transition-colors">${tds}</tr>`
+      return `<tr class="even:bg-gray-50 hover:bg-red-50/40 transition-colors">${tds}</tr>`
     })
     .replace(/(<tr.*?<\/tr>\n?)+/gs, match =>
       `<div class="overflow-x-auto my-3 rounded-xl border border-gray-200 shadow-sm"><table class="border-collapse w-full text-xs">${match}</table></div>`
@@ -51,7 +51,7 @@ function formatMessage(content) {
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status, pullStage }) {
   const configs = {
-    pulling:  { bg: 'bg-blue-50',    border: 'border-blue-200',   text: 'text-blue-600',   dot: 'bg-blue-500 animate-pulse',   label: pullStage || 'Preparing…' },
+    pulling:  { bg: 'bg-gray-50',    border: 'border-gray-200',   text: 'text-gray-600',   dot: 'bg-gray-500 animate-pulse',   label: pullStage || 'Preparing…' },
     ready:    { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', dot: 'bg-emerald-500',              label: 'AI Ready' },
     'no-model':{ bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-600',  dot: 'bg-amber-400 animate-pulse',  label: 'Setting up…' },
     offline:  { bg: 'bg-red-50',     border: 'border-red-200',    text: 'text-red-500',    dot: 'bg-red-400',                  label: 'AI Offline' },
@@ -69,24 +69,24 @@ function StatusBadge({ status, pullStage }) {
 // ── Model pull banner ─────────────────────────────────────────────────────────
 function ModelPullBanner({ progress, stage }) {
   return (
-    <div className="mx-4 mb-3 rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 shadow-sm">
+    <div className="mx-4 mb-3 rounded-xl border border-gray-100 bg-gradient-to-r from-gray-50 to-red-50 px-4 py-3 shadow-sm">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-base">🧠</span>
-          <span className="text-xs font-semibold text-blue-700">{stage || 'Preparing AI model…'}</span>
+          <span className="text-xs font-semibold text-gray-700">{stage || 'Preparing AI model…'}</span>
         </div>
         {progress > 0 && (
-          <span className="text-xs font-mono text-blue-500 tabular-nums">{progress}%</span>
+          <span className="text-xs font-mono text-gray-500 tabular-nums">{progress}%</span>
         )}
       </div>
-      <div className="w-full h-1.5 bg-blue-100 rounded-full overflow-hidden">
+      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-500 ease-out bg-gradient-to-r from-indigo-500 to-blue-400"
+          className="h-full rounded-full transition-all duration-500 ease-out bg-gradient-to-r from-red-500 to-red-400"
           style={{ width: progress > 0 ? `${progress}%` : '30%',
                    animation: progress === 0 ? 'pulse 1.5s ease-in-out infinite' : 'none' }}
         />
       </div>
-      <p className="text-xs text-blue-400 mt-1.5">This only happens once — AI will be ready shortly.</p>
+      <p className="text-xs text-gray-400 mt-1.5">This only happens once — AI will be ready shortly.</p>
     </div>
   )
 }
@@ -97,7 +97,7 @@ function StatCard({ icon, label, value, color }) {
     green:  'bg-emerald-50 border-emerald-200 text-emerald-700',
     amber:  'bg-amber-50  border-amber-200  text-amber-700',
     red:    'bg-red-50    border-red-200    text-red-600',
-    blue:   'bg-blue-50   border-blue-200   text-blue-700',
+    blue:   'bg-gray-50   border-gray-200   text-gray-700',
   }
   return (
     <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs font-medium ${colors[color]}`}>
@@ -116,7 +116,7 @@ function MessageBubble({ msg }) {
   return (
     <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-white text-xs font-bold">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-white text-xs font-bold">
           AI
         </div>
       )}
@@ -125,7 +125,7 @@ function MessageBubble({ msg }) {
         <div
           className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm
             ${isUser
-              ? 'bg-indigo-600 text-white rounded-tr-sm'
+              ? 'bg-red-600 text-white rounded-tr-sm'
               : 'bg-white border border-gray-200 text-gray-700 rounded-tl-sm'
             }`}
           dangerouslySetInnerHTML={{
@@ -145,7 +145,7 @@ function MessageBubble({ msg }) {
       </div>
 
       {isUser && (
-        <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5 text-indigo-600 text-sm">
+        <div className="w-8 h-8 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5 text-red-600 text-sm">
           👤
         </div>
       )}
@@ -297,7 +297,7 @@ export default function AIAssistantPage() {
   const isInputDisabled = ollamaStatus !== 'ready' || isPulling || isLoading;
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50/20 to-blue-50/30 overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-slate-50 via-red-50/20 to-gray-50/30 overflow-hidden">
 
       {/* ── Top bar ── */}
       <div className="flex-shrink-0 px-5 py-3 bg-white/90 backdrop-blur border-b border-gray-200 shadow-sm">
@@ -311,7 +311,7 @@ export default function AIAssistantPage() {
             </Link>
             <div className="w-px h-5 bg-gray-200" />
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center shadow-sm">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center shadow-sm">
                 <span className="text-white text-xs font-bold">AI</span>
               </div>
               <div>
@@ -365,12 +365,12 @@ export default function AIAssistantPage() {
 
           {isLoading && (
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-sm text-white text-xs font-bold">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center flex-shrink-0 shadow-sm text-white text-xs font-bold">
                 AI
               </div>
               <div className="bg-white border border-gray-200 px-4 py-3 rounded-2xl rounded-tl-sm flex items-center gap-1.5 shadow-sm">
                 {[0, 150, 300].map(d => (
-                  <div key={d} className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
+                  <div key={d} className="w-2 h-2 bg-red-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
                 ))}
                 <span className="text-xs text-gray-400 ml-2">Analysing graduation data…</span>
               </div>
@@ -392,7 +392,7 @@ export default function AIAssistantPage() {
                 key={i}
                 onClick={() => { setInput(q); textareaRef.current?.focus(); }}
                 disabled={isInputDisabled}
-                className="px-3 py-1.5 text-xs rounded-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-600 whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                className="px-3 py-1.5 text-xs rounded-full bg-red-50 hover:bg-red-100 border border-red-100 text-red-600 whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-medium"
               >
                 {q}
               </button>
@@ -414,13 +414,13 @@ export default function AIAssistantPage() {
                 ollamaStatus !== 'ready' ? 'AI is offline — check Ollama status' :
                 'Ask about graduation eligibility, at-risk students, credit completion… (Enter to send)'
               }
-              className="flex-1 bg-gray-50 border border-gray-200 focus:border-indigo-400 focus:bg-white rounded-xl px-4 py-3 text-sm resize-none outline-none transition-all text-gray-700 placeholder-gray-400 disabled:opacity-50"
+              className="flex-1 bg-gray-50 border border-gray-200 focus:border-red-400 focus:bg-white rounded-xl px-4 py-3 text-sm resize-none outline-none transition-all text-gray-700 placeholder-gray-400 disabled:opacity-50"
               disabled={isInputDisabled}
             />
             <button
               onClick={handleSend}
               disabled={!input.trim() || isInputDisabled}
-              className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+              className="px-5 py-3 bg-red-600 hover:bg-red-500 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
             >
               {isLoading
                 ? <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin block" />

@@ -84,7 +84,7 @@ const Conflicts = ({ conflicts, isConflictsExpanded, setIsConflictsExpanded, get
                       <td className="py-3 px-4 border-b text-center">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${conflict.issue_type === 'conflict'
                           ? 'bg-red-100 text-red-800'
-                          : 'bg-orange-100 text-red-800'
+                          : 'bg-amber-100 text-amber-800'
                           }`}>
                           {conflict.issue}
                         </span>

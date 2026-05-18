@@ -803,7 +803,7 @@ const StudentUnitHistoryUploader = ({ studentId, onUploadSuccess, onClose, onDat
                             <p className="text-xs text-muted mt-1">
                                 Expected columns: Course (unit code), Status (Complete/Current/Future/etc), Grade (P/C/D/HD/N/F), Term (2024_SEP_S2 format)
                             </p>
-                            <p className="text-xs text-orange-600  mt-1">
+                            <p className="text-xs text-amber-600  mt-1">
                                 Units with "AIMFECS" codes and "Future" status will be automatically excluded from import.
                             </p>
                             <p className="text-xs text-blue-600  mt-1">
@@ -999,7 +999,7 @@ const StudentUnitHistoryUploader = ({ studentId, onUploadSuccess, onClose, onDat
                                                 ${(isImporting || (importMode === 'add' && changesSummary?.totalNew === 0))
                                                     ? 'bg-gray-400cursor-not-allowed'
                                                     : importMode === 'replace'
-                                                        ? 'bg-orange-600  hover:bg-orange-700 '
+                                                        ? 'bg-amber-600 hover:bg-amber-700 '
                                                         : 'bg-green-600  hover:bg-green-700'
                                                 }`}
                                             disabled={isImporting || (importMode === 'add' && changesSummary?.totalNew === 0)}

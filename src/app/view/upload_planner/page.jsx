@@ -747,14 +747,14 @@ const handleAutoPopulate = async () => {
                         type="button"
                         onClick={() => setShowPdfPreview(!showPdfPreview)}
                         disabled={!pdfFile}
-                        className="inline-flex items-center justify-center rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50"
+                        className="inline-flex items-center justify-center rounded bg-[#dc2d27] px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
                     >
                         {showPdfPreview ? 'Hide PDF Preview' : 'Show PDF Preview'}
                     </button>
                     <button
                         type="button"
                         onClick={toggleColorSidebar}
-                        className="inline-flex items-center justify-center rounded bg-purple-600 px-4 py-2 text-white hover:bg-purple-700"
+                        className="inline-flex items-center justify-center rounded bg-gray-600 px-4 py-2 text-white hover:bg-gray-700"
                     >
                         {showColorSidebar ? 'Hide Colour Mappings' : 'Show Colour Mappings'}
                     </button>

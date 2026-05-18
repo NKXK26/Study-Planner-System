@@ -81,7 +81,7 @@ const Dashboard = () => {
 				{ name: "Unit Management", href: "/view/unit", permission: "unit:read" },
 				{ name: "Unit Types", href: "/view/unit_type", permission: "unit_type:read" }
 			],
-			color: "text-[#dc2d27]",
+			color: "text-[#dc2d27] dark:text-red-400",
 			bgColor: "bg-[#dc2d27]/5"
 		},
 		{
@@ -92,8 +92,8 @@ const Dashboard = () => {
 			links: [
 				{ name: "Course Management", href: "/view/course", permission: "course:read" }
 			],
-			color: "text-blue-600",
-			bgColor: "bg-blue-50"
+			color: "text-[#dc2d27] dark:text-red-400",
+			bgColor: "bg-[#dc2d27]/5"
 		},
 		{
 			title: "Students",
@@ -104,8 +104,8 @@ const Dashboard = () => {
 				{ name: "Student Management", href: "/view/student_information", permission: "student_info:read" },
 				{ name: "Search By Student ID", href: "/view/search_student_study_planner", permission: "search_students:read" }
 			],
-			color: "text-green-600",
-			bgColor: "bg-green-50"
+			color: "text-[#dc2d27] dark:text-red-400",
+			bgColor: "bg-[#dc2d27]/5"
 		},
 		{
 			title: "Terms",
@@ -115,8 +115,8 @@ const Dashboard = () => {
 			links: [
 				{ name: "Term Management", href: "/view/terms", permission: "term:read" }
 			],
-			color: "text-purple-600",
-			bgColor: "bg-purple-50"
+			color: "text-[#dc2d27] dark:text-red-400",
+			bgColor: "bg-[#dc2d27]/5"
 		},
 		{
 			title: "Reports",
@@ -127,8 +127,8 @@ const Dashboard = () => {
 				{ name: "Student Reports", href: "/reports/students", permission: "reports:read" },
 				{ name: "Course Reports", href: "/reports/courses", permission: "reports:read" }
 			],
-			color: "text-orange-600",
-			bgColor: "bg-orange-50"
+			color: "text-[#dc2d27] dark:text-red-400",
+			bgColor: "bg-[#dc2d27]/5"
 		},
 		{
 			title: "User Management",
@@ -139,8 +139,8 @@ const Dashboard = () => {
 				{ name: "User Management", href: "/view/user_management", permission: "users:read" },
 				{ name: "Role Management", href: "/view/roles", permission: "role:read" }
 			],
-			color: "text-pink-600",
-			bgColor: "bg-pink-50"
+			color: "text-[#dc2d27] dark:text-red-400",
+			bgColor: "bg-[#dc2d27]/5"
 		},
 		{
 			title: "System",
@@ -151,8 +151,8 @@ const Dashboard = () => {
 				{ name: "Audit Logs", href: "/view/audit_logs", permission: "audit_logs:read" },
 				{ name: "User Management (Whitelist)", href: "/view/user_management", permission: "users:read" }
 			],
-			color: "text-gray-600",
-			bgColor: "bg-gray-50"
+			color: "text-[#dc2d27] dark:text-red-400",
+			bgColor: "bg-[#dc2d27]/5"
 		},
 		{
 			title: "Study Planner",
@@ -167,8 +167,8 @@ const Dashboard = () => {
 				{ name: "Differentiate Study Planners", href: "/view/compare-planners", permission: "planner:read" },
 
 			],
-			color: "text-blue-600",
-			bgColor: "bg-blue-50"
+			color: "text-[#dc2d27] dark:text-red-400",
+			bgColor: "bg-[#dc2d27]/5"
 		},
 		{
 			title: "Graduation Dashboard",
@@ -178,8 +178,8 @@ const Dashboard = () => {
 			links: [
 				{ name: "Graduation Dashboard", href: "/view/graduation_dashboard", permission: "planner:read" },
 			],
-			color: "text-emerald-600",
-			bgColor: "bg-emerald-50"
+			color: "text-[#dc2d27] dark:text-red-400",
+			bgColor: "bg-[#dc2d27]/5"
 		},
 		{
 			title: "Unit Analytics",
@@ -191,8 +191,8 @@ const Dashboard = () => {
 				{ name: "Unit Performance Analytics", href: "/view/unit_analytics", permission: "planner:read" },
 				{ name: "Unit Prerequisite Chain", href: "/view/prerequisite-chain", permission: "planner:read" },
 			],
-			color: "text-red-600",
-			bgColor: "bg-red-50"
+			color: "text-[#dc2d27] dark:text-red-400",
+			bgColor: "bg-[#dc2d27]/5"
 		},
 
 	];
@@ -233,8 +233,8 @@ const Dashboard = () => {
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
 							<div className={`${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
 								<div className="flex items-center">
-									<div className={`p-2 ${theme === 'dark' ? 'bg-blue-900/30' : 'bg-blue-100'} rounded-lg`}>
-										<UserIcon className="h-6 w-6 text-blue-600" />
+									<div className={`p-2 ${theme === 'dark' ? 'bg-red-900/30' : 'bg-[#dc2d27]/10'} rounded-lg`}>
+										<UserIcon className="h-6 w-6 text-[#dc2d27] dark:text-red-400" />
 									</div>
 									<div className="ml-4">
 										<p className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>Total Students</p>
@@ -245,8 +245,8 @@ const Dashboard = () => {
 
 							<div className={`${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
 								<div className="flex items-center">
-									<div className={`p-2 ${theme === 'dark' ? 'bg-green-900/30' : 'bg-green-100'} rounded-lg`}>
-										<BookOpenIcon className="h-6 w-6 text-green-600" />
+									<div className={`p-2 ${theme === 'dark' ? 'bg-red-900/30' : 'bg-[#dc2d27]/10'} rounded-lg`}>
+										<BookOpenIcon className="h-6 w-6 text-[#dc2d27] dark:text-red-400" />
 									</div>
 									<div className="ml-4">
 										<p className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>Total Units</p>
@@ -257,8 +257,8 @@ const Dashboard = () => {
 
 							<div className={`${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
 								<div className="flex items-center">
-									<div className={`p-2 ${theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-100'} rounded-lg`}>
-										<AcademicCapIcon className="h-6 w-6 text-purple-600" />
+									<div className={`p-2 ${theme === 'dark' ? 'bg-red-900/30' : 'bg-[#dc2d27]/10'} rounded-lg`}>
+										<AcademicCapIcon className="h-6 w-6 text-[#dc2d27] dark:text-red-400" />
 									</div>
 									<div className="ml-4">
 										<p className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>Total Courses</p>
@@ -269,8 +269,8 @@ const Dashboard = () => {
 
 							<div className={`${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow p-6`}>
 								<div className="flex items-center">
-									<div className={`p-2 ${theme === 'dark' ? 'bg-orange-900/30' : 'bg-orange-100'} rounded-lg`}>
-										<CalendarIcon className="h-6 w-6 text-orange-600" />
+									<div className={`p-2 ${theme === 'dark' ? 'bg-red-900/30' : 'bg-[#dc2d27]/10'} rounded-lg`}>
+										<CalendarIcon className="h-6 w-6 text-[#dc2d27] dark:text-red-400" />
 									</div>
 									<div className="ml-4">
 										<p className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>Active Terms</p>
@@ -324,7 +324,7 @@ const Dashboard = () => {
 																<Link
 																	key={linkIndex}
 																	href={link.href}
-																	className={`block text-sm hover:underline ${theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'}`}
+																	className={`block text-sm hover:underline ${theme === 'dark' ? 'text-red-400 hover:text-red-300' : 'text-[#dc2d27] hover:text-red-800'}`}
 																>
 																	{link.name}
 																</Link>

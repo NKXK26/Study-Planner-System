@@ -61,8 +61,8 @@ export default function AccountPage() {
                 path: '/view/unit_type',
                 permission: ['unit_type', 'read'],
                 icon: BookOpenIcon,
-                color: 'text-purple-600',
-                bgColor: 'bg-purple-50'
+                color: 'text-gray-700',
+                bgColor: 'bg-gray-100'
             },
             {
                 name: 'Courses',
@@ -70,8 +70,8 @@ export default function AccountPage() {
                 path: '/view/course',
                 permission: ['course', 'read'],
                 icon: AcademicCapIcon,
-                color: 'text-green-600',
-                bgColor: 'bg-green-50'
+                color: 'text-gray-700',
+                bgColor: 'bg-gray-100'
             },
             {
                 name: 'Study Planner Search',
@@ -79,8 +79,8 @@ export default function AccountPage() {
                 path: '/view/search_student_study_planner',
                 permission: ['search_students', 'read'],
                 icon: MagnifyingGlassIcon,
-                color: 'text-orange-600',
-                bgColor: 'bg-orange-50'
+                color: 'text-gray-700',
+                bgColor: 'bg-gray-100'
             },
             {
                 name: 'Student Information',
@@ -88,8 +88,8 @@ export default function AccountPage() {
                 path: '/view/student_information',
                 permission: ['student_info', 'read'],
                 icon: UserIcon,
-                color: 'text-indigo-600',
-                bgColor: 'bg-indigo-50'
+                color: 'text-gray-700',
+                bgColor: 'bg-gray-100'
             },
             {
                 name: 'Terms',
@@ -97,8 +97,8 @@ export default function AccountPage() {
                 path: '/view/terms',
                 permission: ['term', 'read'],
                 icon: CalendarIcon,
-                color: 'text-pink-600',
-                bgColor: 'bg-pink-50'
+                color: 'text-gray-700',
+                bgColor: 'bg-gray-100'
             },
             {
                 name: 'Role Management',
@@ -115,8 +115,8 @@ export default function AccountPage() {
                 path: '/view/user_management',
                 permission: ['user', 'read'],
                 icon: UserGroupIcon,
-                color: 'text-teal-600',
-                bgColor: 'bg-teal-50'
+                color: 'text-gray-700',
+                bgColor: 'bg-gray-100'
             },
             {
                 name: 'Audit Logs',

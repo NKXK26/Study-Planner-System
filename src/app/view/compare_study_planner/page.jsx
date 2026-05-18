@@ -355,7 +355,7 @@ export default function CompareStudyPlannerPage() {
 									)}
 
 									{studentInfo && (
-										<div className="card-bg p-6 rounded-theme shadow-theme mb-8 bg-gradient-to-r from-blue-50 to-indigo-50">
+										<div className="card-bg p-6 rounded-theme shadow-theme mb-8 bg-gradient-to-r from-blue-50 to-red-50">
 											<h2 className="text-lg font-semibold heading-text mb-4 flex items-center gap-2">
 												<AcademicCapIcon className="h-5 w-5" />
 												Student Information
@@ -420,9 +420,9 @@ export default function CompareStudyPlannerPage() {
 																	<p className="text-xs text-muted mb-1">Matching Units</p>
 																	<p className="text-2xl font-bold text-blue-600">{planner.overlapCount} / {planner.completedCount}</p>
 																</div>
-																<div className="bg-indigo-50 p-3 rounded-lg">
+																<div className="bg-red-50 p-3 rounded-lg">
 																	<p className="text-xs text-muted mb-1">Matched Credits</p>
-																	<p className="text-2xl font-bold text-indigo-600">{planner.totalMatchedCredits}</p>
+																	<p className="text-2xl font-bold text-red-600">{planner.totalMatchedCredits}</p>
 																</div>
 																<div className="bg-green-50 p-3 rounded-lg">
 																	<p className="text-xs text-muted mb-1">% of Student's Completed</p>
@@ -431,11 +431,11 @@ export default function CompareStudyPlannerPage() {
 																		<div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchStudentPct, 100)}%` }}></div>
 																	</div>
 																</div>
-																<div className="bg-purple-50 p-3 rounded-lg">
+																<div className="bg-gray-100 p-3 rounded-lg">
 																	<p className="text-xs text-muted mb-1">% of Planner's Units</p>
-																	<p className="text-2xl font-bold text-purple-600">{planner.matchPlannerPct.toFixed(1)}%</p>
-																	<div className="w-full bg-purple-200 rounded-full h-1.5 mt-2">
-																		<div className="bg-purple-600 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchPlannerPct, 100)}%` }}></div>
+																	<p className="text-2xl font-bold text-gray-700">{planner.matchPlannerPct.toFixed(1)}%</p>
+																	<div className="w-full bg-gray-300 rounded-full h-1.5 mt-2">
+																		<div className="bg-gray-700 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchPlannerPct, 100)}%` }}></div>
 																	</div>
 																</div>
 															</div>
