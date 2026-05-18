@@ -159,12 +159,13 @@ const Dashboard = () => {
 			description: "Manage study planners",
 			icon: ChartBarIcon,
 			permission: "system",
+			isNew: true,
 			links: [
 				{ name: "Upload Study Planner", href: "/view/upload_planner", permission: "planner:read" },
 				{ name: "Compare Completed Units", href: "/view/compare_study_planner", permission: "planner:read" },
 				{ name: "Study Planner Management", href: "/view/study-planner", permission: "planner:read" },
 				{ name: "Differentiate Study Planners", href: "/view/compare-planners", permission: "planner:read" },
-				
+
 			],
 			color: "text-blue-600",
 			bgColor: "bg-blue-50"
@@ -185,6 +186,7 @@ const Dashboard = () => {
 			description: "Failure rates, repeat attempts & term trends",
 			icon: ChartBarIcon,
 			permission: "system",
+			isNew: true,
 			links: [
 				{ name: "Unit Performance Analytics", href: "/view/unit_analytics", permission: "planner:read" },
 				{ name: "Unit Prerequisite Chain", href: "/view/prerequisite-chain", permission: "planner:read" },
@@ -295,8 +297,13 @@ const Dashboard = () => {
 															<module.icon className={`h-8 w-8 ${module.color}`} />
 														</div>
 														<div className="ml-4">
-															<h3 className={`text-lg font-semibold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+															<h3 className={`text-lg font-semibold flex items-center gap-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
 																{module.title}
+																{module.isNew && (
+																	<span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#dc2d27] text-white tracking-wide">
+																		NEW!
+																	</span>
+																)}
 															</h3>
 															<p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
 																{module.description}

@@ -8,11 +8,11 @@ export function LightDarkModeProvider({ children }) {
     const [theme, setTheme] = useState('light'); // by default it is light mode
     const [mounted, setMounted] = useState(false);
 
-    // When first load the page, light mode will be the default (or system preference / saved preference)
+    // On first load, default to LIGHT mode unless the user has explicitly toggled to dark before.
+    // We intentionally ignore the OS-level prefers-color-scheme so the app starts white by default.
     useEffect(() => {
         const savedTheme = typeof window !== 'undefined' ? localStorage.getItem('theme') : null;
-        const systemPrefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+        const initialTheme = savedTheme || 'light';
 
         setTheme(initialTheme);
         setMounted(true);
