@@ -225,7 +225,7 @@ const TermListing = ({ params, searchTrigger, HandleOpenForm, refreshList, setPa
 										onClick={(e) => {
 											HandleOpenForm('EDIT', term.id, term);
 										}}
-										className="text-indigo-600 hover:text-indigo-900 cursor-pointer"
+										className="text-[#dc2d27] hover:text-red-800 cursor-pointer"
 										title="Edit unit type"
 									>
 										<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -364,7 +364,7 @@ const StudentPlanner = () => {
 			case 'swapped':
 				return { type: "swapped", label: "Swapped Unit", color: "bg-blue-100 text-blue-800" };
 			case 'replaced':
-				return { type: "replaced", label: "Replaced Unit", color: "bg-indigo-100 text-indigo-800" };
+				return { type: "replaced", label: "Replaced Unit", color: "bg-amber-100 text-amber-800" };
 			case 'added':
 				return { type: "added", label: "Added Unit", color: "bg-green-100 text-green-800" };
 			case 'changed_type':

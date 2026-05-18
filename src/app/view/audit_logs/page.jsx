@@ -331,10 +331,10 @@ export default function AuditLogsPage() {
 
     const getActionColor = (action) => {
         if (action.includes('CREATE')) return 'text-green-600 bg-green-50';
-        if (action.includes('UPDATE') || action.includes('MODIFY')) return 'text-blue-600 bg-blue-50';
+        if (action.includes('UPDATE') || action.includes('MODIFY')) return 'text-amber-600 bg-amber-50';
         if (action.includes('DELETE')) return 'text-red-600 bg-red-50';
         if (action.includes('READ')) return 'text-gray-600 bg-gray-50';
-        return 'text-purple-600 bg-purple-50';
+        return 'text-gray-700 bg-gray-100';
     };
 
     return (

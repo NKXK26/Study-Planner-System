@@ -20,11 +20,11 @@ function TreeNode({ node, depth = 0 }) {
     const [collapsed, setCollapsed] = useState(false);
     const hasChildren = node.prerequisites && node.prerequisites.length > 0;
     const depthColors = [
-        'border-blue-400 bg-blue-50',
-        'border-purple-400 bg-purple-50',
-        'border-green-400 bg-green-50',
-        'border-orange-400 bg-orange-50',
-        'border-pink-400 bg-pink-50',
+        'border-red-400 bg-red-50',
+        'border-gray-400 bg-gray-50',
+        'border-emerald-400 bg-emerald-50',
+        'border-amber-400 bg-amber-50',
+        'border-red-300 bg-red-100/50',
     ];
     const colorClass = depthColors[depth % depthColors.length];
 
@@ -37,7 +37,7 @@ function TreeNode({ node, depth = 0 }) {
                             <span className="font-mono font-bold text-sm">{node.UnitCode}</span>
                             <span className="text-xs text-gray-500">{node.CreditPoints ? `${node.CreditPoints} CP` : ''}</span>
                             {node.minCPRequired && (
-                                <span className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded font-medium border border-orange-200">
+                                <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded font-medium border border-amber-200">
                                     Min {node.minCPRequired} CP to enroll
                                 </span>
                             )}
@@ -321,8 +321,8 @@ export default function PrerequisiteChainPage() {
                                     <p className="text-xs text-gray-500 mt-1">Chain Depth</p>
                                 </div>
                                 {hasMinCPRequired ? (
-                                    <div className="border rounded-lg p-3 text-center bg-orange-50">
-                                        <p className="text-2xl font-bold text-orange-600">{result.tree.minCPRequired}</p>
+                                    <div className="border rounded-lg p-3 text-center bg-amber-50">
+                                        <p className="text-2xl font-bold text-amber-600">{result.tree.minCPRequired}</p>
                                         <p className="text-xs text-gray-500 mt-1">Min CP Required</p>
                                     </div>
                                 ) : (
@@ -339,7 +339,7 @@ export default function PrerequisiteChainPage() {
                                     <div className="border rounded-lg p-4 bg-gray-50 text-sm text-gray-500 space-y-2">
                                         <p><span className="font-mono font-bold text-gray-700">{result.tree.UnitCode}</span> has no prerequisite units.</p>
                                         {result.tree.minCPRequired && (
-                                            <p className="text-orange-700 font-medium">⚠ Minimum {result.tree.minCPRequired} CP required.</p>
+                                            <p className="text-amber-700 font-medium">⚠ Minimum {result.tree.minCPRequired} CP required.</p>
                                         )}
                                     </div>
                                 ) : (

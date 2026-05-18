@@ -138,13 +138,13 @@ const AmendmentHistory = ({ amendment_history, getUnitTypeInfo, getUnitCodeDispl
       >
         <div className="flex items-center">
           <div className="bg-white p-2 rounded-full mr-3 shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <h3 className="text-xl font-semibold text-white">Amendment History</h3>
           {sortedAmendments.length > 0 && (
-            <div className="ml-3 bg-purple-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center shadow-sm">
+            <div className="ml-3 bg-gray-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center shadow-sm">
               {sortedAmendments.length}
             </div>
           )}

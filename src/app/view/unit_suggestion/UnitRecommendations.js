@@ -242,10 +242,10 @@ function optimizeFinalSemester(schedule) {
 const CategoryBadge = ({ category }) => {
   const label = { core: 'Core', elective: 'Elective', major: 'Major', mpu: 'MPU', wil: 'WIL' };
   const colorMap = {
-    core: 'bg-blue-100 text-blue-800 border-blue-200',
-    major: 'bg-purple-100 text-purple-800 border-purple-200',
+    core: 'bg-red-100 text-red-800 border-red-200',
+    major: 'bg-gray-200 text-gray-800 border-gray-300',
     elective: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    wil: 'bg-pink-100 text-pink-800 border-pink-200',
+    wil: 'bg-gray-100 text-gray-700 border-gray-200',
     mpu: 'bg-amber-100 text-amber-800 border-amber-200',
   };
   const defaultStyle = 'bg-gray-100 text-gray-700 border-gray-200';
@@ -335,7 +335,7 @@ const PanelUnitCard = ({ unit, status, onDragStart, isDragging, onRemove, catego
           {status === 'completed' && <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">✓ Completed</span>}
           {status === 'scheduled' && <span className="text-xs text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">Scheduled</span>}
           {isMapped && <span className="text-xs text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">Mapped</span>}
-          {unit.doubleCount && <span className="text-xs text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">2x</span>}
+          {unit.doubleCount && <span className="text-xs text-gray-700 bg-gray-200 px-1.5 py-0.5 rounded-full">2x</span>}
           <span className="text-xs text-emerald-600 font-semibold ml-auto">{unit.CreditPoints || 12.5}CP</span>
         </div>
         {unit.Name && <p className="text-xs text-gray-500 leading-snug">{unit.Name}</p>}
@@ -894,7 +894,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
           onDragEnd={() => { setDragSource(null); setDragTarget(null); setDragOverPanel(null); }}
         >
           {/* Header */}
-          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 rounded-t-2xl flex-shrink-0">
+          <div className="bg-gradient-to-r from-[#dc2d27] to-red-700 text-white p-4 rounded-t-2xl flex-shrink-0">
             <div className="flex justify-between items-center mb-2">
               <div className="flex items-center gap-3">
                 <div className="bg-white/20 p-2 rounded-xl"><CalendarIcon className="h-6 w-6" /></div>

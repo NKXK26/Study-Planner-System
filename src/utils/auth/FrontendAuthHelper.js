@@ -97,7 +97,7 @@ export default class SecureFrontendAuthHelper {
                         title: 'Session Expired',
                         text: 'Your session has expired. Please log in again.',
                         confirmButtonText: 'OK',
-                        confirmButtonColor: '#3085d6',
+                        confirmButtonColor: '#dc2d27',
                     });
 
                     this.DataCacherObject.ClearAllCache();
