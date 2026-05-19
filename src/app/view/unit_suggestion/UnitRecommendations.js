@@ -235,23 +235,19 @@ function optimizeFinalSemester(schedule) {
   return schedule;
 }
 
-// ─────────────────────────────────────────────
-// CATEGORY BADGE
-// ─────────────────────────────────────────────
-
 const CategoryBadge = ({ category }) => {
   const label = { core: 'Core', elective: 'Elective', major: 'Major', mpu: 'MPU', wil: 'WIL' };
   const colorMap = {
-    core: 'bg-blue-100 text-blue-800 border-blue-200',
-    major: 'bg-purple-100 text-purple-800 border-purple-200',
-    elective: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    wil: 'bg-pink-100 text-pink-800 border-pink-200',
-    mpu: 'bg-amber-100 text-amber-800 border-amber-200',
+    core: 'text-blue-700 border-blue-300',
+    major: 'text-amber-700 border-amber-300',   // changed from purple to orange
+    elective: 'text-emerald-700 border-emerald-300',
+    wil: 'text-pink-700 border-pink-300',
+    mpu: 'text-amber-700 border-amber-300',
   };
-  const defaultStyle = 'bg-gray-100 text-gray-700 border-gray-200';
+  const defaultStyle = 'text-gray-600 border-gray-300';
   const style = colorMap[category] || defaultStyle;
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${style}`}>
+    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium bg-white ${style}`}>
       {label[category] || category}
     </span>
   );
@@ -295,7 +291,7 @@ const DraggableUnitCard = ({ unit, semIdx, unitIdx, onDragStart, onDragEnter, on
         {!compact && unit.Name && <p className="text-xs text-gray-500 mt-0.5 truncate">{unit.Name}</p>}
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
-        <span className="text-xs font-semibold text-emerald-600">{unit.CreditPoints || 12.5}CP</span>
+        <span className="text-xs text-red-600 font-semibold ml-auto">{unit.CreditPoints || 12.5}CP</span>
         {onRemove && (
           <button
             onClick={e => { e.stopPropagation(); onRemove(semIdx, unitIdx); }}
@@ -319,24 +315,20 @@ const PanelUnitCard = ({ unit, status, onDragStart, isDragging, onRemove, catego
       onDragStart={() => onDragStart({ unit, fromPanel: true, category })}
       onDragOver={e => e.preventDefault()}
       className={`
-        group flex items-start gap-2 px-3 py-2.5 rounded-lg border cursor-grab active:cursor-grabbing
-        transition-all duration-150 select-none
-        ${isDragging ? 'opacity-40 border-dashed border-gray-300 bg-gray-50' : ''}
-        ${status === 'completed' ? 'bg-green-50 border-green-200 hover:border-green-300' :
-          status === 'scheduled' ? 'bg-blue-50 border-blue-200 hover:border-blue-300' :
-            'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}
+        group flex items-start gap-2 px-3 py-2.5 rounded-lg border border-red-500 cursor-grab active:cursor-grabbing
+        transition-all duration-150 select-none bg-white
+        ${isDragging ? 'opacity-40 border-dashed border-red-300 bg-gray-50' : 'hover:border-red-600 hover:shadow-sm'}
       `}
     >
-      <Bars3Icon className="h-3.5 w-3.5 text-gray-300 flex-shrink-0 mt-0.5 group-hover:text-gray-500" />
+      <Bars3Icon className="h-3.5 w-3.5 text-gray-300 flex-shrink-0 mt-0.5 group-hover:text-red-500" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
           <span className="font-mono font-semibold text-gray-800 text-xs">{code}</span>
           <CategoryBadge category={category} />
-          {status === 'completed' && <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">✓ Completed</span>}
-          {status === 'scheduled' && <span className="text-xs text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">Scheduled</span>}
+          {status === 'completed' && <span className="text-xs text-green-700 border border-green-300 bg-white px-1.5 py-0.5 rounded-full">✓ Completed</span>}
           {isMapped && <span className="text-xs text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">Mapped</span>}
           {unit.doubleCount && <span className="text-xs text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">2x</span>}
-          <span className="text-xs text-emerald-600 font-semibold ml-auto">{unit.CreditPoints || 12.5}CP</span>
+          <span className="text-xs text-red-600 font-semibold ml-auto">{unit.CreditPoints || 12.5}CP</span>
         </div>
         {unit.Name && <p className="text-xs text-gray-500 leading-snug">{unit.Name}</p>}
         {unit.Prerequisites && unit.Prerequisites !== 'Nil' && unit.Prerequisites !== 'nil' && !isMapped && (
@@ -365,14 +357,13 @@ const ExternalUnitCard = ({ unit, onMapToCategory }) => {
   ];
   const handleMap = (category) => { onMapToCategory(category, unit); setShowMenu(false); };
   return (
-    <div className="relative bg-white rounded-lg border border-gray-200 p-3 hover:shadow-md transition-shadow cursor-pointer">
+    <div className="relative bg-white rounded-lg border border-red-200 p-3 hover:border-red-400 hover:shadow-md transition-all cursor-pointer">
       <div onClick={() => setShowMenu(!showMenu)}>
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-sm font-semibold text-gray-800">{unit.code}</span>
-              <span className="text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">External</span>
-              <span className="text-xs text-emerald-600 font-semibold ml-auto">{unit.creditPoints || 12.5}CP</span>
+              <span className="text-xs text-red-600 font-semibold ml-auto">{unit.CreditPoints || 12.5}CP</span>
             </div>
             {unit.name && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{unit.name}</p>}
           </div>
@@ -382,7 +373,7 @@ const ExternalUnitCard = ({ unit, onMapToCategory }) => {
       {showMenu && (
         <div className="mt-3 pt-2 border-t border-gray-200 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
           {categories.map(cat => (
-            <button key={cat.id} onClick={() => handleMap(cat.id)} className="text-xs px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors font-medium">
+            <button key={cat.id} onClick={() => handleMap(cat.id)} className="text-xs px-3 py-1.5 rounded-md bg-white border border-red-300 text-red-600 hover:bg-red-50 transition-colors font-medium">
               Map to {cat.label}
             </button>
           ))}
@@ -880,57 +871,84 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
 
   return (
     <>
-      {/* ── Toolbox floats above everything, rendered outside the modal ── */}
       <UnitPoolToolbox
         isOpen={showToolbox}
         onClose={() => setShowToolbox(false)}
       />
 
-      <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-2" onClick={onClose}>
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2"
+        onClick={onClose}
+      >
         <div
-          className="bg-white rounded-2xl shadow-2xl w-full h-full flex flex-col overflow-hidden mt-16"
+          className="bg-white rounded-2xl border border-gray-200 shadow-xl w-full h-full flex flex-col overflow-hidden mt-16"
           style={{ maxWidth: '1600px', maxHeight: '95vh' }}
           onClick={e => e.stopPropagation()}
-          onDragEnd={() => { setDragSource(null); setDragTarget(null); setDragOverPanel(null); }}
+          onDragEnd={() => {
+            setDragSource(null);
+            setDragTarget(null);
+            setDragOverPanel(null);
+          }}
         >
           {/* Header */}
-          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 rounded-t-2xl flex-shrink-0">
+          <div className="bg-white border-b border-gray-200 p-4 rounded-t-2xl flex-shrink-0">
             <div className="flex justify-between items-center mb-2">
               <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-xl"><CalendarIcon className="h-6 w-6" /></div>
+                <div className="border border-[#cc2131]/30 text-[#cc2131] bg-[#cc2131]/5 p-2 rounded-xl">
+                  <CalendarIcon className="h-6 w-6" />
+                </div>
+
                 <div>
-                  <h2 className="text-xl font-bold">Study Planner</h2>
-                  <p className="text-emerald-100 text-xs">{plannersLoading ? 'Loading planners…' : `${allPlanners.length} planner(s) available`}</p>
+                  <h2 className="text-xl font-bold text-[#111827]">
+                    Study Planner
+                  </h2>
+
+                  <p className="text-gray-500 text-xs">
+                    {plannersLoading
+                      ? 'Loading planners…'
+                      : `${allPlanners.length} planner(s) available`}
+                  </p>
                 </div>
               </div>
+
               <div className="flex items-center gap-2">
-                {/* Unit Toolbox toggle */}
+                {/* Toolbox */}
                 <button
                   onClick={() => setShowToolbox(v => !v)}
                   title="Toggle Unit Toolbox"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
-                    ${showToolbox
-                      ? 'bg-white text-emerald-700 shadow-sm'
-                      : 'bg-white/20 hover:bg-white/30 text-white'
-                    }`}
+                  className={`
+                  flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border
+                  ${showToolbox
+                      ? 'border-[#cc2131] text-[#cc2131] bg-[#cc2131]/5'
+                      : 'border-gray-300 text-gray-600 bg-white hover:border-[#cc2131] hover:text-[#cc2131]'
+                    }
+                `}
                 >
                   <WrenchScrewdriverIcon className="h-4 w-4" />
                   <span className="hidden sm:inline">Unit Toolbox</span>
                 </button>
-                <button onClick={onClose} className="bg-white/20 hover:bg-white/30 rounded-full p-2"><XMarkIcon className="h-5 w-5" /></button>
+
+                <button
+                  onClick={onClose}
+                  className="border border-gray-300 hover:border-[#cc2131] hover:text-[#cc2131] rounded-full p-2 transition-all"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
               </div>
             </div>
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto p-5 bg-gray-50/40">
+            {/* Error */}
             {plannersError && (
               <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm flex items-center gap-2">
-                <ExclamationTriangleIcon className="h-4 w-4" /> {plannersError}
+                <ExclamationTriangleIcon className="h-4 w-4" />
+                {plannersError}
               </div>
             )}
 
-            {/* Progress card */}
+            {/* Progress */}
             {studentInfo && recommendations && (
               <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
                 <div className="flex items-center gap-2 mb-3">
@@ -940,9 +958,9 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
                   <div><span className="text-gray-500 text-xs">Student ID</span><p className="font-semibold">{studentInfo.studentId}</p></div>
-                  <div><span className="text-gray-500 text-xs">Position</span>{(() => { const count = completedUnits?.length || 0; const sems = Math.floor(count / 4); const sem = Math.max(1, sems); const yr = Math.floor((sem - 1) / 2) + 1; return <p className="font-semibold text-emerald-600">Y{yr} S{sem}</p>; })()}</div>
-                  <div><span className="text-gray-500 text-xs">Units</span><p className="font-semibold text-emerald-600">{recommendations.totalCompleted}/24</p></div>
-                  <div><span className="text-gray-500 text-xs">Credits</span><p className="font-semibold text-emerald-600">{recommendations.totalCredits}/300</p></div>
+                  <div><span className="text-gray-500 text-xs">Position</span>{(() => { const count = completedUnits?.length || 0; const sems = Math.floor(count / 4); const sem = Math.max(1, sems); const yr = Math.floor((sem - 1) / 2) + 1; return <p className="font-semibold text-red-600">Y{yr} S{sem}</p>; })()}</div>
+                  <div><span className="text-gray-500 text-xs">Units</span><p className="font-semibold text-red-600">{recommendations.totalCompleted}/24</p></div>
+                  <div><span className="text-gray-500 text-xs">Credits</span><p className="font-semibold text-red-600">{recommendations.totalCredits}/300</p></div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs mb-3">
                   {['core', 'major', 'elective'].map(cat => (
@@ -950,7 +968,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                       <span className="text-gray-500 capitalize">{cat}</span>
                       <p className="font-bold">{recommendations.categoryRequirements[cat].completed}/{recommendations.categoryRequirements[cat].required}</p>
                       <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
-                        <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${(recommendations.categoryRequirements[cat].completed / recommendations.categoryRequirements[cat].required) * 100}%` }} />
+                        <div className="bg-red-500 h-1 rounded-full" style={{ width: `${(recommendations.categoryRequirements[cat].completed / recommendations.categoryRequirements[cat].required) * 100}%` }} />
                       </div>
                     </div>
                   ))}
@@ -961,13 +979,45 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                   </div>
                 )}
                 <div>
-                  <div className="flex justify-between text-xs text-gray-500 mb-1"><span>Overall progress (24 units)</span><span>{recommendations.completedPercent?.toFixed(1)}%</span></div>
-                  <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-emerald-600 h-2 rounded-full transition-all" style={{ width: `${recommendations.completedPercent || 0}%` }} /></div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Overall progress (24 units)</span>
+                    <span>{recommendations.completedPercent?.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-[#cc2131] h-2 rounded-full transition-all" style={{ width: `${recommendations.completedPercent || 0}%` }} />
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Four panels */}
+            {/* Field planners */}
+            {fieldPlanners.length > 1 && (
+              <div className="mb-4 flex flex-wrap gap-2 items-center">
+                <span className="text-xs text-gray-500">Study field:</span>
+
+                {fieldPlanners.map(item => (
+                  <button
+                    key={item.field}
+                    onClick={() => {
+                      setSelectedFieldPlanner(item.planner);
+                      setRecommendations(null);
+                      generateScheduleForPlanner(item.planner);
+                    }}
+                    className={`
+                    text-xs px-3 py-1.5 rounded-full border font-medium transition-all
+                    ${selectedFieldPlanner?.name === item.planner.name
+                        ? 'border-[#cc2131] text-[#cc2131] bg-[#cc2131]/5'
+                        : 'border-gray-300 text-gray-600 bg-white hover:border-[#cc2131] hover:text-[#cc2131]'
+                      }
+                  `}
+                  >
+                    {item.field} ({item.score}/{completedUnits?.length || 0})
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Panels */}
             {selectedFieldPlanner && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 {[
@@ -978,14 +1028,23 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                 ].map(({ key, units }) => (
                   <div
                     key={key}
-                    className={`bg-white rounded-xl border border-gray-200 p-3 flex flex-col transition-all ${dragOverPanel === key ? 'ring-2 ring-emerald-400 bg-gray-50' : ''}`}
+                    className={`
+          bg-white rounded-xl border-2 border-red-500 p-3 flex flex-col transition-all
+          ${dragOverPanel === key ? 'ring-2 ring-red-500 bg-red-50/30' : ''}
+        `}
                     onDragOver={e => { e.preventDefault(); setDragOverPanel(key); }}
                     onDragLeave={() => setDragOverPanel(null)}
                     onDrop={() => { handleDropOnPanel(key); setDragOverPanel(null); }}
                   >
-                    <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1 capitalize">
-                      {key} <span className="text-xs font-normal text-gray-500 ml-auto">{units.length} units</span>
-                    </h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold text-gray-800 text-sm capitalize">
+                        {key}
+                      </h4>
+                      <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                        {units.length} units
+                      </span>
+                    </div>
+
                     <div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
                       {units.map((unit, idx) => (
                         <PanelUnitCard
@@ -994,113 +1053,147 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                           status={unit.status}
                           category={key}
                           onDragStart={handleDragStart}
-                          isDragging={dragSource?.fromPanel && extractUnitCode(dragSource.unit?.UnitCode) === extractUnitCode(unit.UnitCode)}
-                          onRemove={unit.isMappedExternal ? (u) => handleRemoveMappedUnit(key, u) : null}
+                          isDragging={
+                            dragSource?.fromPanel &&
+                            extractUnitCode(dragSource.unit?.UnitCode) === extractUnitCode(unit.UnitCode)
+                          }
+                          onRemove={
+                            unit.isMappedExternal ? (u) => handleRemoveMappedUnit(key, u) : null
+                          }
                         />
                       ))}
                     </div>
-                    <div className="mt-2 text-xs text-gray-400 text-center border-t border-gray-100 pt-2">⬅️ Drop to unschedule</div>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* External units panel */}
-            <div className="mb-4 bg-gray-50 rounded-xl border border-gray-200 p-3">
-              <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1">
-                ✅ Completed (External)
-                <span className="text-xs font-normal text-gray-500 ml-auto">{unrecognisedUnits.length} units</span>
+            {/* External units */}
+            <div className="mb-4 bg-white rounded-xl border border-gray-200 p-3">
+              <h4 className="font-semibold text-[#111827] text-sm mb-2 flex items-center gap-1">
+                Completed (External)
+
+                <span className="text-xs font-normal text-gray-500 ml-auto">
+                  {unrecognisedUnits.length} units
+                </span>
               </h4>
+
               {unrecognisedUnits.length > 0 ? (
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {unrecognisedUnits.map((unit, idx) => (
-                    <ExternalUnitCard key={`ext-${idx}`} unit={unit} onMapToCategory={handleMapExternalToCategory} />
+                    <ExternalUnitCard
+                      key={`ext-${idx}`}
+                      unit={unit}
+                      onMapToCategory={handleMapExternalToCategory}
+                    />
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-gray-500 text-center py-2">All external units have been mapped. You can now generate your custom planner.</p>
+                <p className="text-xs text-gray-500 text-center py-2">
+                  All external units have been mapped.
+                </p>
               )}
+
               <div className="mt-3 flex justify-end">
                 <button
                   onClick={regenerateFromMapped}
                   disabled={!allExternalMapped || scheduleLoading}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2
-                    ${allExternalMapped && !scheduleLoading ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                  className={`
+                  px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 border
+                  ${allExternalMapped && !scheduleLoading
+                      ? 'border-[#cc2131] text-[#cc2131] bg-white hover:bg-[#cc2131]/5'
+                      : 'bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed'
+                    }
+                `}
                 >
-                  {scheduleLoading ? <><ArrowPathIcon className="h-4 w-4 animate-spin" />Generating...</> : <><ArrowPathIcon className="h-4 w-4" />Generate Study Plan</>}
+                  {scheduleLoading ? (
+                    <>
+                      <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowPathIcon className="h-4 w-4" />
+                      Generate Study Plan
+                    </>
+                  )}
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mt-2">Click the arrow on any external unit to map it to Core, Major, Elective, or WIL. After mapping all, click Generate to create your personalised study plan.</p>
             </div>
 
-            {/* Field planner selector */}
-            {fieldPlanners.length > 1 && (
-              <div className="mb-4 flex flex-wrap gap-2 items-center">
-                <span className="text-xs text-gray-500">Study field:</span>
-                {fieldPlanners.map(item => (
-                  <button
-                    key={item.field}
-                    onClick={() => { setSelectedFieldPlanner(item.planner); setRecommendations(null); generateScheduleForPlanner(item.planner); }}
-                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${selectedFieldPlanner?.name === item.planner.name ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'}`}
-                  >
-                    {item.field} ({item.score}/{completedUnits?.length || 0})
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Schedule */}
+            {/* Loading */}
             {scheduleLoading || plannersLoading ? (
-              <div className="text-center py-12"><ArrowPathIcon className="h-10 w-10 text-emerald-500 animate-spin mx-auto mb-3" /><p className="text-gray-500">{plannersLoading ? 'Fetching planners…' : 'Building your schedule…'}</p></div>
+              <div className="text-center py-12">
+                <ArrowPathIcon className="h-10 w-10 text-[#cc2131] animate-spin mx-auto mb-3" />
+
+                <p className="text-gray-500">
+                  {plannersLoading
+                    ? 'Fetching planners…'
+                    : 'Building your schedule…'}
+                </p>
+              </div>
             ) : editableSchedule.length === 0 ? (
               <div className="text-center py-12">
-                <div className="bg-gray-100 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center"><CheckCircleIcon className="h-10 w-10 text-emerald-600" /></div>
-                <p className="text-gray-700 text-lg font-medium">🎓 All requirements met!</p>
-                <p className="text-gray-500 mt-2">You've completed all 8 Core, 8 Elective, and 8 Major units.</p>
+                <div className="bg-white border border-gray-200 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                  <CheckCircleIcon className="h-10 w-10 text-[#cc2131]" />
+                </div>
+
+                <p className="text-[#111827] text-lg font-medium">
+                  🎓 All requirements met!
+                </p>
+
+                <p className="text-gray-500 mt-2">
+                  You've completed all required units.
+                </p>
               </div>
             ) : (
               <div>
+                {/* Header */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <CalendarIcon className="h-5 w-5 text-emerald-600" />
-                    <h3 className="text-base font-bold text-gray-800">Full Study Plan</h3>
-                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{editableSchedule.length} semester(s)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <ArrowsRightLeftIcon className="h-3.5 w-3.5" /> Drag units to reorder
+                    <CalendarIcon className="h-5 w-5 text-[#cc2131]" />
+
+                    <h3 className="text-base font-bold text-[#111827]">
+                      Full Study Plan
+                    </h3>
+
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                      {editableSchedule.length} semester(s)
                     </span>
-                    <button onClick={() => setShowFullPlan(!showFullPlan)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-                      {showFullPlan ? 'Collapse' : 'Expand'}{showFullPlan ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
-                    </button>
                   </div>
+
+                  <button
+                    onClick={() => setShowFullPlan(!showFullPlan)}
+                    className="flex items-center gap-1 text-sm text-gray-500 hover:text-[#cc2131]"
+                  >
+                    {showFullPlan ? 'Collapse' : 'Expand'}
+
+                    {showFullPlan ? (
+                      <ChevronUpIcon className="h-4 w-4" />
+                    ) : (
+                      <ChevronDownIcon className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
 
                 {showFullPlan && (
                   <div className="space-y-3">
                     {editableSchedule.map((sem, semIdx) => (
-                      <div key={semIdx} className="border border-gray-200 rounded-xl overflow-hidden">
-                        <div className="bg-gray-100 px-4 py-2.5 border-b border-gray-200 flex justify-between items-center">
-                          <h4 className="font-semibold text-gray-800 text-sm">Year {sem.year}, Semester {sem.semester}</h4>
-                          <span className="text-xs text-gray-600">{sem.unitCount} unit(s) · {sem.totalCredits} CP</span>
+                      <div
+                        key={semIdx}
+                        className="border border-gray-200 rounded-xl overflow-hidden bg-white"
+                      >
+                        <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex justify-between items-center">
+                          <h4 className="font-semibold text-[#111827] text-sm">
+                            Year {sem.year}, Semester {sem.semester}
+                          </h4>
+
+                          <span className="text-xs text-gray-500">
+                            {sem.unitCount} unit(s) · {sem.totalCredits} CP
+                          </span>
                         </div>
-                        <div
-                          className="p-3 bg-white space-y-1.5"
-                          onDragOver={e => e.preventDefault()}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            try {
-                              const raw = e.dataTransfer.getData('application/json');
-                              if (raw) {
-                                const data = JSON.parse(raw);
-                                if (data.fromToolbox && data.unit) {
-                                  handleNativeDropIntoSemester(semIdx, sem.units.length, data.unit);
-                                  return;
-                                }
-                              }
-                            } catch (_) { }
-                          }}
-                        >
+
+                        <div className="p-3 space-y-1.5">
                           {sem.units.map((unit, unitIdx) => (
                             <DraggableUnitCard
                               key={`${semIdx}-${unitIdx}-${unit.UnitCode}`}
@@ -1110,43 +1203,65 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                               onDragStart={handleDragStart}
                               onDragEnter={handleDragEnter}
                               onDrop={handleDrop}
-                              isDragOver={dragTarget?.semIdx === semIdx && dragTarget?.unitIdx === unitIdx && dragSource && !dragSource.fromPanel}
-                              isSource={dragSource && !dragSource.fromPanel && dragSource.semIdx === semIdx && dragSource.unitIdx === unitIdx}
+                              isDragOver={
+                                dragTarget?.semIdx === semIdx &&
+                                dragTarget?.unitIdx === unitIdx &&
+                                dragSource &&
+                                !dragSource.fromPanel
+                              }
+                              isSource={
+                                dragSource &&
+                                !dragSource.fromPanel &&
+                                dragSource.semIdx === semIdx &&
+                                dragSource.unitIdx === unitIdx
+                              }
                               onRemove={handleRemoveUnit}
                             />
                           ))}
+
                           <SemesterDropZone
                             sem={sem}
                             semIdx={semIdx}
                             onDragEnter={handleDragEnter}
                             onDrop={handleDrop}
                             onNativeDrop={handleNativeDropIntoSemester}
-                            isDragOver={dragTarget?.semIdx === semIdx && dragTarget?.unitIdx === sem.units.length && dragSource}
+                            isDragOver={
+                              dragTarget?.semIdx === semIdx &&
+                              dragTarget?.unitIdx === sem.units.length &&
+                              dragSource
+                            }
                           />
                         </div>
                       </div>
                     ))}
 
-                    {/* ── Bottom PDF export bar ── */}
+                    {/* Bottom */}
                     <div className="flex items-center justify-between pt-3 border-t border-gray-200 mt-2">
-                      <p className="text-xs text-gray-400 flex items-center gap-1">
+                      <p className="text-xs text-gray-500 flex items-center gap-1">
                         <ArrowsRightLeftIcon className="h-3.5 w-3.5" />
-                        Drag units between semesters to customise, then export.
+                        Drag units between semesters to customise.
                       </p>
+
                       <button
                         onClick={handleExportPdf}
                         disabled={pdfLoading}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-all
-                          ${pdfLoading
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                          }`}
+                        className={`
+                        flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                        ${pdfLoading
+                            ? 'bg-gray-100 border border-gray-300 text-gray-400 cursor-not-allowed'
+                            : 'bg-[#cc2131] hover:bg-[#b01d2c] text-white'
+                          }
+                      `}
                       >
+                        {pdfLoading ? (
+                          <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ArrowDownTrayIcon className="h-4 w-4" />
+                        )}
+
                         {pdfLoading
-                          ? <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                          : <ArrowDownTrayIcon className="h-4 w-4" />
-                        }
-                        {pdfLoading ? 'Generating PDF…' : 'Save as PDF'}
+                          ? 'Generating PDF…'
+                          : 'Save as PDF'}
                       </button>
                     </div>
                   </div>

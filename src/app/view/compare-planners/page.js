@@ -122,7 +122,7 @@ export default function ComparePlannersPage() {
         <div className="p-6 max-w-6xl mx-auto">
             <button
                 onClick={() => router.push('/view/study-planner')}
-                className="text-sm text-blue-600 hover:underline mb-4 inline-block"
+                className="text-sm text-[#cc2131] hover:underline mb-4 inline-block"
             >
                 ← Back to Study Planners
             </button>
@@ -171,7 +171,7 @@ export default function ComparePlannersPage() {
                 <button
                     onClick={handleCompare}
                     disabled={!selectedA || !selectedB || loading}
-                    className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+                    className="px-5 py-2 bg-[#cc2131] text-white rounded-md hover:bg-[#b01d2c] disabled:opacity-50 text-sm font-medium transition-colors"
                 >
                     {loading ? 'Comparing...' : 'Compare'}
                 </button>

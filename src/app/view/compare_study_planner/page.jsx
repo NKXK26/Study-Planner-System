@@ -236,6 +236,7 @@ export default function CompareStudyPlannerPage() {
 				studentId: studentId.trim(),
 				completedUnitsCount: completedUnitsMap.size,
 				totalCredits: totalCredits,
+				completedUnitsList: completedUnitsList.map(u => ({ code: u.code, name: u.name, creditPoints: u.creditPoints }))
 			});
 
 			const allPlanners = await fetchAllStudyPlanners();
@@ -293,7 +294,7 @@ export default function CompareStudyPlannerPage() {
 										<button
 											onClick={exportToExcel}
 											disabled={exporting}
-											className="bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-150"
+											className="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-150"
 										>
 											<DocumentArrowDownIcon className="h-5 w-5" />
 											{exporting ? 'Exporting...' : 'Export to Excel'}
@@ -302,7 +303,7 @@ export default function CompareStudyPlannerPage() {
 											<button
 												onClick={() => setShowRecommendations(true)}
 												disabled={studentInfo.totalCredits >= 300}
-												className={`bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-150 ${studentInfo.totalCredits >= 300 ? 'opacity-50 cursor-not-allowed' : ''
+												className={`bg-[#cc2131] hover:bg-[#b01d2c] text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-150 ${studentInfo.totalCredits >= 300 ? 'opacity-50 cursor-not-allowed' : ''
 													}`}
 											>
 												<LightBulbIcon className="h-5 w-5" />
@@ -331,14 +332,14 @@ export default function CompareStudyPlannerPage() {
 														value={studentId}
 														onChange={(e) => setStudentId(e.target.value)}
 														placeholder="Enter student ID..."
-														className="input-field w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+														className="input-field w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#cc2131]"
 													/>
 												</div>
 												<div className="flex items-end">
 													<button
 														type="submit"
 														disabled={loading}
-														className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-bold py-2 px-6 rounded-lg transition duration-150 ease-in-out flex items-center gap-2"
+														className="bg-[#cc2131] hover:bg-[#b01d2c] disabled:bg-red-300 text-white font-bold py-2 px-6 rounded-lg transition duration-150 ease-in-out flex items-center gap-2"
 													>
 														<MagnifyingGlassIcon className="h-5 w-5" />
 														{loading ? 'Searching...' : 'Search'}
@@ -355,7 +356,7 @@ export default function CompareStudyPlannerPage() {
 									)}
 
 									{studentInfo && (
-										<div className="card-bg p-6 rounded-theme shadow-theme mb-8 bg-gradient-to-r from-blue-50 to-indigo-50">
+										<div className="card-bg p-6 rounded-theme shadow-theme mb-8 bg-gradient-to-r from-red-50 to-orange-50">
 											<h2 className="text-lg font-semibold heading-text mb-4 flex items-center gap-2">
 												<AcademicCapIcon className="h-5 w-5" />
 												Student Information
@@ -363,24 +364,24 @@ export default function CompareStudyPlannerPage() {
 											<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
 												<div>
 													<p className="text-sm text-muted">Student ID</p>
-													<p className="font-semibold text-primary text-lg">{studentInfo.studentId}</p>
+													<p className="font-semibold text-[#cc2131] text-lg">{studentInfo.studentId}</p>
 												</div>
 												<div>
 													<p className="text-sm text-muted">Completed Units (Passed)</p>
-													<p className="font-semibold text-primary text-lg">{studentInfo.completedUnitsCount}</p>
+													<p className="font-semibold text-[#cc2131] text-lg">{studentInfo.completedUnitsCount}</p>
 												</div>
 												<div>
 													<p className="text-sm text-muted">Total Credits Earned</p>
-													<p className="font-semibold text-primary text-lg">{studentInfo.totalCredits}</p>
+													<p className="font-semibold text-[#cc2131] text-lg">{studentInfo.totalCredits}</p>
 												</div>
 											</div>
 											<details className="mt-4 border-t border-gray-200 pt-3">
-												<summary className="text-sm font-semibold text-gray-700 cursor-pointer hover:text-blue-600">
+												<summary className="text-sm font-semibold text-gray-700 cursor-pointer hover:text-[#cc2131]">
 													View Completed Units ({completedUnits.length} unit(s))
 												</summary>
 												<div className="flex flex-wrap gap-2 mt-3 max-h-64 overflow-y-auto p-2 bg-white rounded-md">
 													{completedUnits.map(unit => (
-														<div key={unit.id} className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+														<div key={unit.id} className="text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">
 															{unit.code} – {unit.name}
 														</div>
 													))}
@@ -407,7 +408,7 @@ export default function CompareStudyPlannerPage() {
 															<div className="flex items-start justify-between">
 																<div className="flex-1">
 																	<div className="flex items-center gap-3 mb-2">
-																		<span className="text-2xl font-bold text-blue-600">#{index + 1}</span>
+																		<span className="text-2xl font-bold text-[#cc2131]">#{index + 1}</span>
 																		<h3 className="text-xl font-bold heading-text">{planner.plannerName}</h3>
 																	</div>
 																	<p className="text-sm text-muted">
@@ -416,66 +417,56 @@ export default function CompareStudyPlannerPage() {
 																</div>
 															</div>
 															<div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-																<div className="bg-blue-50 p-3 rounded-lg">
-																	<p className="text-xs text-muted mb-1">Matching Units</p>
-																	<p className="text-2xl font-bold text-blue-600">{planner.overlapCount} / {planner.completedCount}</p>
+																{/* Matching Units */}
+																<div className="border border-red-500 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+																	<p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Matching Units</p>
+																	<p className="text-2xl font-bold text-gray-800">{planner.overlapCount} / {planner.completedCount}</p>
 																</div>
-																<div className="bg-indigo-50 p-3 rounded-lg">
-																	<p className="text-xs text-muted mb-1">Matched Credits</p>
-																	<p className="text-2xl font-bold text-indigo-600">{planner.totalMatchedCredits}</p>
+
+																{/* Matched Credits */}
+																<div className="border border-red-500 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+																	<p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Matched Credits</p>
+																	<p className="text-2xl font-bold text-gray-800">{planner.totalMatchedCredits}</p>
 																</div>
-																<div className="bg-green-50 p-3 rounded-lg">
-																	<p className="text-xs text-muted mb-1">% of Student's Completed</p>
-																	<p className="text-2xl font-bold text-green-600">{planner.matchStudentPct.toFixed(1)}%</p>
-																	<div className="w-full bg-green-200 rounded-full h-1.5 mt-2">
-																		<div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchStudentPct, 100)}%` }}></div>
+
+																{/* % of Student's Completed */}
+																<div className="border border-red-500 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+																	<p className="text-xs text-gray-500 uppercase tracking-wide mb-1">% of Student's Completed</p>
+																	<p className="text-2xl font-bold text-gray-800">{planner.matchStudentPct.toFixed(1)}%</p>
+																	<div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
+																		<div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchStudentPct, 100)}%` }}></div>
 																	</div>
 																</div>
-																<div className="bg-purple-50 p-3 rounded-lg">
-																	<p className="text-xs text-muted mb-1">% of Planner's Units</p>
-																	<p className="text-2xl font-bold text-purple-600">{planner.matchPlannerPct.toFixed(1)}%</p>
-																	<div className="w-full bg-purple-200 rounded-full h-1.5 mt-2">
-																		<div className="bg-purple-600 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchPlannerPct, 100)}%` }}></div>
+
+																{/* % of Planner's Units */}
+																<div className="border border-red-500 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+																	<p className="text-xs text-gray-500 uppercase tracking-wide mb-1">% of Planner's Units</p>
+																	<p className="text-2xl font-bold text-gray-800">{planner.matchPlannerPct.toFixed(1)}%</p>
+																	<div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
+																		<div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchPlannerPct, 100)}%` }}></div>
 																	</div>
 																</div>
 															</div>
 														</div>
 														<div className="p-6">
-															<h4 className="font-semibold text-sm heading-text mb-3 flex items-center gap-2">
-																<CheckCircleIcon className="h-4 w-4 text-green-600" />
+															<h4 className="font-semibold text-sm text-gray-700 mb-3 flex items-center gap-2">
+																<CheckCircleIcon className="h-4 w-4 text-red-600" />
 																Matched Units ({planner.matchingUnits.length})
 															</h4>
 															{planner.matchingUnits.length > 0 ? (
 																<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 																	{planner.matchingUnits.map((unit, idx) => (
-																		<div key={idx} className="bg-green-50 border border-green-200 rounded-lg p-3">
-																			<p className="font-mono text-sm font-semibold text-green-800">{unit.code}</p>
-																			{unit.name && <p className="text-xs text-green-700 mt-1">{unit.name}</p>}
-																			<p className="text-xs text-green-600 mt-1">{unit.creditPoints} credits</p>
+																		<div key={idx} className="bg-white border border-red-500 rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
+																			<p className="font-mono text-sm font-semibold text-gray-800">{unit.code}</p>
+																			{unit.name && <p className="text-xs text-gray-600 mt-1">{unit.name}</p>}
+																			<p className="text-xs text-gray-500 mt-1">{unit.creditPoints} credits</p>
 																		</div>
 																	))}
 																</div>
 															) : (
-																<p className="text-sm text-muted">No matching units found</p>
+																<p className="text-sm text-gray-500">No matching units found</p>
 															)}
 														</div>
-														<details className="border-t">
-															<summary className="px-6 py-3 cursor-pointer hover:bg-gray-50 text-sm font-medium text-muted">
-																View all units in this planner ({planner.totalUnits.length} total)
-															</summary>
-															<div className="px-6 pb-4 pt-2">
-																<div className="flex flex-wrap gap-2">
-																	{planner.totalUnits.map((unit) => {
-																		const isMatched = planner.matchingUnits.some(mu => mu.id === unit.ID);
-																		return (
-																			<span key={unit.ID} className={`text-xs font-medium px-2.5 py-1 rounded-full ${isMatched ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-gray-100 text-gray-600'}`}>
-																				{unit.UnitCode}{isMatched && ' ✓'}
-																			</span>
-																		);
-																	})}
-																</div>
-															</div>
-														</details>
 													</div>
 												))}
 											</div>

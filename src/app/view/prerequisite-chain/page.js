@@ -14,7 +14,7 @@ function collectTreeNodes(tree, set = new Set()) {
     return set;
 }
 
-// ─── Tree View Components (unchanged) ──────────────────────────────────────
+
 
 function TreeNode({ node, depth = 0 }) {
     const [collapsed, setCollapsed] = useState(false);
@@ -92,12 +92,37 @@ export default function PrerequisiteChainPage() {
     const [graphHighlight, setGraphHighlight] = useState([]);
     const [graphLoading, setGraphLoading] = useState(false);
     const [cy, setCy] = useState(null);
-
+    const [initialZoomDone, setInitialZoomDone] = useState(false);
     useEffect(() => {
         fetchUnits();
         fetchGraphData();
     }, []);
+    useEffect(() => {
+        if (cy && graphData && !initialZoomDone) {
+            const applyZoom = () => {
+                cy.zoom(5);        // Adjust zoom level as needed
+                cy.center();
+                setInitialZoomDone(true);
+                cy.off('layoutstop', applyZoom);
+            };
 
+            // Listen for layout completion
+            cy.on('layoutstop', applyZoom);
+
+            // Fallback: if layout already completed before event attached,
+            // or never fires, apply zoom after a short delay
+            const timeoutId = setTimeout(() => {
+                if (!initialZoomDone) {
+                    applyZoom();
+                }
+            }, 500);
+
+            return () => {
+                clearTimeout(timeoutId);
+                cy.off('layoutstop', applyZoom);
+            };
+        }
+    }, [cy, graphData, initialZoomDone]);
     async function fetchUnits() {
         try {
             const res = await fetch('/api/prerequisite-chain', { headers: { 'x-dev-override': 'true' } });

@@ -135,7 +135,7 @@ const UnitPoolToolbox = ({ isOpen, onClose, onDragStart }) => {
             <div
                 ref={nodeRef}
                 className="fixed bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col z-[100]"
-                style={{ width: '360px', maxWidth: '90vw', right: '20px', top: '100px' }}
+                style={{ width: '360px', maxWidth: '90vw', right: '20px', top: '150px' }}
             >
                 {/* Header */}
                 <div className="drag-handle bg-gray-100 rounded-t-xl px-3 py-2 flex justify-between items-center cursor-move border-b border-gray-200">
@@ -164,7 +164,7 @@ const UnitPoolToolbox = ({ isOpen, onClose, onDragStart }) => {
                                 placeholder="Search unit..."
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full pl-8 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-300"
+                                className="w-full pl-8 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#cc2131]"
                             />
                         </div>
 
@@ -175,7 +175,7 @@ const UnitPoolToolbox = ({ isOpen, onClose, onDragStart }) => {
                                     key={type}
                                     onClick={() => setSelectedTypes(prev => ({ ...prev, [type]: !prev[type] }))}
                                     className={`text-xs px-2 py-0.5 rounded-full border font-medium capitalize transition-all
-                                    ${selectedTypes[type] ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-200'}`}
+                                    ${selectedTypes[type] ? 'bg-[#cc2131] text-white border-[#cc2131]' : 'bg-white text-gray-600 border-gray-200'}`}
                                 >
                                     {type}
                                 </button>
@@ -189,7 +189,7 @@ const UnitPoolToolbox = ({ isOpen, onClose, onDragStart }) => {
                                     key={field}
                                     onClick={() => setSelectedFields(prev => ({ ...prev, [field]: !prev[field] }))}
                                     className={`text-xs px-2 py-0.5 rounded-full border transition-all
-                                    ${selectedFields[field] ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-200'}`}
+                                    ${selectedFields[field] ? 'bg-[#cc2131] text-white border-[#cc2131]' : 'bg-white text-gray-600 border-gray-200'}`}
                                 >
                                     {field}
                                 </button>
@@ -227,7 +227,7 @@ const UnitPoolToolbox = ({ isOpen, onClose, onDragStart }) => {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <span className="text-xs text-emerald-600 font-medium">{unitGroup.creditPoints} CP</span>
+                                                <span className="text-xs text-[#cc2131] font-medium">{unitGroup.creditPoints} CP</span>
                                             </div>
                                             <p className="text-xs text-gray-600 truncate mt-0.5">{unitGroup.name}</p>
                                             <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
