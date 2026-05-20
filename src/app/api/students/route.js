@@ -24,7 +24,9 @@ export async function GET(req) {
 			}
 		}
 		const { searchParams } = new URL(req.url);
-		const params_stuID = searchParams.get('StudentID');
+		const rawStudentID = searchParams.get('StudentID');
+		// StudentID is an Int column in Prisma — must be parsed, otherwise Prisma returns no matches
+		const params_stuID = rawStudentID ? parseInt(rawStudentID, 10) : null;
 		const params_stuName = searchParams.get('FirstName');
 		const params_courseid = Number(searchParams.get('CourseID'));
 		const params_majorid = Number(searchParams.get('MajorID'));
@@ -80,7 +82,7 @@ export async function GET(req) {
 
 		const query = {
 			where: {
-				...(params_stuID && { StudentID: params_stuID }),
+				...(params_stuID && !isNaN(params_stuID) && { StudentID: params_stuID }),
 				...(params_stuIntake && !isNaN(params_stuIntake) && { IntakeID: params_stuIntake }),
 				...(params_stuName && { FirstName: { contains: params_stuName } }),
 				...(params_courseid && !isNaN(params_courseid) && { CourseID: params_courseid }),
