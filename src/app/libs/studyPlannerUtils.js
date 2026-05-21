@@ -6,6 +6,20 @@ import {
 } from '@heroicons/react/24/outline';
 
 // ─────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────
+
+export const REQUIRED_UNITS_PER_CATEGORY = 8;
+export const TOTAL_REQUIRED_UNITS = 24;
+export const TOTAL_REQUIRED_CREDITS = 300;
+export const DEFAULT_CREDIT_POINTS = 12.5;
+export const MAX_UNITS_PER_SEMESTER = 4;
+export const MAX_CREDITS_PER_SEMESTER = 50;
+
+// Units that count as 2 towards requirements
+export const DOUBLE_COUNT_UNITS = ['ICT20016'];
+
+// ─────────────────────────────────────────────
 // UNIT EQUIVALENCE
 // ─────────────────────────────────────────────
 
@@ -24,6 +38,15 @@ export function getNormalizedUnitCode(code) {
 export function areUnitsEquivalent(code1, code2) {
   if (!code1 || !code2) return false;
   return getNormalizedUnitCode(code1) === getNormalizedUnitCode(code2);
+}
+
+// ─────────────────────────────────────────────
+// DOUBLE-COUNT HELPER
+// ─────────────────────────────────────────────
+
+export function isDoubleCountUnit(unit) {
+  const code = unit.UnitCode || unit.code || '';
+  return DOUBLE_COUNT_UNITS.includes(code) || unit.doubleCount === true;
 }
 
 // ─────────────────────────────────────────────
@@ -49,6 +72,12 @@ export const orderToYearSemester = (order) => ({
   order,
 });
 
+export const getStudentPositionFromCompletedUnits = (completedCount) => {
+  const completedSemesters = Math.floor(completedCount / MAX_UNITS_PER_SEMESTER);
+  const nextSemesterOrder = Math.max(1, completedSemesters) + 1;
+  return orderToYearSemester(nextSemesterOrder);
+};
+
 export const getUnitCategory = (unit) => {
   let typeId = null;
   if (unit.unitTypeId !== undefined) typeId = unit.unitTypeId;
@@ -62,6 +91,23 @@ export const extractUnitCode = (str) => {
   if (!str) return '';
   const m = str.match(/[A-Z]{3}\d{5}/i);
   return m ? m[0].toUpperCase() : str.split(' ')[0].toUpperCase();
+};
+
+export const calculateCompletedCredits = (completedCore, completedElective, completedMajor) =>
+  (completedCore + completedElective + completedMajor) * DEFAULT_CREDIT_POINTS;
+
+export const limitMissingUnitsToRequirements = (missingUnits, needCore, needElective, needMajor) => {
+  const scheduledByCategory = { core: 0, elective: 0, major: 0 };
+  const neededByCategory = { core: needCore, elective: needElective, major: needMajor };
+  return missingUnits.filter(unit => {
+    const category = getUnitCategory(unit);
+    if (!(category in neededByCategory)) return true;
+    const double = isDoubleCountUnit(unit);
+    const increment = double ? 2 : 1;
+    if (scheduledByCategory[category] + increment > neededByCategory[category]) return false;
+    scheduledByCategory[category] += increment;
+    return true;
+  });
 };
 
 export const parsePrerequisites = (s) => {
@@ -130,9 +176,13 @@ export const scheduleRemainingUnits = (
 
   const getPriorityBonus = (unit) => {
     const cat = getUnitCategory(unit);
-    if (cat === 'core' && scheduledCore < needCore) return 30;
-    if (cat === 'elective' && scheduledElective < needElective) return 30;
-    if (cat === 'major' && scheduledMajor < needMajor) return 30;
+    const double = isDoubleCountUnit(unit);
+    const remainingCore = needCore - scheduledCore;
+    const remainingElective = needElective - scheduledElective;
+    const remainingMajor = needMajor - scheduledMajor;
+    if (cat === 'core' && remainingCore > 0) return 30 + (double ? 10 : 0);
+    if (cat === 'elective' && remainingElective > 0) return 30 + (double ? 10 : 0);
+    if (cat === 'major' && remainingMajor > 0) return 30 + (double ? 10 : 0);
     return 0;
   };
 
@@ -147,9 +197,11 @@ export const scheduleRemainingUnits = (
     const available = [];
     for (const unit of remaining) {
       const cat = getUnitCategory(unit);
-      if (cat === 'core' && scheduledCore >= needCore) continue;
-      if (cat === 'elective' && scheduledElective >= needElective) continue;
-      if (cat === 'major' && scheduledMajor >= needMajor) continue;
+      const double = isDoubleCountUnit(unit);
+      const neededCount = double ? 2 : 1;
+      if (cat === 'core' && scheduledCore + neededCount > needCore) continue;
+      if (cat === 'elective' && scheduledElective + neededCount > needElective) continue;
+      if (cat === 'major' && scheduledMajor + neededCount > needMajor) continue;
 
       let prereqsMet = true;
       for (const prereq of unit.prerequisites || []) {
@@ -164,9 +216,7 @@ export const scheduleRemainingUnits = (
             sem.order < currentOrder &&
             sem.units.some((u) => {
               const uc = u.UnitCode || u.code;
-              return (
-                uc === prereq || getNormalizedUnitCode(uc) === normPrereq
-              );
+              return uc === prereq || getNormalizedUnitCode(uc) === normPrereq;
             })
         );
         if (!found) {
@@ -177,24 +227,14 @@ export const scheduleRemainingUnits = (
       if (!prereqsMet) continue;
 
       const uc = unit.UnitCode || '';
-      if (
-        (uc === 'COS40005' || uc === 'SWE40001') &&
-        !(current.year === 3 && current.semester === 1)
-      )
+      // Special case: ICT20016 – double unit with specific availability
+      if (uc === 'ICT20016') {
+        if (!(current.year >= 2 && (current.year > 2 || current.semester >= 2) && totalUnitsCompleted >= 12))
+          continue;
+      }
+      if ((uc === 'COS40005' || uc === 'SWE40001') && !(current.year === 3 && current.semester === 1))
         continue;
-      if (
-        (uc === 'COS40006' || uc === 'SWE40002') &&
-        !(current.year === 3 && current.semester === 2)
-      )
-        continue;
-      if (
-        uc === 'ICT20016' &&
-        !(
-          current.year >= 2 &&
-          (current.year > 2 || current.semester >= 2) &&
-          totalUnitsCompleted >= 12
-        )
-      )
+      if ((uc === 'COS40006' || uc === 'SWE40002') && !(current.year === 3 && current.semester === 2))
         continue;
       if (!isAvailableInSemester(unit, current.year, current.semester))
         continue;
@@ -213,20 +253,25 @@ export const scheduleRemainingUnits = (
     let semesterUnits = [],
       semesterCredits = 0;
     for (const unit of available) {
+      const double = isDoubleCountUnit(unit);
+      const credits = unit.CreditPoints || DEFAULT_CREDIT_POINTS;
+      const effectiveCredits = double ? credits * 2 : credits;
+      const countIncrement = double ? 2 : 1;
+
+      const cat = getUnitCategory(unit);
+      if (cat === 'core' && scheduledCore + countIncrement > needCore) continue;
+      if (cat === 'elective' && scheduledElective + countIncrement > needElective) continue;
+      if (cat === 'major' && scheduledMajor + countIncrement > needMajor) continue;
+
       if (
-        scheduledCore >= needCore &&
-        scheduledElective >= needElective &&
-        scheduledMajor >= needMajor
-      )
-        break;
-      const credits = unit.CreditPoints || 12.5;
-      if (semesterUnits.length < 4 && semesterCredits + credits <= 50) {
+        semesterUnits.length < MAX_UNITS_PER_SEMESTER &&
+        semesterCredits + effectiveCredits <= MAX_CREDITS_PER_SEMESTER
+      ) {
         semesterUnits.push(unit);
-        semesterCredits += credits;
-        const cat = getUnitCategory(unit);
-        if (cat === 'core') scheduledCore++;
-        else if (cat === 'elective') scheduledElective++;
-        else if (cat === 'major') scheduledMajor++;
+        semesterCredits += effectiveCredits;
+        if (cat === 'core') scheduledCore += countIncrement;
+        else if (cat === 'elective') scheduledElective += countIncrement;
+        else if (cat === 'major') scheduledMajor += countIncrement;
       }
     }
 
@@ -284,17 +329,20 @@ export function optimizeFinalSemester(schedule) {
       secondLast.unitCount + last.unitCount <= 5 &&
       secondLast.totalCredits + last.totalCredits <= 62.5
     ) {
-      secondLast.units = [...secondLast.units, ...last.units];
-      secondLast.unitCount = secondLast.units.length;
-      secondLast.totalCredits = secondLast.totalCredits + last.totalCredits;
-      schedule.pop();
+      const merged = {
+        ...secondLast,
+        units: [...secondLast.units, ...last.units],
+        unitCount: secondLast.unitCount + last.unitCount,
+        totalCredits: secondLast.totalCredits + last.totalCredits,
+      };
+      return [...schedule.slice(0, -2), merged];
     }
   }
   return schedule;
 }
 
 // ─────────────────────────────────────────────
-// COMPONENTS
+// COMPONENTS (unchanged from original, but shown for completeness)
 // ─────────────────────────────────────────────
 
 export const CategoryBadge = ({ category }) => {
@@ -306,17 +354,17 @@ export const CategoryBadge = ({ category }) => {
     wil: 'WIL',
   };
   const colorMap = {
-    core: 'bg-blue-100 text-blue-800 border-blue-200',
-    major: 'bg-purple-100 text-purple-800 border-purple-200',
-    elective: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    wil: 'bg-pink-100 text-pink-800 border-pink-200',
-    mpu: 'bg-amber-100 text-amber-800 border-amber-200',
+    core: 'text-blue-700 border-blue-300',
+    major: 'text-amber-700 border-amber-300',
+    elective: 'text-emerald-700 border-emerald-300',
+    wil: 'text-pink-700 border-pink-300',
+    mpu: 'text-amber-700 border-amber-300',
   };
-  const defaultStyle = 'bg-gray-100 text-gray-700 border-gray-200';
+  const defaultStyle = 'text-gray-600 border-gray-300';
   const style = colorMap[category] || defaultStyle;
   return (
     <span
-      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${style}`}
+      className={`text-xs px-2 py-0.5 rounded-full border font-medium bg-white ${style}`}
     >
       {label[category] || category}
     </span>
@@ -341,7 +389,6 @@ export const DraggableUnitCard = ({
     <div
       draggable
       onDragStart={(e) => {
-        // Support both internal state DnD and native dataTransfer (for toolbox compat)
         e.dataTransfer.setData(
           'application/json',
           JSON.stringify({ unit, fromToolbox: false })
@@ -375,8 +422,8 @@ export const DraggableUnitCard = ({
         )}
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
-        <span className="text-xs font-semibold text-emerald-600">
-          {unit.CreditPoints || 12.5}CP
+        <span className="text-xs text-red-600 font-semibold">
+          {unit.CreditPoints || DEFAULT_CREDIT_POINTS}CP
         </span>
         {onRemove && (
           <button
@@ -404,25 +451,25 @@ export const PanelUnitCard = ({
 }) => {
   const code = extractUnitCode(unit.UnitCode || unit.code || '');
   const isMapped = unit.isMappedExternal;
+  const double = isDoubleCountUnit(unit);
   return (
     <div
       draggable
-      onDragStart={() => onDragStart({ unit, fromPanel: true, category })}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(
+          'application/json',
+          JSON.stringify({ unit, fromToolbox: false, fromPanel: true, category })
+        );
+        onDragStart({ unit, fromPanel: true, category });
+      }}
       onDragOver={(e) => e.preventDefault()}
       className={`
-        group flex items-start gap-2 px-3 py-2.5 rounded-lg border cursor-grab active:cursor-grabbing
-        transition-all duration-150 select-none
-        ${isDragging ? 'opacity-40 border-dashed border-gray-300 bg-gray-50' : ''}
-        ${
-          status === 'completed'
-            ? 'bg-green-50 border-green-200 hover:border-green-300'
-            : status === 'scheduled'
-            ? 'bg-blue-50 border-blue-200 hover:border-blue-300'
-            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-        }
+        group flex items-start gap-2 px-3 py-2.5 rounded-lg border border-red-500 cursor-grab active:cursor-grabbing
+        transition-all duration-150 select-none bg-white
+        ${isDragging ? 'opacity-40 border-dashed border-red-300 bg-gray-50' : 'hover:border-red-600 hover:shadow-sm'}
       `}
     >
-      <Bars3Icon className="h-3.5 w-3.5 text-gray-300 flex-shrink-0 mt-0.5 group-hover:text-gray-500" />
+      <Bars3Icon className="h-3.5 w-3.5 text-gray-300 flex-shrink-0 mt-0.5 group-hover:text-red-500" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
           <span className="font-mono font-semibold text-gray-800 text-xs">
@@ -430,27 +477,27 @@ export const PanelUnitCard = ({
           </span>
           <CategoryBadge category={category} />
           {status === 'completed' && (
-            <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">
+            <span className="text-xs text-green-700 border border-green-300 bg-white px-1.5 py-0.5 rounded-full">
               ✓ Completed
             </span>
           )}
           {status === 'scheduled' && (
-            <span className="text-xs text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
+            <span className="text-xs text-blue-700 border border-blue-300 bg-white px-1.5 py-0.5 rounded-full">
               Scheduled
             </span>
           )}
           {isMapped && (
-            <span className="text-xs text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">
+            <span className="text-xs text-amber-600 border border-amber-300 bg-white px-1.5 py-0.5 rounded-full">
               Mapped
             </span>
           )}
-          {unit.doubleCount && (
-            <span className="text-xs text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">
+          {double && (
+            <span className="text-xs text-purple-600 border border-purple-300 bg-white px-1.5 py-0.5 rounded-full">
               2x
             </span>
           )}
-          <span className="text-xs text-emerald-600 font-semibold ml-auto">
-            {unit.CreditPoints || 12.5}CP
+          <span className="text-xs text-red-600 font-semibold ml-auto">
+            {unit.CreditPoints || DEFAULT_CREDIT_POINTS}CP
           </span>
         </div>
         {unit.Name && <p className="text-xs text-gray-500 leading-snug">{unit.Name}</p>}
@@ -477,7 +524,18 @@ export const PanelUnitCard = ({
     </div>
   );
 };
-
+// Add this function to studyPlannerUtils.js
+export const countPlannerUnitsByCategory = (plannerUnits) => {
+  let core = 0, major = 0, elective = 0, wil = 0;
+  (plannerUnits || []).forEach(unit => {
+    const cat = getUnitCategory(unit);
+    if (cat === 'core') core++;
+    else if (cat === 'major') major++;
+    else if (cat === 'elective') elective++;
+    else if (cat === 'wil') wil++;
+  });
+  return { core, major, elective, wil };
+};
 export const SemesterDropZone = ({
   sem,
   semIdx,
@@ -491,7 +549,6 @@ export const SemesterDropZone = ({
     onDragOver={(e) => e.preventDefault()}
     onDrop={(e) => {
       e.preventDefault();
-      // Check for native toolbox drop first
       try {
         const raw = e.dataTransfer.getData('application/json');
         if (raw) {
@@ -502,7 +559,6 @@ export const SemesterDropZone = ({
           }
         }
       } catch (_) {}
-      // Fall back to internal state DnD
       onDrop({ semIdx, unitIdx: sem.units.length });
     }}
     className={`mt-2 border-2 border-dashed rounded-lg p-2 text-center text-xs transition-all

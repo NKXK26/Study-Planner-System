@@ -1,17 +1,16 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { ConditionalRequireAuth } from '@components/helper';
 import { useRole } from '@app/context/RoleContext';
 import AccessDenied from '@components/AccessDenied';
 import PageLoadingWrapper from '@components/PageLoadingWrapper';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
-import { MagnifyingGlassIcon, CheckCircleIcon, AcademicCapIcon, ChartBarIcon, DocumentArrowDownIcon, LightBulbIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, AcademicCapIcon, ChartBarIcon, DocumentArrowDownIcon, LightBulbIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import UnitRecommendations from '../unit_suggestion/UnitRecommendations';
 
 export default function CompareStudyPlannerPage() {
 	const { can, isSuperadmin } = useRole();
-	const [studentId, setStudentId] = useState('');
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(null);
 	const [matchedPlanners, setMatchedPlanners] = useState([]);
@@ -20,77 +19,98 @@ export default function CompareStudyPlannerPage() {
 	const [completedUnits, setCompletedUnits] = useState([]);
 	const [exporting, setExporting] = useState(false);
 	const [showRecommendations, setShowRecommendations] = useState(false);
-	const [showUnitTypeDebug, setShowUnitTypeDebug] = useState(false);
-	const hasAccess = isSuperadmin() || can('planner', 'read');
 	const [selectedSpecialisationPlanner, setSelectedSpecialisationPlanner] = useState(null);
+	const [fileName, setFileName] = useState('');
+	const fileInputRef = useRef(null);
 
-	const fetchStudentCompletedUnits = async (studentId) => {
-		try {
-			const response = await SecureFrontendAuthHelper.authenticatedFetch(
-				`${process.env.NEXT_PUBLIC_SERVER_URL}/api/students/student_unit_history?studentId=${studentId}`
-			);
-			if (!response.ok) throw new Error(`Failed to fetch student units: ${response.status}`);
-			const result = await response.json();
-			const passedUnits = (result.units || [])
-				.filter(unit => unit.Status?.toLowerCase() === 'pass')
-				.map(unit => ({
-					id: unit.UnitID,
-					code: unit.Unit?.UnitCode || '',
-					name: unit.Unit?.Name || '',
-					status: unit.Status,
-					year: unit.Year,
-					termId: unit.TermID,
-					creditPoints: unit.Unit?.CreditPoints || 0,
-					prerequisites: unit.Unit?.Prerequisites || [],
-					unitTypeId: unit.Unit?.unitTypeId,
-				}));
-			return passedUnits;
-		} catch (err) {
-			console.error('Error fetching student completed units:', err);
-			throw err;
-		}
+	const hasAccess = isSuperadmin() || can('planner', 'read');
+	const parseXlsxFile = (file) => {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				try {
+					const data = new Uint8Array(e.target.result);
+					const workbook = XLSX.read(data, { type: 'array' });
+					const sheet = workbook.Sheets[workbook.SheetNames[0]];
+					const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+
+					const passed = rows.filter(row => {
+						const grade = row['Grade'];
+						if (grade === null || grade === undefined || grade === '') return false;
+						const gradeStr = String(grade).trim().toUpperCase();
+						return gradeStr !== 'N';
+					});
+
+					const units = passed.map((row) => {
+						const code = String(row['Course'] || '').trim().toUpperCase();
+						const title = String(row['Course Title'] || '').trim();
+						// unitTypeId 17 = WIL. Requires BOTH the course code AND the
+						// exact title to match, so a code reuse for a different unit
+						// never gets misclassified as WIL.
+						const isWil = code === 'ICT20016' &&
+							title === 'Work Integrated Learning Placement - ICT (3 month)';
+						const unitTypeId = isWil ? 17 : null;
+						return {
+							id: code,
+							code,
+							name: title,
+							creditPoints: parseFloat(row['Credits'] || row['Earned'] || 0) || 0,
+							grade: String(row['Grade'] || '').trim(),
+							prerequisites: [],
+							unitTypeId,
+						};
+					}).filter(u => u.code);
+
+					resolve(units);
+				} catch (err) {
+					reject(new Error('Failed to parse XLSX file: ' + err.message));
+				}
+			};
+			reader.onerror = () => reject(new Error('Failed to read file'));
+			reader.readAsArrayBuffer(file);
+		});
 	};
 
 	const fetchAllStudyPlanners = async () => {
-		try {
-			const response = await SecureFrontendAuthHelper.authenticatedFetch(
-				`${process.env.NEXT_PUBLIC_SERVER_URL}/api/study-planner`
-			);
-			if (!response.ok) throw new Error(`Failed to fetch study planners: ${response.status}`);
-			const result = await response.json();
-			if (result.success) return result.data;
-			else throw new Error(result.message || 'Failed to fetch study planners');
-		} catch (err) {
-			console.error('Error fetching study planners:', err);
-			throw err;
-		}
+		const response = await SecureFrontendAuthHelper.authenticatedFetch(
+			`${process.env.NEXT_PUBLIC_SERVER_URL}/api/study-planner`
+		);
+		if (!response.ok) throw new Error(`Failed to fetch study planners: ${response.status}`);
+		const result = await response.json();
+		if (result.success) return result.data;
+		throw new Error(result.message || 'Failed to fetch study planners');
 	};
 
 	const compareWithPlanner = (completedUnitsMap, planner) => {
 		const plannerUnits = planner.units || [];
 		const plannerUnitsMap = new Map();
 		plannerUnits.forEach(unit => {
-			plannerUnitsMap.set(unit.ID, {
-				id: unit.ID,
-				code: unit.UnitCode,
-				name: unit.Name,
-				creditPoints: unit.CreditPoints || 0,
-				prerequisites: unit.Prerequisites || [],
-				offeredIn: unit.OfferedIn || unit.offeredIn || ''
-			});
+			// Index by UnitCode so it matches against the Course code from the XLSX
+			const code = (unit.UnitCode || '').trim().toUpperCase();
+			if (code) {
+				plannerUnitsMap.set(code, {
+					id: unit.ID,
+					code: unit.UnitCode,
+					name: unit.Name,
+					creditPoints: unit.CreditPoints || 0,
+					prerequisites: unit.Prerequisites || [],
+					offeredIn: unit.OfferedIn || unit.offeredIn || ''
+				});
+			}
 		});
 
 		const matchingUnits = [];
 		let overlapCount = 0;
 		let totalMatchedCredits = 0;
 
-		completedUnitsMap.forEach((completedUnit, unitId) => {
-			if (plannerUnitsMap.has(unitId)) {
+		completedUnitsMap.forEach((completedUnit, unitCode) => {
+			const key = unitCode.toUpperCase();
+			if (plannerUnitsMap.has(key)) {
 				overlapCount++;
-				const plannerUnit = plannerUnitsMap.get(unitId);
+				const plannerUnit = plannerUnitsMap.get(key);
 				totalMatchedCredits += completedUnit.creditPoints || 0;
 				matchingUnits.push({
-					id: unitId,
+					id: unitCode,
 					code: completedUnit.code,
 					name: completedUnit.name,
 					plannerCode: plannerUnit.code,
@@ -100,14 +120,12 @@ export default function CompareStudyPlannerPage() {
 			}
 		});
 
-		const completedCount = completedUnitsMap.size;
 		const plannerUnitCount = plannerUnits.length;
 		const MAX_UNITS_FOR_100_PERCENT = 24;
 		const MAX_CREDITS_FOR_100_PERCENT = 300;
 		const unitPercentage = (overlapCount / MAX_UNITS_FOR_100_PERCENT) * 100;
 		const creditPercentage = (totalMatchedCredits / MAX_CREDITS_FOR_100_PERCENT) * 100;
-		let matchStudentPct = Math.max(unitPercentage, creditPercentage);
-		matchStudentPct = Math.min(matchStudentPct, 100);
+		let matchStudentPct = Math.min(Math.max(unitPercentage, creditPercentage), 100);
 		const matchPlannerPct = plannerUnitCount > 0 ? (overlapCount / plannerUnitCount) * 100 : 0;
 
 		return {
@@ -115,7 +133,7 @@ export default function CompareStudyPlannerPage() {
 			plannerName: planner.name,
 			createdAt: planner.createdAt,
 			overlapCount,
-			completedCount,
+			completedCount: completedUnitsMap.size,
 			plannerUnitCount,
 			matchStudentPct,
 			matchPlannerPct,
@@ -130,30 +148,26 @@ export default function CompareStudyPlannerPage() {
 			alert('No data to export');
 			return;
 		}
-
 		setExporting(true);
 		try {
 			const workbook = XLSX.utils.book_new();
 
-			// 1. Student Info sheet
 			const studentRows = [
-				['Student Information'],
-				['Student ID', studentInfo.studentId],
-				['Completed Units (Passed)', studentInfo.completedUnitsCount],
+				['Student / File Information'],
+				['File', studentInfo.studentId],
+				['Completed Units', studentInfo.completedUnitsCount],
 				['Total Credits Earned', studentInfo.totalCredits],
 				[''],
 				['Completed Units List'],
-				['Unit Code', 'Unit Name', 'Credits']
+				['Unit Code', 'Unit Name', 'Grade', 'Credits']
 			];
 			studentInfo.completedUnitsList?.forEach(unit => {
-				studentRows.push([unit.code, unit.name, unit.creditPoints]);
+				studentRows.push([unit.code, unit.name, unit.grade, unit.creditPoints]);
 			});
-			const studentSheet = XLSX.utils.aoa_to_sheet(studentRows);
-			XLSX.utils.book_append_sheet(workbook, studentSheet, 'Student Info');
+			XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(studentRows), 'Completed Units');
 
-			// 2. Top Planners sheet
 			const plannerRows = [
-				['Rank', 'Planner Name', 'Planner ID', 'Created', 'Matching Units', 'Matched Credits', '% of Student\'s Completed', '% of Planner\'s Units']
+				['Rank', 'Planner Name', 'Planner ID', 'Created', 'Matching Units', 'Matched Credits', "% of Student's Completed", "% of Planner's Units"]
 			];
 			matchedPlanners.forEach((planner, idx) => {
 				plannerRows.push([
@@ -167,10 +181,8 @@ export default function CompareStudyPlannerPage() {
 					planner.matchPlannerPct.toFixed(1) + '%'
 				]);
 			});
-			const plannerSheet = XLSX.utils.aoa_to_sheet(plannerRows);
-			XLSX.utils.book_append_sheet(workbook, plannerSheet, 'Top Planners');
+			XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(plannerRows), 'Top Planners');
 
-			// 3. Detailed matching units for each planner (optional, one sheet per planner)
 			matchedPlanners.forEach((planner, idx) => {
 				const matchingRows = [
 					[`Matched Units for ${planner.plannerName}`],
@@ -179,12 +191,10 @@ export default function CompareStudyPlannerPage() {
 				planner.matchingUnits.forEach(unit => {
 					matchingRows.push([unit.code, unit.name, unit.creditPoints]);
 				});
-				const sheet = XLSX.utils.aoa_to_sheet(matchingRows);
-				const sheetName = `Planner_${idx + 1}_Matches`.slice(0, 31);
-				XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+				XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(matchingRows), `Planner_${idx + 1}_Matches`.slice(0, 31));
 			});
 
-			XLSX.writeFile(workbook, `study_planner_comparison_${studentInfo.studentId}.xlsx`);
+			XLSX.writeFile(workbook, `study_planner_comparison_${fileName.replace(/\.xlsx$/i, '')}.xlsx`);
 		} catch (err) {
 			console.error('Export error:', err);
 			alert('Failed to export Excel. Check console for details.');
@@ -193,50 +203,48 @@ export default function CompareStudyPlannerPage() {
 		}
 	};
 
-	const handleSearch = async (e) => {
-		e.preventDefault();
+	const handleFileChange = async (e) => {
+		const file = e.target.files?.[0];
+		if (!file) return;
+
 		setSearched(true);
-		if (!studentId.trim()) {
-			setError('Please enter a student ID');
-			setMatchedPlanners([]);
-			setStudentInfo(null);
-			return;
-		}
+		setFileName(file.name);
+		setError(null);
+		setMatchedPlanners([]);
+		setCompletedUnits([]);
+		setStudentInfo(null);
 
 		try {
 			setLoading(true);
-			setError(null);
-			setMatchedPlanners([]);
-			setCompletedUnits([]);
 
-			const completedUnitsList = await fetchStudentCompletedUnits(studentId.trim());
+			const completedUnitsList = await parseXlsxFile(file);
+
 			if (completedUnitsList.length === 0) {
-				setError(`No completed units (status: 'pass') found for student ID "${studentId}".`);
-				setStudentInfo(null);
+				setError('No completed units found in the uploaded file. Make sure units have a grade other than "N".');
 				return;
 			}
 
+			// De-duplicate by unit code (keep first occurrence)
 			const completedUnitsMap = new Map();
 			completedUnitsList.forEach(unit => {
-				completedUnitsMap.set(unit.id, {
-					id: unit.id,
-					code: unit.code,
-					name: unit.name,
-					year: unit.year,
-					termId: unit.termId,
-					creditPoints: unit.creditPoints,
-					prerequisites: unit.prerequisites,
-					unitTypeId: unit.unitTypeId
-				});
+				if (!completedUnitsMap.has(unit.code.toUpperCase())) {
+					completedUnitsMap.set(unit.code.toUpperCase(), unit);
+				}
 			});
+
 			setCompletedUnits(Array.from(completedUnitsMap.values()));
 
-			const totalCredits = completedUnitsList.reduce((sum, unit) => sum + (unit.creditPoints || 0), 0);
+			const totalCredits = Array.from(completedUnitsMap.values()).reduce((sum, u) => sum + (u.creditPoints || 0), 0);
 			setStudentInfo({
-				studentId: studentId.trim(),
+				studentId: file.name,
 				completedUnitsCount: completedUnitsMap.size,
-				totalCredits: totalCredits,
-				completedUnitsList: completedUnitsList.map(u => ({ code: u.code, name: u.name, creditPoints: u.creditPoints }))
+				totalCredits,
+				completedUnitsList: Array.from(completedUnitsMap.values()).map(u => ({
+					code: u.code,
+					name: u.name,
+					grade: u.grade,
+					creditPoints: u.creditPoints
+				}))
 			});
 
 			const allPlanners = await fetchAllStudyPlanners();
@@ -249,24 +257,23 @@ export default function CompareStudyPlannerPage() {
 			const top5Planners = comparisons
 				.sort((a, b) => {
 					if (b.overlapCount !== a.overlapCount) return b.overlapCount - a.overlapCount;
-					if (b.matchStudentPct !== a.matchStudentPct) return b.matchStudentPct - a.matchStudentPct;
-					return 0;
+					return b.matchStudentPct - a.matchStudentPct;
 				})
 				.slice(0, 5)
 				.filter(planner => planner.overlapCount > 0);
 
 			if (top5Planners.length === 0) {
-				setError('No matching study planners found for this student\'s completed units');
+				setError("No matching study planners found for the units in this file.");
 			} else {
 				setMatchedPlanners(top5Planners);
 			}
 		} catch (err) {
-			console.error('Error searching student:', err);
-			setError(err.message || 'Failed to search student data');
-			setMatchedPlanners([]);
-			setStudentInfo(null);
+			console.error('Error processing file:', err);
+			setError(err.message || 'Failed to process the uploaded file');
 		} finally {
 			setLoading(false);
+			// Reset file input so the same file can be re-uploaded
+			if (fileInputRef.current) fileInputRef.current.value = '';
 		}
 	};
 
@@ -286,7 +293,7 @@ export default function CompareStudyPlannerPage() {
 								<div>
 									<h1 className="title-text text-3xl font-bold">Compare Study Planner</h1>
 									<p className="text-muted text-sm mt-1">
-										Search for a student and compare their completed units with available study planners
+										Upload a student grid XLSX file to compare completed units with available study planners
 									</p>
 								</div>
 								{matchedPlanners.length > 0 && studentInfo && (
@@ -303,8 +310,7 @@ export default function CompareStudyPlannerPage() {
 											<button
 												onClick={() => setShowRecommendations(true)}
 												disabled={studentInfo.totalCredits >= 300}
-												className={`bg-[#cc2131] hover:bg-[#b01d2c] text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-150 ${studentInfo.totalCredits >= 300 ? 'opacity-50 cursor-not-allowed' : ''
-													}`}
+												className={`bg-[#cc2131] hover:bg-[#b01d2c] text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-150 ${studentInfo.totalCredits >= 300 ? 'opacity-50 cursor-not-allowed' : ''}`}
 											>
 												<LightBulbIcon className="h-5 w-5" />
 												Unit Recommendations
@@ -321,32 +327,42 @@ export default function CompareStudyPlannerPage() {
 
 							<div className="flex gap-6">
 								<div className="flex-1">
-									{/* Search Form */}
+									{/* File Upload */}
 									<div className="card-bg p-6 rounded-theme shadow-theme mb-8">
-										<form onSubmit={handleSearch}>
-											<div className="flex flex-col md:flex-row gap-4">
-												<div className="flex-1">
-													<label className="label-text-alt block mb-2 text-sm font-medium">Student ID</label>
-													<input
-														type="text"
-														value={studentId}
-														onChange={(e) => setStudentId(e.target.value)}
-														placeholder="Enter student ID..."
-														className="input-field w-full border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#cc2131]"
-													/>
-												</div>
-												<div className="flex items-end">
-													<button
-														type="submit"
-														disabled={loading}
-														className="bg-[#cc2131] hover:bg-[#b01d2c] disabled:bg-red-300 text-white font-bold py-2 px-6 rounded-lg transition duration-150 ease-in-out flex items-center gap-2"
-													>
-														<MagnifyingGlassIcon className="h-5 w-5" />
-														{loading ? 'Searching...' : 'Search'}
-													</button>
-												</div>
-											</div>
-										</form>
+										<label className="label-text-alt block mb-2 text-sm font-medium">
+											Upload Student Transcirpt (XLSX)
+										</label>
+										<div
+											className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-8 cursor-pointer hover:border-[#cc2131] transition-colors bg-white"
+											onClick={() => fileInputRef.current?.click()}
+											onDragOver={(e) => e.preventDefault()}
+											onDrop={(e) => {
+												e.preventDefault();
+												const file = e.dataTransfer.files?.[0];
+												if (file) {
+													const dt = new DataTransfer();
+													dt.items.add(file);
+													fileInputRef.current.files = dt.files;
+													handleFileChange({ target: { files: dt.files } });
+												}
+											}}
+										>
+											<ArrowUpTrayIcon className="h-10 w-10 text-gray-400 mb-3" />
+											<p className="text-sm font-medium text-gray-700">
+												{loading ? 'Processing...' : fileName ? `Loaded: ${fileName}` : 'Click or drag & drop an XLSX file here'}
+											</p>
+											<p className="text-xs text-gray-400 mt-1">
+												Completed units: grade = EXM or any grade except N
+											</p>
+											<input
+												ref={fileInputRef}
+												type="file"
+												accept=".xlsx"
+												className="hidden"
+												onChange={handleFileChange}
+												disabled={loading}
+											/>
+										</div>
 									</div>
 
 									{error && (
@@ -359,15 +375,15 @@ export default function CompareStudyPlannerPage() {
 										<div className="card-bg p-6 rounded-theme shadow-theme mb-8 bg-gradient-to-r from-red-50 to-orange-50">
 											<h2 className="text-lg font-semibold heading-text mb-4 flex items-center gap-2">
 												<AcademicCapIcon className="h-5 w-5" />
-												Student Information
+												File Summary
 											</h2>
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+											<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
 												<div>
-													<p className="text-sm text-muted">Student ID</p>
-													<p className="font-semibold text-[#cc2131] text-lg">{studentInfo.studentId}</p>
+													<p className="text-sm text-muted">File</p>
+													<p className="font-semibold text-[#cc2131] text-base break-all">{studentInfo.studentId}</p>
 												</div>
 												<div>
-													<p className="text-sm text-muted">Completed Units (Passed)</p>
+													<p className="text-sm text-muted">Completed Units</p>
 													<p className="font-semibold text-[#cc2131] text-lg">{studentInfo.completedUnitsCount}</p>
 												</div>
 												<div>
@@ -381,8 +397,9 @@ export default function CompareStudyPlannerPage() {
 												</summary>
 												<div className="flex flex-wrap gap-2 mt-3 max-h-64 overflow-y-auto p-2 bg-white rounded-md">
 													{completedUnits.map(unit => (
-														<div key={unit.id} className="text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">
+														<div key={unit.code} className="text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">
 															{unit.code} – {unit.name}
+															{unit.grade && <span className="ml-1 opacity-70">({unit.grade})</span>}
 														</div>
 													))}
 												</div>
@@ -417,19 +434,14 @@ export default function CompareStudyPlannerPage() {
 																</div>
 															</div>
 															<div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-																{/* Matching Units */}
 																<div className="border border-red-500 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
 																	<p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Matching Units</p>
 																	<p className="text-2xl font-bold text-gray-800">{planner.overlapCount} / {planner.completedCount}</p>
 																</div>
-
-																{/* Matched Credits */}
 																<div className="border border-red-500 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
 																	<p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Matched Credits</p>
 																	<p className="text-2xl font-bold text-gray-800">{planner.totalMatchedCredits}</p>
 																</div>
-
-																{/* % of Student's Completed */}
 																<div className="border border-red-500 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
 																	<p className="text-xs text-gray-500 uppercase tracking-wide mb-1">% of Student's Completed</p>
 																	<p className="text-2xl font-bold text-gray-800">{planner.matchStudentPct.toFixed(1)}%</p>
@@ -437,8 +449,6 @@ export default function CompareStudyPlannerPage() {
 																		<div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${Math.min(planner.matchStudentPct, 100)}%` }}></div>
 																	</div>
 																</div>
-
-																{/* % of Planner's Units */}
 																<div className="border border-red-500 rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
 																	<p className="text-xs text-gray-500 uppercase tracking-wide mb-1">% of Planner's Units</p>
 																	<p className="text-2xl font-bold text-gray-800">{planner.matchPlannerPct.toFixed(1)}%</p>
@@ -477,14 +487,13 @@ export default function CompareStudyPlannerPage() {
 
 							{!searched && !studentInfo && !error && (
 								<div className="card-bg p-12 rounded-theme shadow-theme text-center mt-6">
-									<MagnifyingGlassIcon className="h-16 w-16 text-muted mx-auto mb-4 opacity-50" />
-									<p className="text-muted text-lg">Enter a student ID to search and compare study planners</p>
+									<ArrowUpTrayIcon className="h-16 w-16 text-muted mx-auto mb-4 opacity-50" />
+									<p className="text-muted text-lg">Upload a Student Transcript to compare completed units with available study planners</p>
 								</div>
 							)}
 						</div>
 					</div>
 
-					{/* Unit Recommendations Modal */}
 					{showRecommendations && matchedPlanners.length > 0 && studentInfo && (
 						<UnitRecommendations
 							isOpen={showRecommendations}
