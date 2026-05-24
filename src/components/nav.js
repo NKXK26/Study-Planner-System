@@ -9,7 +9,8 @@ import {
   UserIcon,
   CalendarIcon,
   ChevronDownIcon,
-  CogIcon
+  CogIcon,
+  DocumentDuplicateIcon
 } from '@heroicons/react/24/outline';
 import { useRole } from '@app/context/RoleContext';
 
@@ -44,6 +45,11 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
       name: "Courses",
       link: "/view/course",
       icon: AcademicCapIcon
+    },
+    {
+      name: "Study Planner Maker",
+      link: "/view/study_planner_maker",
+      icon: DocumentDuplicateIcon
     },
     {
       name: "Students",
@@ -93,6 +99,7 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
       '/view/unit': 'unit:read',
       '/view/unit_type': 'unit_type:read',
       '/view/course': 'course:read',
+      '/view/study_planner_maker': 'course:read',
       '/view/search_student_study_planner': 'search_students:read',
       '/view/student_information': 'student_info:read',
       '/view/terms/': 'term:read',

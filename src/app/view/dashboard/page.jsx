@@ -16,6 +16,7 @@ import {
 	ArrowRightIcon,
 	ClockIcon,
 	ShieldCheckIcon,
+	DocumentDuplicateIcon,
 } from '@heroicons/react/24/outline';
 import { ArrowRightIcon as ArrowRightSolid } from '@heroicons/react/24/solid';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
@@ -199,6 +200,21 @@ const Dashboard = () => {
 				iconBg: 'bg-transparent',
 				iconColor: 'text-emerald-600 dark:text-emerald-400',
 				borderColor: 'hover:border-emerald-500/30',
+			},
+			{
+				title: 'Study Planner Maker',
+				description: 'Copy a study planner and arrange its units across semesters',
+				icon: DocumentDuplicateIcon,
+				permission: 'course',
+				isNew: true,
+				links: [
+					{ name: 'Open Study Planner Maker', href: '/view/study_planner_maker', permission: 'course:read' },
+				],
+				gradient: 'from-rose-500 to-red-600',
+				bgGradient: 'from-rose-50 to-red-50 dark:from-rose-900/20 dark:to-red-900/10',
+				iconBg: 'bg-transparent',
+				iconColor: 'text-rose-600 dark:text-rose-400',
+				borderColor: 'hover:border-rose-500/30',
 			},
 			{
 				title: 'Students',
@@ -570,4 +586,4 @@ async function fetchDashboardData() {
 		}
 		throw error;
 	}
-}
+}

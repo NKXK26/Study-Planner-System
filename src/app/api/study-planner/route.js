@@ -77,6 +77,7 @@ export async function GET(req) {
             Availability: j.unit.Availability,
             unitTypeId: j.unitTypeId,
             unitType: j.unitType,
+            semester: j.semester,
         })),
     }));
 
@@ -199,9 +200,11 @@ export async function POST(req) {
             data: {
                 name,
                 studyPlannerUnits: {
-                    create: units.map(({ unitId, unitTypeId }) => ({
+                    create: units.map(({ unitId, unitTypeId, semester }) => ({
                         unitId,
                         unitTypeId: unitTypeId || null, // default to null if not provided
+                        // semester is optional — null means the unit is not placed in a semester yet
+                        semester: Number.isInteger(semester) && semester > 0 ? semester : null,
                     })),
                 },
             },
@@ -228,6 +231,7 @@ export async function POST(req) {
                 Availability: j.unit.Availability,
                 unitTypeId: j.unitTypeId,
                 unitType: j.unitType,
+                semester: j.semester,
             })),
         };
 

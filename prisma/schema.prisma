@@ -163,6 +163,7 @@ model StudyPlannerUnit {
   studyPlannerId Int
   unitId         Int
   unitTypeId     Int?
+  semester       Int?
   unitType       UnitType?    @relation(fields: [unitTypeId], references: [ID])
   unit           Unit         @relation(fields: [unitId], references: [ID], onDelete: Cascade)
   studyPlanner   StudyPlanner @relation(fields: [studyPlannerId], references: [id], onDelete: Cascade)
