@@ -185,10 +185,6 @@ export const scheduleRemainingUnits = (
             if (cat === 'major' && scheduledMajor >= remainingMajorNeeded) continue;
             if (cat === 'elective' && scheduledElective >= electiveNeeded) continue;
 
-            // FYP offering semesters
-            if ((code === 'COS40005' || code === 'SWE40001') && current.semester !== 1) continue;
-            if ((code === 'COS40006' || code === 'SWE40002') && current.semester !== 2) continue;
-
             // FYP B needs FYP A
             if (code === 'COS40006' || code === 'SWE40002') {
                 const fypACode = getNormalizedUnitCode('SWE40001');

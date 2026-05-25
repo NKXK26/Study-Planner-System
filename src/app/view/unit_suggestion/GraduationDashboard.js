@@ -1,37 +1,68 @@
 'use client';
 
+import { useMemo } from 'react';
 import {
   ChartBarIcon,
   AcademicCapIcon,
   CalendarIcon,
   CheckCircleIcon,
-  ClockIcon,
 } from '@heroicons/react/24/outline';
 
 const TOTAL_REQUIRED_UNITS = 24;
 const TOTAL_REQUIRED_CREDITS = 300;
+const UNITS_PER_SEMESTER = 4;
+const SEMESTERS_PER_YEAR = 2;
 
 const GraduationDashboard = ({ recommendations, studentInfo, completedUnits, editableSchedule }) => {
   if (!recommendations) return null;
 
-  const {
-    totalCompleted,
-    totalCredits,
-    completedPercent,
-    creditsToGraduate,
-    unitsToGraduate,
-    currentYear,
-    currentSemester,
-  } = recommendations;
+  // Single source of truth for completed units count
+  const actualCompletedCount = completedUnits?.length ?? 0;
+
+  // Total credits from completed units (handling double‑count units)
+  const actualTotalCredits = useMemo(() => {
+    let sum = 0;
+    (completedUnits || []).forEach(u => {
+      let cp = u.creditPoints || u.CreditPoints || 12.5;
+      if (u.code === 'ICT20016' || u.doubleCount) cp = 25;
+      sum += cp;
+    });
+    return sum;
+  }, [completedUnits]);
+
+  const actualCompletedPercent = (actualCompletedCount / TOTAL_REQUIRED_UNITS) * 100;
+  const actualUnitsRemaining = Math.max(0, TOTAL_REQUIRED_UNITS - actualCompletedCount);
+  const actualCreditsRemaining = Math.max(0, TOTAL_REQUIRED_CREDITS - actualTotalCredits);
+
+  // Fixed: current position based on ceiling (so 20 units = 5th semester = Year 3 Sem 1)
+  const currentPosition = useMemo(() => {
+    const completedCount = actualCompletedCount;
+    let semesterOrder = Math.ceil(completedCount / UNITS_PER_SEMESTER);
+    if (semesterOrder === 0) semesterOrder = 1; // no units completed → still 1st semester
+    const year = Math.floor((semesterOrder - 1) / SEMESTERS_PER_YEAR) + 1;
+    const semester = ((semesterOrder - 1) % SEMESTERS_PER_YEAR) + 1;
+    return { year, semester, semesterOrder };
+  }, [actualCompletedCount]);
+
+  const ordinal = (n) => {
+    if (n % 10 === 1 && n % 100 !== 11) return 'st';
+    if (n % 10 === 2 && n % 100 !== 12) return 'nd';
+    if (n % 10 === 3 && n % 100 !== 13) return 'rd';
+    return 'th';
+  };
 
   const categoryReqs = recommendations.categoryRequirements || {};
 
-  // Calculate estimated graduation semester from schedule
   let gradSemester = null;
   if (editableSchedule && editableSchedule.length > 0) {
     const lastSem = editableSchedule[editableSchedule.length - 1];
     gradSemester = `Year ${lastSem.year}, Semester ${lastSem.semester}`;
   }
+
+  // Helper to show credits with one decimal if needed
+  const formattedCredits = Number.isInteger(actualTotalCredits)
+    ? actualTotalCredits
+    : actualTotalCredits.toFixed(1);
 
   return (
     <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">
@@ -54,13 +85,13 @@ const GraduationDashboard = ({ recommendations, studentInfo, completedUnits, edi
               stroke="#cc2131"
               strokeWidth="10"
               strokeDasharray={`${2 * Math.PI * 42}`}
-              strokeDashoffset={`${2 * Math.PI * 42 * (1 - completedPercent / 100)}`}
+              strokeDashoffset={`${2 * Math.PI * 42 * (1 - actualCompletedPercent / 100)}`}
               strokeLinecap="round"
               transform="rotate(-90 50 50)"
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold text-gray-800">{Math.round(completedPercent)}%</span>
+            <span className="text-2xl font-bold text-gray-800">{Math.round(actualCompletedPercent)}%</span>
             <span className="text-[10px] text-gray-500">complete</span>
           </div>
         </div>
@@ -71,23 +102,28 @@ const GraduationDashboard = ({ recommendations, studentInfo, completedUnits, edi
               <AcademicCapIcon className="h-4 w-4" />
               <span>Units</span>
             </div>
-            <p className="text-2xl font-bold text-gray-800">{totalCompleted} / {TOTAL_REQUIRED_UNITS}</p>
-            <p className="text-xs text-gray-400">{unitsToGraduate} remaining</p>
+            <p className="text-2xl font-bold text-gray-800">{actualCompletedCount} / {TOTAL_REQUIRED_UNITS}</p>
+            <p className="text-xs text-gray-400">{actualUnitsRemaining} remaining</p>
           </div>
           <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
             <div className="flex items-center gap-2 text-gray-500 mb-1">
               <CheckCircleIcon className="h-4 w-4" />
               <span>Credits</span>
             </div>
-            <p className="text-2xl font-bold text-gray-800">{totalCredits} / {TOTAL_REQUIRED_CREDITS}</p>
-            <p className="text-xs text-gray-400">{creditsToGraduate} CP left</p>
+            <p className="text-2xl font-bold text-gray-800">{formattedCredits} / {TOTAL_REQUIRED_CREDITS}</p>
+            <p className="text-xs text-gray-400">{actualCreditsRemaining} CP left</p>
           </div>
           <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
             <div className="flex items-center gap-2 text-gray-500 mb-1">
               <CalendarIcon className="h-4 w-4" />
               <span>Current position</span>
             </div>
-            <p className="font-semibold text-gray-800">Y{currentYear} S{currentSemester}</p>
+            <p className="font-semibold text-gray-800">
+              Year {currentPosition.year}, Semester {currentPosition.semester}
+            </p>
+            <p className="text-xs text-gray-400">
+              {actualCompletedCount} units completed · {currentPosition.semesterOrder}{ordinal(currentPosition.semesterOrder)} semester
+            </p>
           </div>
         </div>
       </div>

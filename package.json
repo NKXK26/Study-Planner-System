@@ -1,6 +1,6 @@
 {
   "name": "student-study-planner-system",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -42,9 +42,11 @@
     "lexical": "^0.38.2",
     "localforage": "^1.10.0",
     "logic-solver": "^2.0.1",
+    "multer": "^2.1.1",
     "next": "^15.5.6",
     "nodemailer": "^7.0.5",
     "papaparse": "^5.5.2",
+    "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^3.11.174",
     "prisma": "^6.5.0",
     "rate-limiter-flexible": "^8.1.0",
@@ -58,6 +60,7 @@
     "reactflow": "^11.11.4",
     "sqlite": "^5.1.1",
     "sweetalert2": "^11.26.2",
+    "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

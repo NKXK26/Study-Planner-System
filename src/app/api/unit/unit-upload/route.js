@@ -6,7 +6,7 @@ import { TokenValidation } from "@app/api/api_helper";
 import { checkUploadRateLimit } from "@utils/rateLimiting/uploadRateLimiter";
 
 // API Endpoint for the Unit file uploads
-// Try to optimise for batch processing 
+// Optimised for batch processing
 
 // Helper function to validate unit data
 function validateUnitData(unit) {
@@ -21,7 +21,6 @@ function validateUnitData(unit) {
     }
 
     // Check credit points is a valid number
-    // Allow 0 CP for MPU units, but require positive for others
     const cp = parseFloat(unit.cp);
     const isMPU = unit.code && unit.code.toUpperCase().startsWith('MPU');
 
@@ -61,14 +60,6 @@ function validateUnitData(unit) {
     return errors;
 }
 
-// Helper function to check if a unit code exists
-async function unitExists(unitCode) {
-    const unit = await prisma.Unit.findUnique({
-        where: { UnitCode: unitCode }
-    });
-    return !!unit;
-}
-
 // Helper function to log operations
 function logOperation(operation, details) {
     const timestamp = new Date().toISOString();
@@ -77,25 +68,23 @@ function logOperation(operation, details) {
 
 export async function POST(req) {
     try {
-        // Check for DEV override
+        // ─── Authentication & Dev Override ─────────────────────────
         const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
             process.env.NEXT_PUBLIC_MODE === 'DEV';
 
         if (!isDevOverride) {
             const authHeader = req.headers.get('Authorization');
             const token_res = TokenValidation(authHeader);
-
             if (!token_res.success) {
                 return NextResponse.json({ success: false, message: token_res.message }, { status: token_res.status });
             }
-            // Require actor email for auditability
             const sessionEmail = req.headers.get('x-session-email');
             if (!sessionEmail) {
                 return NextResponse.json({ success: false, message: 'Missing authentication header x-session-email' }, { status: 401 });
             }
         }
 
-        // Check rate limit for uploads
+        // ─── Rate limiting ────────────────────────────────────────
         let rateLimitIdentifier = null;
         let userRole = null;
         try {
@@ -104,12 +93,10 @@ export async function POST(req) {
                 rateLimitIdentifier = user.email;
                 userRole = user.role;
             } else {
-                // Fallback to IP address if user email not available
                 rateLimitIdentifier = req.headers.get('x-forwarded-for') || req.ip || 'unknown';
             }
 
             const rateLimitCheck = await checkUploadRateLimit(rateLimitIdentifier, userRole);
-
             if (!rateLimitCheck.allowed) {
                 return NextResponse.json(
                     {
@@ -122,63 +109,45 @@ export async function POST(req) {
                     },
                     {
                         status: 429,
-                        headers: {
-                            'Retry-After': rateLimitCheck.retryAfter.toString()
-                        }
+                        headers: { 'Retry-After': rateLimitCheck.retryAfter.toString() }
                     }
                 );
             }
         } catch (rateLimitError) {
             console.warn('Rate limit check failed:', rateLimitError?.message);
-            // Continue if rate limit check fails - don't block the request
         }
 
-        // Parse request body as JSON
+        // ─── Parse request body ───────────────────────────────────
         const requestText = await req.text();
         let requestData;
-
         try {
             requestData = JSON.parse(requestText);
         } catch (error) {
             console.error('JSON Parse Error:', error);
-            console.log('Request text received:', requestText.substring(0, 200) + '...');
-
             return NextResponse.json(
-                {
-                    success: false,
-                    message: `Failed to parse request data: ${error.message}`,
-                    receivedData: requestText.substring(0, 100) + '...'
-                },
+                { success: false, message: `Failed to parse request data: ${error.message}` },
                 { status: 400 }
             );
         }
 
         if (!requestData || !Array.isArray(requestData.units) || requestData.units.length === 0) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: 'No valid unit data provided',
-                    receivedData: JSON.stringify(requestData)
-                },
+                { success: false, message: 'No valid unit data provided' },
                 { status: 400 }
             );
         }
 
-        // Enforce maximum array size to prevent memory exhaustion
         const MAX_UNITS_PER_REQUEST = 10000;
         if (requestData.units.length > MAX_UNITS_PER_REQUEST) {
             return NextResponse.json(
-                {
-                    success: false,
-                    message: `Cannot import more than ${MAX_UNITS_PER_REQUEST} units at once. Received ${requestData.units.length} units. Please split your import into multiple smaller batches.`
-                },
-                { status: 413 } // Payload Too Large
+                { success: false, message: `Cannot import more than ${MAX_UNITS_PER_REQUEST} units at once.` },
+                { status: 413 }
             );
         }
 
         const units = requestData.units;
-        const importMode = requestData.mode || 'add'; // Default to 'add' if not specified
-        const includeRequisites = requestData.includeRequisites !== false; // Default to true
+        const importMode = requestData.mode || 'add';
+        const includeRequisites = requestData.includeRequisites !== false;
 
         const results = {
             success: true,
@@ -192,12 +161,10 @@ export async function POST(req) {
             timestamp: new Date().toISOString()
         };
 
-        // Validate all units first
+        // ─── Validate all units first ─────────────────────────────
         const validUnits = [];
         for (let i = 0; i < units.length; i++) {
             const unit = units[i];
-
-            // Validate unit data
             const validationErrors = validateUnitData(unit);
             if (validationErrors.length > 0) {
                 results.failed++;
@@ -207,7 +174,6 @@ export async function POST(req) {
                     errors: validationErrors
                 });
             } else {
-                // Add to valid units list
                 validUnits.push({
                     ...unit,
                     UnitCode: unit.code.trim(),
@@ -218,72 +184,23 @@ export async function POST(req) {
             }
         }
 
-        // REPLACE MODE
-        // Handle replace mode (delete all existing units)
-        // if (importMode === 'replace') {
-        //     try {
-        //         // Count existing units to confirm replacement
-        //         const existingCount = await prisma.Unit.count();
-
-        //         // Log the delete operation
-        //         logOperation('DELETE ALL UNITS', { count: existingCount });
-
-        //         // Delete all existing units
-        //         await prisma.Unit.deleteMany({});
-
-        //         results.replaced = true;
-        //         results.replacedCount = existingCount;
-
-        //         console.log(`[${results.timestamp}] REPLACE MODE: Deleted ${existingCount} units`);
-        //     } catch (error) {
-        //         console.error(`[${results.timestamp}] REPLACE MODE ERROR:`, error);
-        //         return NextResponse.json(
-        //             { 
-        //                 success: false, 
-        //                 message: 'Failed to replace existing units. Import aborted.',
-        //                 error: error.message
-        //             },
-        //             { status: 500 }
-        //         );
-        //     }
-        // }
-
-        // for (let unit of units) {
-        //  await prisma.Unit.create({ data: unit });
-        // }
-        //
-        //THIS ^^ part is bad for optimisation as it queries the db for each item in the csv
-        //BAd
-
-        //DO the following instead \/
-
-
-        // Process units in batches for better performance
+        // ─── Batch create / update units ─────────────────────────
         try {
             if (validUnits.length > 0) {
-                // OPTIMIZATION: Prepare data for batch operations
                 const unitsToCreate = [];
                 const unitsToUpdate = [];
                 const existingUnitCodes = new Set();
 
-                // Only check for existing units in 'add' mode
                 if (importMode === 'add') {
                     // Get all existing unit codes in one query
                     const existingUnits = await prisma.Unit.findMany({
-                        where: {
-                            UnitCode: {
-                                in: validUnits.map(u => u.UnitCode)
-                            }
-                        },
-                        select: {
-                            UnitCode: true
-                        }
+                        where: { UnitCode: { in: validUnits.map(u => u.UnitCode) } },
+                        select: { UnitCode: true, ID: true }
                     });
-
-                    existingUnits.forEach(unit => existingUnitCodes.add(unit.UnitCode));
+                    existingUnits.forEach(u => existingUnitCodes.add(u.UnitCode));
                 }
 
-                // Separate units into create and update arrays
+                // Separate into create / update
                 validUnits.forEach(unit => {
                     if (importMode === 'replace' || !existingUnitCodes.has(unit.UnitCode)) {
                         unitsToCreate.push({
@@ -297,29 +214,20 @@ export async function POST(req) {
                     }
                 });
 
-                // OPTIMIZATION: Create all new units in a single batch
-                // use createMany Instead
+                // ─── CREATE new units (batch with transaction) ────
                 if (unitsToCreate.length > 0) {
                     logOperation('BATCH CREATE UNITS', { count: unitsToCreate.length });
 
-                    const createdUnits = await prisma.$transaction(async (tx) => {
-                        const inserted = await Promise.all(
-                            unitsToCreate.map(async (unitData) => {
-                                const unit = await tx.unit.create({ data: unitData });
-
-                                const match = validUnits.find(u => u.code === unitData.UnitCode);
-                                if (match) {
-                                    match.UnitID = unit.ID;
-                                }
-                                return unit;
-                            })
-                        );
-                        return inserted;
+                    await prisma.$transaction(async (tx) => {
+                        for (const unitData of unitsToCreate) {
+                            const created = await tx.unit.create({ data: unitData });
+                            const match = validUnits.find(u => u.UnitCode === unitData.UnitCode);
+                            if (match) match.UnitID = created.ID;
+                        }
                     });
 
                     results.successful += unitsToCreate.length;
 
-                    // AUDIT CREATE
                     try {
                         const user = await SecureSessionManager.authenticateUser(req);
                         const actorEmail = user?.email || req.headers.get('x-session-email') || undefined;
@@ -332,14 +240,49 @@ export async function POST(req) {
                             after: unitsToCreate.map(u => u.UnitCode),
                             metadata: { importMode, count: unitsToCreate.length, includeRequisites }
                         }, req);
-                    } catch (e) {
-                        console.warn('Audit CREATE Unit Import failed:', e?.message);
-                    }
+                    } catch (e) { console.warn('Audit CREATE failed:', e?.message); }
                 }
 
-                // Handle updates (these need to be done individually due to Prisma limitations)
+                // ─── UPDATE existing units (by ID) ────────────────
                 if (unitsToUpdate.length > 0) {
-                    // AUDIT UPDATE batch
+                    // First, fetch IDs for all codes that need updating
+                    const existingMap = new Map();
+                    const existingUnitsData = await prisma.Unit.findMany({
+                        where: { UnitCode: { in: unitsToUpdate.map(u => u.UnitCode) } },
+                        select: { ID: true, UnitCode: true }
+                    });
+                    for (const eu of existingUnitsData) {
+                        existingMap.set(eu.UnitCode, eu.ID);
+                    }
+
+                    for (const unit of unitsToUpdate) {
+                        const unitId = existingMap.get(unit.UnitCode);
+                        if (!unitId) continue;
+
+                        await prisma.Unit.update({
+                            where: { ID: unitId },
+                            data: {
+                                Name: unit.Name,
+                                CreditPoints: unit.CreditPoints,
+                                Availability: unit.Availability
+                            }
+                        });
+
+                        // Delete existing terms for this unit using ID
+                        await prisma.UnitTermOffered.deleteMany({
+                            where: { UnitID: unitId }
+                        });
+
+                        if (includeRequisites) {
+                            await prisma.UnitRequisiteRelationship.deleteMany({
+                                where: { UnitID: unitId }
+                            });
+                        }
+
+                        results.successful++;
+                        unit.UnitID = unitId; // store ID for later term/requisite insertion
+                    }
+
                     try {
                         const user = await SecureSessionManager.authenticateUser(req);
                         const actorEmail = user?.email || req.headers.get('x-session-email') || undefined;
@@ -353,40 +296,12 @@ export async function POST(req) {
                             after: unitsToUpdate,
                             metadata: { importMode, count: unitsToUpdate.length, includeRequisites }
                         }, req);
-                    } catch (e) {
-                        console.warn('Audit UPDATE Unit Import failed:', e?.message);
-                    }
+                    } catch (e) { console.warn('Audit UPDATE failed:', e?.message); }
                 }
 
-                for (const unit of unitsToUpdate) {
-                    await prisma.Unit.update({
-                        where: { UnitCode: unit.UnitCode },
-                        data: {
-                            Name: unit.Name,
-                            CreditPoints: unit.CreditPoints,
-                            Availability: unit.Availability
-                        }
-                    });
-
-                    // Delete existing terms for this unit
-                    await prisma.UnitTermOffered.deleteMany({
-                        where: { UnitCode: unit.UnitCode }
-                    });
-
-                    if (includeRequisites) {
-                        // Delete existing requisites for this unit
-                        await prisma.UnitRequisiteRelationship.deleteMany({
-                            where: { UnitCode: unit.UnitCode }
-                        });
-                    }
-
-                    results.successful++;
-                }
-
-                // OPTIMIZATION: Batch insert all unit terms in one operation
+                // ─── Batch insert all unit terms ──────────────────
                 const allTermsToCreate = [];
                 for (const unit of validUnits) {
-                    console.log('unit', unit)
                     if (unit.offered_terms && Array.isArray(unit.offered_terms) && unit.offered_terms.length > 0) {
                         for (const term of unit.offered_terms) {
                             allTermsToCreate.push({
@@ -396,46 +311,37 @@ export async function POST(req) {
                         }
                     }
                 }
-
                 if (allTermsToCreate.length > 0) {
-                    console.log('allTermsToCreate', allTermsToCreate)
                     logOperation('BATCH ADD UNIT TERMS', { count: allTermsToCreate.length });
-
                     await prisma.UnitTermOffered.createMany({
                         data: allTermsToCreate,
-                        skipDuplicates: true
+                
                     });
                 }
             }
         } catch (error) {
             console.error(`[${results.timestamp}] BATCH OPERATION ERROR:`, error);
             return NextResponse.json(
-                {
-                    success: false,
-                    message: `Failed during batch unit operations: ${error.message}`
-                },
+                { success: false, message: `Failed during batch unit operations: ${error.message}` },
                 { status: 500 }
             );
         }
 
-        // Process requisite relationships if enabled
+        // ─── Process requisite relationships (if enabled) ─────────
         if (includeRequisites && validUnits.length > 0) {
             try {
                 const requisiteErrors = [];
-
-                // OPTIMIZATION: Collect all requisite relationships in one array
                 const allRequisiteRelationships = [];
 
                 for (const unit of validUnits) {
-                    console.log(validUnits);
                     const unitCode = unit.UnitCode;
                     const UnitID = unit.UnitID;
+                    if (!UnitID) continue;
 
-                    // Process prerequisites
-                    if (unit.pre_requisites && unit.pre_requisites.length > 0) {
+                    if (unit.pre_requisites?.length) {
                         for (const preReqCode of unit.pre_requisites) {
                             allRequisiteRelationships.push({
-                                UnitID: UnitID,
+                                UnitID,
                                 UnitCode: unitCode,
                                 RequisiteUnitCode: preReqCode.trim(),
                                 UnitRelationship: 'pre',
@@ -443,12 +349,10 @@ export async function POST(req) {
                             });
                         }
                     }
-
-                    // Process corequisites
-                    if (unit.co_requisites && unit.co_requisites.length > 0) {
+                    if (unit.co_requisites?.length) {
                         for (const coReqCode of unit.co_requisites) {
                             allRequisiteRelationships.push({
-                                UnitID: UnitID,
+                                UnitID,
                                 UnitCode: unitCode,
                                 RequisiteUnitCode: coReqCode.trim(),
                                 UnitRelationship: 'co',
@@ -456,12 +360,10 @@ export async function POST(req) {
                             });
                         }
                     }
-
-                    // Process antirequisites
-                    if (unit.anti_requisites && unit.anti_requisites.length > 0) {
+                    if (unit.anti_requisites?.length) {
                         for (const antiReqCode of unit.anti_requisites) {
                             allRequisiteRelationships.push({
-                                UnitID: UnitID,
+                                UnitID,
                                 UnitCode: unitCode,
                                 RequisiteUnitCode: antiReqCode.trim(),
                                 UnitRelationship: 'anti',
@@ -469,11 +371,9 @@ export async function POST(req) {
                             });
                         }
                     }
-
-                    // Process minimum credit points
                     if (unit.min_cp) {
                         allRequisiteRelationships.push({
-                            UnitID: UnitID,
+                            UnitID,
                             UnitCode: unitCode,
                             RequisiteUnitCode: null,
                             UnitRelationship: 'min',
@@ -483,9 +383,8 @@ export async function POST(req) {
                     }
                 }
 
-                // OPTIMIZATION: Validate all requisite unit codes in a single query
                 if (allRequisiteRelationships.length > 0) {
-                    // Collect all unique requisite unit codes (excluding min CP requisites)
+                    // Collect all requisite unit codes (excluding min)
                     const requisiteUnitCodes = new Set();
                     allRequisiteRelationships.forEach(req => {
                         if (req.UnitRelationship !== 'min' && req.RequisiteUnitCode) {
@@ -493,47 +392,31 @@ export async function POST(req) {
                         }
                     });
 
-                    // Get all existing unit codes in one query
                     const existingUnitCodes = new Set(validUnits.map(u => u.UnitCode));
                     const existingUnitIDs = new Set(validUnits.map(u => u.UnitID));
 
                     if (requisiteUnitCodes.size > 0) {
                         const dbExistingUnits = await prisma.Unit.findMany({
-                            where: {
-                                UnitCode: {
-                                    in: Array.from(requisiteUnitCodes)
-                                }
-                            },
-                            select: {
-                                UnitCode: true,
-                                ID: true
-                            }
+                            where: { UnitCode: { in: Array.from(requisiteUnitCodes) } },
+                            select: { UnitCode: true, ID: true }
                         });
-
-                        dbExistingUnits.forEach((unit) => {
+                        dbExistingUnits.forEach(unit => {
                             existingUnitCodes.add(unit.UnitCode);
                             existingUnitIDs.add(unit.ID);
                         });
-
-                        dbExistingUnits.forEach((unit_db) => {
-                            allRequisiteRelationships.forEach((unit) => {
-                                if (unit.RequisiteUnitCode === unit_db.UnitCode) {
-                                    unit.RequisiteUnitID = unit_db.ID;
+                        dbExistingUnits.forEach(unitDb => {
+                            allRequisiteRelationships.forEach(req => {
+                                if (req.RequisiteUnitCode === unitDb.UnitCode) {
+                                    req.RequisiteUnitID = unitDb.ID;
                                 }
                             });
                         });
                     }
 
-                    // Filter out invalid requisites
+                    // Filter invalid requisites
                     const validRequisites = allRequisiteRelationships.filter(req => {
-                        // Min CP requisites don't reference other units, so they're always valid
-                        if (req.UnitRelationship === 'min') {
-                            return true;
-                        }
-
-                        // Check if requisite unit exists either in database or in current import batch
+                        if (req.UnitRelationship === 'min') return true;
                         const isValid = existingUnitCodes.has(req.RequisiteUnitCode);
-
                         if (!isValid) {
                             requisiteErrors.push({
                                 unitCode: req.UnitCode,
@@ -542,26 +425,18 @@ export async function POST(req) {
                                 error: `Referenced unit ${req.RequisiteUnitCode} does not exist`
                             });
                         }
-
                         return isValid;
-                    }).map(({ UnitCode, RequisiteUnitCode, ...rest }) => rest);;
+                    }).map(({ UnitCode, RequisiteUnitCode, ...rest }) => rest);
 
-
-                    // Insert all valid requisite relationships in a single batch
                     if (validRequisites.length > 0) {
-                        console.log('validRequisites', validRequisites)
                         logOperation('BATCH ADD REQUISITES', { count: validRequisites.length });
-
-
                         const inserted = await prisma.UnitRequisiteRelationship.createMany({
                             data: validRequisites,
                             skipDuplicates: true
                         });
-
                         results.requisitesAdded = inserted.count;
                     }
 
-                    // Add any requisite errors to the overall results
                     if (requisiteErrors.length > 0) {
                         results.requisiteErrors = requisiteErrors;
                         results.requisitesFailed = requisiteErrors.length;
@@ -570,61 +445,40 @@ export async function POST(req) {
             } catch (error) {
                 console.error(`[${results.timestamp}] BATCH REQUISITES ERROR:`, error);
                 results.requisitesFailed = 1;
-                results.requisiteErrors = [{
-                    error: `Failed to add requisites: ${error.message}`
-                }];
+                results.requisiteErrors = [{ error: `Failed to add requisites: ${error.message}` }];
             }
         }
 
-        // Generate appropriate message based on results
+        // ─── Build response message ───────────────────────────────
         if (results.failed > 0) {
             results.success = results.successful > 0;
-
-            if (importMode === 'replace') {
-                results.message = results.successful > 0
-                    ? `Replaced ${results.replacedCount} units with ${results.successful} new units. ${results.failed} units had errors.`
-                    : `Failed to replace units. All ${results.failed} import operations failed.`;
-            } else {
-                results.message = results.successful > 0
-                    ? `Successfully processed ${results.successful} of ${results.total} units with ${results.failed} errors.`
-                    : `Failed to process any units. Found ${results.failed} errors.`;
-            }
+            results.message = results.successful > 0
+                ? `Successfully processed ${results.successful} of ${results.total} units with ${results.failed} errors.`
+                : `Failed to process any units. Found ${results.failed} errors.`;
         } else {
-            if (importMode === 'replace') {
-                results.message = `Successfully replaced ${results.replacedCount} units with ${results.successful} new units.`;
-            } else {
-                results.message = `Successfully processed all ${results.total} units.`;
-            }
+            results.message = `Successfully processed all ${results.total} units.`;
         }
 
-        // Add requisite processing results to the message
         if (includeRequisites) {
             results.message += ` Added ${results.requisitesAdded} requisite relationships.`;
-            if (results.requisitesFailed > 0 || (results.requisiteErrors && results.requisiteErrors.length > 0)) {
-                results.message += ` Failed to add some requisite relationships.`;
-            }
+            if (results.requisitesFailed > 0) results.message += ` Failed to add some requisite relationships.`;
         }
 
-        // Log the final result
         logOperation('IMPORT COMPLETED', {
             mode: importMode,
             total: results.total,
             successful: results.successful,
             failed: results.failed,
             requisitesAdded: results.requisitesAdded,
-            requisitesFailed: results.requisitesFailed,
-            success: results.success
+            requisitesFailed: results.requisitesFailed
         });
 
         return NextResponse.json(results, { status: 200 });
+
     } catch (error) {
         console.error('Error processing unit upload:', error);
         return NextResponse.json(
-            {
-                success: false,
-                message: 'Server error while processing unit upload',
-                error: error.message
-            },
+            { success: false, message: 'Server error while processing unit upload', error: error.message },
             { status: 500 }
         );
     }

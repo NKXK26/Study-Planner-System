@@ -33,38 +33,26 @@ export async function GET(req) {
 
     const url = new URL(req.url);
     const plannerId = url.searchParams.get('id');
-
     const id = plannerId ? parseInt(plannerId, 10) : null;
 
     if (plannerId && isNaN(id)) {
-        return NextResponse.json(
-            { success: false, message: 'Invalid planner ID' },
-            { status: 400 }
-        );
+        return NextResponse.json({ success: false, message: 'Invalid planner ID' }, { status: 400 });
     }
 
-    // Use the explicit join table StudyPlannerUnit
     const studyPlanners = await prisma.studyPlanner.findMany({
         where: id ? { id } : {},
         orderBy: { createdAt: 'desc' },
         include: {
             studyPlannerUnits: {
-                include: {
-                    unit: true,
-                    unitType: true,
-                },
+                include: { unit: true, unitType: true },
             },
         },
     });
 
     if (id && studyPlanners.length === 0) {
-        return NextResponse.json(
-            { success: false, message: 'Study planner not found' },
-            { status: 404 }
-        );
+        return NextResponse.json({ success: false, message: 'Study planner not found' }, { status: 404 });
     }
 
-    // Transform to the old `units` structure for frontend compatibility
     const transformed = studyPlanners.map(planner => ({
         id: planner.id,
         name: planner.name,
@@ -80,12 +68,9 @@ export async function GET(req) {
         })),
     }));
 
-    return NextResponse.json({
-        success: true,
-        count: studyPlanners.length,
-        data: transformed,
-    });
+    return NextResponse.json({ success: true, count: studyPlanners.length, data: transformed });
 }
+
 export async function DELETE(req) {
     const authResult = await validateAuthenticatedRequest(req);
     if (authResult.error) return authResult.error;
@@ -94,59 +79,31 @@ export async function DELETE(req) {
     const plannerId = url.searchParams.get('id');
 
     if (!plannerId) {
-        return NextResponse.json(
-            { success: false, message: 'Missing planner ID query parameter' },
-            { status: 400 }
-        );
+        return NextResponse.json({ success: false, message: 'Missing planner ID query parameter' }, { status: 400 });
     }
 
     const id = parseInt(plannerId, 10);
     if (isNaN(id)) {
-        return NextResponse.json(
-            { success: false, message: 'Invalid planner ID' },
-            { status: 400 }
-        );
+        return NextResponse.json({ success: false, message: 'Invalid planner ID' }, { status: 400 });
     }
 
     try {
-        // Check if planner exists
-        const existing = await prisma.studyPlanner.findUnique({
-            where: { id },
-        });
-
+        const existing = await prisma.studyPlanner.findUnique({ where: { id } });
         if (!existing) {
-            return NextResponse.json(
-                { success: false, message: 'Study planner not found' },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, message: 'Study planner not found' }, { status: 404 });
         }
 
-        // Delete the planner (cascade delete should remove associated StudyPlannerUnit records)
-        await prisma.studyPlanner.delete({
-            where: { id },
-        });
-
-        return NextResponse.json({
-            success: true,
-            message: 'Study planner deleted successfully',
-        });
+        await prisma.studyPlanner.delete({ where: { id } });
+        return NextResponse.json({ success: true, message: 'Study planner deleted successfully' });
     } catch (error) {
         console.error('❌ DELETE error:', error);
-        return NextResponse.json(
-            {
-                success: false,
-                message: 'Failed to delete study planner',
-                details: error.message,
-            },
-            { status: 500 }
-        );
+        return NextResponse.json({ success: false, message: 'Failed to delete study planner', details: error.message }, { status: 500 });
     }
 }
+
 export async function POST(req) {
     const authResult = await validateAuthenticatedRequest(req);
-    if (authResult.error) {
-        return authResult.error;
-    }
+    if (authResult.error) return authResult.error;
 
     try {
         let body;
@@ -157,17 +114,13 @@ export async function POST(req) {
         }
 
         const name = typeof body.name === 'string' ? body.name.trim() : '';
-        // New payload: { name, units: [{ unitId, unitTypeId }] }
         const units = Array.isArray(body.units) ? body.units : [];
 
         if (!name) {
             return NextResponse.json({ success: false, message: 'Study planner name is required' }, { status: 400 });
         }
 
-        const existingPlanner = await prisma.studyPlanner.findFirst({
-            where: { name },
-        });
-
+        const existingPlanner = await prisma.studyPlanner.findFirst({ where: { name } });
         if (existingPlanner) {
             return NextResponse.json({
                 success: false,
@@ -179,43 +132,114 @@ export async function POST(req) {
             return NextResponse.json({ success: false, message: 'At least one unit is required' }, { status: 400 });
         }
 
-        // Validate that all unitIds exist
-        const unitIds = units.map(u => u.unitId).filter(id => Number.isInteger(id) && id > 0);
-        const validUnits = await prisma.unit.findMany({
-            where: { ID: { in: unitIds } },
-            select: { ID: true },
-        });
-        const validUnitIds = new Set(validUnits.map(u => u.ID));
-        const missingUnitIds = unitIds.filter(id => !validUnitIds.has(id));
-        if (missingUnitIds.length > 0) {
+        // ─── Detect payload format ─────────────────────────────────────────────
+        const isOldFormat = units[0] && typeof units[0].unitId === 'number';
+        const isNewFormat = units[0] && typeof units[0].unitCode === 'string';
+
+        let unitLinkData = [];
+
+        // ─── Old format: { unitId, unitTypeId } ───────────────────────────────
+        if (isOldFormat) {
+            const unitIds = units.map(u => u.unitId).filter(id => Number.isInteger(id) && id > 0);
+            const validUnits = await prisma.unit.findMany({
+                where: { ID: { in: unitIds } },
+                select: { ID: true },
+            });
+            const validUnitIds = new Set(validUnits.map(u => u.ID));
+            const missingUnitIds = unitIds.filter(id => !validUnitIds.has(id));
+            if (missingUnitIds.length > 0) {
+                return NextResponse.json(
+                    { success: false, message: `Invalid unit IDs: ${missingUnitIds.join(', ')}` },
+                    { status: 400 }
+                );
+            }
+            unitLinkData = units.map(({ unitId, unitTypeId }) => ({ unitId, unitTypeId }));
+        }
+        // ─── New format: { unitCode, name?, creditPoints?, unitTypeName } ─────
+        else if (isNewFormat) {
+            // Fetch all unit types once
+            const allUnitTypes = await prisma.unitType.findMany({
+                select: { ID: true, Name: true },
+            });
+            const typeNameToId = new Map(allUnitTypes.map(t => [t.Name.toLowerCase(), t.ID]));
+
+            for (const unit of units) {
+                const unitCode = unit.unitCode?.trim();
+                if (!unitCode) {
+                    return NextResponse.json({ success: false, message: 'Missing unitCode in one of the units' }, { status: 400 });
+                }
+
+                // Resolve unitTypeId from unitTypeName
+                let unitTypeId = null;
+                if (unit.unitTypeName) {
+                    const typeName = unit.unitTypeName.trim();
+                    const typeId = typeNameToId.get(typeName.toLowerCase());
+                    if (!typeId) {
+                        return NextResponse.json(
+                            { success: false, message: `Unknown unit type "${typeName}". Please create it first.` },
+                            { status: 400 }
+                        );
+                    }
+                    unitTypeId = typeId;
+                } else if (typeof unit.unitTypeId === 'number') {
+                    // Fallback: allow direct unitTypeId if provided
+                    const exists = allUnitTypes.some(t => t.ID === unit.unitTypeId);
+                    unitTypeId = unit.unitTypeId; // this line is fine, it's from the request body
+                }
+
+                // Find or create the unit by UnitCode
+                const unitName = unit.name?.trim() || `Unknown: ${unitCode}`;
+                const creditPoints = unit.creditPoints ? parseFloat(unit.creditPoints) : 12.5;
+
+                let dbUnit = await prisma.unit.findFirst({
+                    where: { UnitCode: unitCode },
+                    select: { ID: true },
+                });
+
+                if (!dbUnit) {
+                    dbUnit = await prisma.unit.create({
+                        data: {
+                            UnitCode: unitCode,
+                            Name: unitName,
+                            CreditPoints: creditPoints,
+                            Availability: 'unpublished',
+                        },
+                        select: { ID: true },
+                    });
+                }
+
+                unitLinkData.push({
+                    unitId: dbUnit.ID,
+                    unitTypeId: unitTypeId || null,
+                });
+            }
+        }
+        // ─── Unknown format ─────────────────────────────────────────────────
+        else {
             return NextResponse.json(
-                { success: false, message: `Invalid unit IDs: ${missingUnitIds.join(', ')}` },
+                { success: false, message: 'Invalid unit format. Provide either { unitId, unitTypeId } or { unitCode, unitTypeName }' },
                 { status: 400 }
             );
         }
 
-        // Create the planner and its join records
+        // ─── Create planner and join records ────────────────────────────────
         const studyPlannerWithUnits = await prisma.studyPlanner.create({
             data: {
                 name,
                 studyPlannerUnits: {
-                    create: units.map(({ unitId, unitTypeId }) => ({
+                    create: unitLinkData.map(({ unitId, unitTypeId }) => ({
                         unitId,
-                        unitTypeId: unitTypeId || null, // default to null if not provided
+                        unitTypeId: unitTypeId || null,
                     })),
                 },
             },
             include: {
                 studyPlannerUnits: {
-                    include: {
-                        unit: true,
-                        unitType: true,
-                    },
+                    include: { unit: true, unitType: true },
                 },
             },
         });
 
-        // Transform the response to the old format for consistency
         const responseData = {
             id: studyPlannerWithUnits.id,
             name: studyPlannerWithUnits.name,
@@ -231,10 +255,7 @@ export async function POST(req) {
             })),
         };
 
-        return NextResponse.json({
-            success: true,
-            data: responseData,
-        }, { status: 201 });
+        return NextResponse.json({ success: true, data: responseData }, { status: 201 });
     } catch (error) {
         console.error('❌ Study planner POST error:', error.message || error);
         console.error('Full error:', error);
@@ -243,7 +264,7 @@ export async function POST(req) {
                 success: false,
                 message: 'Failed to create study planner',
                 details: error.message || 'Unknown error',
-                error: error.code
+                error: error.code,
             },
             { status: 500 }
         );

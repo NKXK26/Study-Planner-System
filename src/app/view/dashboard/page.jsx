@@ -177,7 +177,6 @@ const Dashboard = () => {
 				description: 'Manage units, prerequisites, and unit types',
 				icon: BookOpenIcon,
 				permission: 'unit',
-				isNew: true,
 				links: [
 					{ name: 'Unit Management', href: '/view/unit', permission: 'unit:read' },
 					{ name: 'Unit Types', href: '/view/unit_type', permission: 'unit_type:read' },
