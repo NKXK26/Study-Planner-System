@@ -16,10 +16,17 @@ const SEMESTERS_PER_YEAR = 2;
 const GraduationDashboard = ({ recommendations, studentInfo, completedUnits, editableSchedule }) => {
   if (!recommendations) return null;
 
-  // Single source of truth for completed units count
-  const actualCompletedCount = completedUnits?.length ?? 0;
+  // Effective unit count: ICT20016 or any unit with doubleCount flag counts as 2, otherwise 1
+  const effectiveUnitCount = useMemo(() => {
+    let count = 0;
+    (completedUnits || []).forEach(u => {
+      if (u.code === 'ICT20016' || u.doubleCount) count += 2;
+      else count += 1;
+    });
+    return count;
+  }, [completedUnits]);
 
-  // Total credits from completed units (handling double‑count units)
+  // Total credits from completed units (already handles double credits)
   const actualTotalCredits = useMemo(() => {
     let sum = 0;
     (completedUnits || []).forEach(u => {
@@ -30,19 +37,18 @@ const GraduationDashboard = ({ recommendations, studentInfo, completedUnits, edi
     return sum;
   }, [completedUnits]);
 
-  const actualCompletedPercent = (actualCompletedCount / TOTAL_REQUIRED_UNITS) * 100;
-  const actualUnitsRemaining = Math.max(0, TOTAL_REQUIRED_UNITS - actualCompletedCount);
+  const actualCompletedPercent = (effectiveUnitCount / TOTAL_REQUIRED_UNITS) * 100;
+  const actualUnitsRemaining = Math.max(0, TOTAL_REQUIRED_UNITS - effectiveUnitCount);
   const actualCreditsRemaining = Math.max(0, TOTAL_REQUIRED_CREDITS - actualTotalCredits);
 
-  // Fixed: current position based on ceiling (so 20 units = 5th semester = Year 3 Sem 1)
+  // Current position based on effective units (so ICT20016 pushes the student forward by 2 units)
   const currentPosition = useMemo(() => {
-    const completedCount = actualCompletedCount;
-    let semesterOrder = Math.ceil(completedCount / UNITS_PER_SEMESTER);
-    if (semesterOrder === 0) semesterOrder = 1; // no units completed → still 1st semester
+    let semesterOrder = Math.ceil(effectiveUnitCount / UNITS_PER_SEMESTER);
+    if (semesterOrder === 0) semesterOrder = 1;
     const year = Math.floor((semesterOrder - 1) / SEMESTERS_PER_YEAR) + 1;
     const semester = ((semesterOrder - 1) % SEMESTERS_PER_YEAR) + 1;
     return { year, semester, semesterOrder };
-  }, [actualCompletedCount]);
+  }, [effectiveUnitCount]);
 
   const ordinal = (n) => {
     if (n % 10 === 1 && n % 100 !== 11) return 'st';
@@ -102,7 +108,7 @@ const GraduationDashboard = ({ recommendations, studentInfo, completedUnits, edi
               <AcademicCapIcon className="h-4 w-4" />
               <span>Units</span>
             </div>
-            <p className="text-2xl font-bold text-gray-800">{actualCompletedCount} / {TOTAL_REQUIRED_UNITS}</p>
+            <p className="text-2xl font-bold text-gray-800">{effectiveUnitCount} / {TOTAL_REQUIRED_UNITS}</p>
             <p className="text-xs text-gray-400">{actualUnitsRemaining} remaining</p>
           </div>
           <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
@@ -122,7 +128,7 @@ const GraduationDashboard = ({ recommendations, studentInfo, completedUnits, edi
               Year {currentPosition.year}, Semester {currentPosition.semester}
             </p>
             <p className="text-xs text-gray-400">
-              {actualCompletedCount} units completed · {currentPosition.semesterOrder}{ordinal(currentPosition.semesterOrder)} semester
+              {effectiveUnitCount} effective units · {currentPosition.semesterOrder}{ordinal(currentPosition.semesterOrder)} semester
             </p>
           </div>
         </div>

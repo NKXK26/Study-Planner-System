@@ -235,6 +235,7 @@ const Dashboard = () => {
 				links: [
 					{ name: 'Upload Study Planner', href: '/view/upload_planner', permission: 'planner:read' },
 					{ name: 'Compare Completed Units', href: '/view/compare_study_planner', permission: 'planner:read' },
+					{ name: 'Study Planner Maker', href: '/view/study-planner-maker', permission: 'planner:read' },
 					{ name: 'Study Planner Management', href: '/view/study-planner', permission: 'planner:read' },
 					{ name: 'Differentiate Study Planners', href: '/view/compare-planners', permission: 'planner:read' },
 				],

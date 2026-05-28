@@ -5,8 +5,6 @@ import Link from 'next/link';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
 
 // ─── constants ─────────────────────────────────────────────────────────────────
-const OLLAMA_URL = process.env.NEXT_PUBLIC_OLLAMA_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = 'llama3.2:3b';
 const DEFAULT_CREDIT_POINTS = '12.5';
 
 const DEFAULT_UNIT_TYPES = [
@@ -39,12 +37,10 @@ const Step = ({ n, label, active, done }) => (
 const StepDivider = () => <div className="flex-1 h-px bg-gray-200 mx-1" />;
 
 // ─── Inline colour picker for a unit type ─────────────────────────────────────
-// Renders a hidden <input type="color"> tied to a visible swatch button.
 const UnitTypeColourPicker = ({ typeOpt, onChange }) => {
   const inputRef = useRef(null);
   return (
     <div className="relative group">
-      {/* Hidden native colour picker */}
       <input
         ref={inputRef}
         type="color"
@@ -53,12 +49,10 @@ const UnitTypeColourPicker = ({ typeOpt, onChange }) => {
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         title={`Change colour for ${typeOpt.name}`}
       />
-      {/* Visible swatch */}
       <div
         className="w-6 h-6 rounded-md border-2 border-white shadow-md cursor-pointer ring-1 ring-gray-200 transition-transform group-hover:scale-110"
         style={{ backgroundColor: typeOpt.colour || '#cccccc' }}
       />
-      {/* Tooltip */}
       <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5
                        bg-gray-800 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
         Change colour
@@ -67,7 +61,7 @@ const UnitTypeColourPicker = ({ typeOpt, onChange }) => {
   );
 };
 
-// ─── Unit type legend / colour manager (used in step 3 left panel) ────────────
+// ─── Unit type legend / colour manager ────────────────────────────────────────
 const UnitTypeLegend = ({ unitTypeOptions, setUnitTypeOptions }) => {
   const updateColour = (id, colour) =>
     setUnitTypeOptions(prev => prev.map(opt => opt.id === id ? { ...opt, colour } : opt));
@@ -96,23 +90,18 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
   useEffect(() => setLocalColors(colors), [colors]);
 
   const handleChange = (idx, typeId) => {
-  // Get the colour of the current PDF block
-  const pdfColour = localColors[idx].color;
-
-  // Update the local mapping (selectedTypeId)
-  setLocalColors(prev => prev.map((c, i) =>
-    i === idx ? { ...c, selectedTypeId: typeId } : c
-  ));
-
-  // If a unit type was selected, change its colour to match the PDF colour
-  if (typeId !== null) {
-    setUnitTypeOptions(prevOpts =>
-      prevOpts.map(opt =>
-        opt.id === typeId ? { ...opt, colour: pdfColour } : opt
-      )
-    );
-  }
-};
+    const pdfColour = localColors[idx].color;
+    setLocalColors(prev => prev.map((c, i) =>
+      i === idx ? { ...c, selectedTypeId: typeId } : c
+    ));
+    if (typeId !== null) {
+      setUnitTypeOptions(prevOpts =>
+        prevOpts.map(opt =>
+          opt.id === typeId ? { ...opt, colour: pdfColour } : opt
+        )
+      );
+    }
+  };
 
   const addUnitType = () => {
     const name = newTypeName.trim();
@@ -133,7 +122,7 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
   };
 
   const updateUnitTypeColour = (id, newColour) =>
-    setUnitTypeOptions(prev => prev.map(opt => opt.id === id ? { ...opt, colour: newColour } : opt));
+    setUnitTypeOptions(prev => prev.map(o => o.id === id ? { ...o, colour: newColour } : o));
 
   const mappedCount = localColors.filter(c => c.selectedTypeId).length;
 
@@ -147,7 +136,6 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
             <p className="text-sm text-gray-500 mt-1">Add unit types, set their row colour, then map each PDF colour.</p>
           </div>
 
-          {/* Unit type manager */}
           <div className="px-5 pt-4 pb-3 border-b border-gray-200 bg-gray-50">
             <div className="flex gap-2 mb-3">
               <input
@@ -169,7 +157,6 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
                   {unitTypeOptions.map(opt => (
                     <div key={opt.id}
                       className="flex items-center gap-1.5 bg-white rounded-full border border-gray-200 px-2.5 py-1 text-sm">
-                      {/* Inline colour picker swatch */}
                       <div className="relative">
                         <input
                           type="color"
@@ -193,7 +180,6 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
             }
           </div>
 
-          {/* Colour list */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
             {localColors.length === 0
               ? <p className="text-sm text-gray-400 text-center py-8">No colours detected in the PDF.</p>
@@ -219,7 +205,6 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
             }
           </div>
 
-          {/* Footer */}
           <div className="px-5 py-4 border-t border-gray-200 bg-white flex items-center justify-between gap-3">
             <button onClick={onCancel}
               className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-all">
@@ -246,7 +231,6 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
           </div>
         </div>
 
-        {/* Right: PDF preview */}
         <div className="flex-1 bg-gray-900 flex flex-col">
           <div className="px-5 py-3 border-b border-gray-700 flex items-center justify-between">
             <span className="text-sm font-medium text-gray-300">PDF Preview</span>
@@ -389,9 +373,9 @@ const EditableUnitsTable = ({ units, setUnits, unitTypeOptions }) => {
   );
 };
 
-// ─── Regex extraction ──────────────────────────────────────────────────────────
+// ─── Regex extraction (no AI) ─────────────────────────────────────────────────
 function extractUnitsWithRegex(rawText, onProgress) {
-  onProgress?.('Using pattern matching to find units…');
+  onProgress?.('Extracting units using pattern matching…');
   let text = rawText.replace(/([A-Z]{2,4})\s+(\d{4,5})/gi, '$1$2');
   text = text.replace(/\b([A-Z]{2,4})\s+(\d{2,3})\s+(\d{2})\b/gi, '$1$2$3');
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -427,58 +411,10 @@ function extractUnitsWithRegex(rawText, onProgress) {
       unit_code: code,
       name: name || '',
       credit_points: DEFAULT_CREDIT_POINTS,
-      _suggestedTypeName: null,
+      unit_type_id: null,
     });
   }
   return units;
-}
-
-// ─── Ollama extraction ─────────────────────────────────────────────────────────
-async function extractUnitsWithOllama(rawText, unitTypeNames, colorHints, onProgress) {
-  let cleanedText = rawText.replace(/\[[A-Z]+\]\s*/gi, '').replace(/\[(Core|Major|Elective)\]\s*/gi, '');
-  const CHUNK_SIZE = 4800;
-  const chunks = [];
-  for (let i = 0; i < cleanedText.length; i += CHUNK_SIZE) chunks.push(cleanedText.slice(i, i + CHUNK_SIZE));
-  const typeList = unitTypeNames.join(', ');
-  const allUnits = [];
-  const seenCodes = new Set();
-  for (let ci = 0; ci < chunks.length; ci++) {
-    onProgress?.(`AI reading chunk ${ci + 1} of ${chunks.length}…`);
-    const prompt = `Extract university units from this course planner text. Return ONLY a JSON array.
-Unit types: ${typeList}
-Rules: unit_code = 2-4 letters + 4-5 digits; name = full title; credit_points = 12.5 if not found; unit_type must be one of: ${typeList}
-Examples: {"unit_code":"COS10009","name":"Introduction to Programming","credit_points":12.5,"unit_type":"Core"}
-Now parse:
-${chunks[ci]}
-JSON array:`;
-    try {
-      const res = await fetch(`${OLLAMA_URL}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: OLLAMA_MODEL, prompt, stream: false, options: { temperature: 0.2, num_predict: 3000 } }),
-      });
-      const data = await res.json();
-      let raw = data.response.trim().replace(/```json\s*|\s*```/g, '');
-      const match = raw.match(/\[[\s\S]*?\]/);
-      if (match) {
-        const parsed = JSON.parse(match[0]);
-        for (const item of parsed) {
-          const code = normalizeCode(item.unit_code);
-          if (code && !seenCodes.has(code)) {
-            seenCodes.add(code);
-            allUnits.push({
-              _uid: uid(),
-              unit_code: code,
-              name: (item.name || '').trim(),
-              credit_points: item.credit_points != null ? String(item.credit_points) : DEFAULT_CREDIT_POINTS,
-              _suggestedTypeName: (item.unit_type || unitTypeNames[0]).trim(),
-            });
-          }
-        }
-      }
-    } catch (err) { console.warn(err); }
-  }
-  return allUnits;
 }
 
 // ─── Main page component ───────────────────────────────────────────────────────
@@ -557,16 +493,41 @@ const UploadPlannerPage = () => {
     }
   };
 
+  // Helper to enrich units with database information (name, credit points)
+  async function enrichUnitsWithDatabase(units) {
+    try {
+      const unitsRes = await SecureFrontendAuthHelper.authenticatedFetch('/api/units');
+      if (!unitsRes.ok) throw new Error('Failed to fetch units from database');
+      const unitsData = await unitsRes.json();
+      const allUnits = unitsData.data || unitsData;
+      const dbMap = new Map();
+      for (const u of allUnits) {
+        dbMap.set(u.UnitCode.toUpperCase(), {
+          name: u.Name,
+          creditPoints: u.CreditPoints,
+          unitTypeId: u.unitTypeId,
+        });
+      }
+      return units.map(unit => {
+        const dbUnit = dbMap.get(unit.unit_code.toUpperCase());
+        if (dbUnit) {
+          return {
+            ...unit,
+            name: dbUnit.name || unit.name,
+            credit_points: dbUnit.creditPoints?.toString() || unit.credit_points,
+          };
+        }
+        return unit;
+      });
+    } catch (err) {
+      console.warn('Could not enrich units from DB:', err);
+      return units;
+    }
+  }
+
   const handleMappingConfirm = async (mappedColors) => {
     const colorMapping = {};
     for (const c of mappedColors) if (c.selectedTypeId) colorMapping[c.color.toLowerCase()] = c.selectedTypeId;
-    // If no colours are mapped, we'll still proceed – the AI will suggest types.
-    // The colour mapping will be empty, so typeId will come from AI suggestion only.
-    if (Object.keys(colorMapping).length === 0) {
-      setExtractProgress('No colours mapped – using AI suggestions only.');
-      // Still proceed, but set a small delay to show the message
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
     setShowModal(false);
     setIsExtracting(true);
     setError(null);
@@ -586,31 +547,24 @@ const UploadPlannerPage = () => {
       let normalized = fullText.replace(/\r\n?/g, '\n');
       normalized = normalized.replace(/([A-Z]{2,4})\s+(\d{4,5})/gi, '$1$2');
       setRawPdfText(normalized);
-      const typeNames = unitTypeOptions.map(t => t.name);
-      let ollamaUnits = [];
-      try {
-        setExtractProgress('Sending to Ollama for AI extraction…');
-        ollamaUnits = await extractUnitsWithOllama(normalized, typeNames, colorMapping, (msg) => setExtractProgress(msg));
-        if (ollamaUnits.length < 3) throw new Error('Insufficient Ollama results');
-      } catch (ollamaErr) {
-        console.warn('Ollama extraction failed, using regex fallback:', ollamaErr.message);
-        setExtractProgress('Using pattern matching fallback…');
-        ollamaUnits = extractUnitsWithRegex(normalized, (msg) => setExtractProgress(msg));
-      }
-      const resolvedUnits = ollamaUnits.map(unit => {
-  let typeId = null;
-  const block = extractedBlocks.find(b => {
-    const match = b.text?.match(/([A-Z]{2,4}\d{4,5})/i);
-    return match ? normalizeCode(match[1]) === unit.unit_code : false;
-  });
-  if (block) typeId = colorMapping[block.color.toLowerCase()] ?? null;
-  if (!typeId && unit._suggestedTypeName) {
-    const suggested = unit._suggestedTypeName.toLowerCase();
-    const match = unitTypeOptions.find(t => t.name.toLowerCase() === suggested);
-    typeId = match?.id ?? unitTypeOptions[0]?.id ?? null;
-  }
-  return { ...unit, unit_type_id: typeId };
-});
+
+      setExtractProgress('Extracting unit codes and names…');
+      let extracted = extractUnitsWithRegex(normalized, (msg) => setExtractProgress(msg));
+
+      setExtractProgress('Matching with database…');
+      extracted = await enrichUnitsWithDatabase(extracted);
+
+      const resolvedUnits = extracted.map(unit => {
+        let typeId = null;
+        const block = extractedBlocks.find(b => {
+          const match = b.text?.match(/([A-Z]{2,4}\d{4,5})/i);
+          return match ? normalizeCode(match[1]) === unit.unit_code : false;
+        });
+        if (block) typeId = colorMapping[block.color.toLowerCase()] ?? null;
+        if (!typeId && unitTypeOptions.length > 0) typeId = unitTypeOptions[0].id;
+        return { ...unit, unit_type_id: typeId };
+      });
+
       setEditableUnits(resolvedUnits);
       setStep(3);
     } catch (err) {
@@ -623,105 +577,98 @@ const UploadPlannerPage = () => {
     }
   };
 
-// Helper: create a unit type in the database
-async function createUnitTypeInDB(name, colour) {
-  const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/unit_type', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, colour }),
-  });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
-    throw new Error(`Failed to create unit type "${name}": ${data.message || 'Unknown error'}`);
-  }
-  return data.data.id; // assumes response contains { success: true, data: { id: ... } }
-}
-
-// Updated handleSave
-const handleSave = async () => {
-  if (!plannerName.trim()) {
-    setError('Please enter a planner name.');
-    return;
-  }
-
-  const validUnits = editableUnits.filter(u => u.unit_code?.trim());
-  if (validUnits.length === 0) {
-    setError('No units to save.');
-    return;
-  }
-
-  setIsSaving(true);
-  setError(null);
-  setMessage(null);
-
-  try {
-    // ── 1. Fetch existing unit types from DB ──────────────────────────
-    const typesRes = await SecureFrontendAuthHelper.authenticatedFetch('/api/unit_type');
-    const typesData = await typesRes.json();
-    if (!typesData.success) throw new Error('Could not fetch unit types');
-    const existingTypes = typesData.data.map(t => ({
-      id: t.id,
-      name: t.name.toLowerCase(),
-      colour: t.colour,
-    }));
-
-    // ── 2. Create missing unit types (local types not in DB) ─────────
-    const localTypes = unitTypeOptions; // array of { id, name, colour }
-    const typeNameToRealId = new Map();
-
-    for (const localType of localTypes) {
-      const existing = existingTypes.find(et => et.name === localType.name.toLowerCase());
-      if (existing) {
-        typeNameToRealId.set(localType.name, existing.id);
-      } else {
-        // Create new unit type in DB
-        const newId = await createUnitTypeInDB(localType.name, localType.colour);
-        typeNameToRealId.set(localType.name, newId);
-      }
-    }
-
-    // ── 3. Prepare payload for /api/study-planner (unitCode + unitTypeName) ──
-    const unitsToSave = validUnits.map(u => {
-      const localType = unitTypeOptions.find(opt => opt.id === u.unit_type_id);
-      if (!localType) {
-        throw new Error(`Unit type not found for unit ${u.unit_code}`);
-      }
-      return {
-        unitCode: u.unit_code.trim(),
-        name: u.name?.trim() || '',
-        creditPoints: u.credit_points ? Number(u.credit_points) : 12.5,
-        unitTypeName: localType.name,   // send the name, not the ID
-      };
-    });
-
-    // ── 4. Save the planner ─────────────────────────────────────────
-    const saveRes = await SecureFrontendAuthHelper.authenticatedFetch('/api/study-planner', {
+  async function createUnitTypeInDB(name, colour) {
+    const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/unit_type', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: plannerName.trim(),
-        units: unitsToSave,
-      }),
+      body: JSON.stringify({ name, colour }),
     });
-
-    const saveResult = await saveRes.json();
-    if (!saveRes.ok || !saveResult.success) {
-      throw new Error(saveResult.message || `Save failed (${saveRes.status})`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(`Failed to create unit type "${name}": ${data.message || 'Unknown error'}`);
     }
-
-    setMessage(`✓ "${plannerName}" saved successfully with ${unitsToSave.length} units.`);
-    setStep(4);
-  } catch (err) {
-    const msg = err.message || 'Unknown error';
-    if (msg.includes('already exists')) {
-      setError('A planner with this name already exists. Please choose a different name.');
-    } else {
-      setError(`Failed to save: ${msg}`);
-    }
-  } finally {
-    setIsSaving(false);
+    return data.data.id;
   }
-};
+
+  const handleSave = async () => {
+    if (!plannerName.trim()) {
+      setError('Please enter a planner name.');
+      return;
+    }
+
+    const validUnits = editableUnits.filter(u => u.unit_code?.trim());
+    if (validUnits.length === 0) {
+      setError('No units to save.');
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const typesRes = await SecureFrontendAuthHelper.authenticatedFetch('/api/unit_type');
+      const typesData = await typesRes.json();
+      if (!typesData.success) throw new Error('Could not fetch unit types');
+      const existingTypes = typesData.data.map(t => ({
+        id: t.id,
+        name: t.name.toLowerCase(),
+        colour: t.colour,
+      }));
+
+      const localTypes = unitTypeOptions;
+      const typeNameToRealId = new Map();
+
+      for (const localType of localTypes) {
+        const existing = existingTypes.find(et => et.name === localType.name.toLowerCase());
+        if (existing) {
+          typeNameToRealId.set(localType.name, existing.id);
+        } else {
+          const newId = await createUnitTypeInDB(localType.name, localType.colour);
+          typeNameToRealId.set(localType.name, newId);
+        }
+      }
+
+      const unitsToSave = validUnits.map(u => {
+        const localType = unitTypeOptions.find(opt => opt.id === u.unit_type_id);
+        if (!localType) {
+          throw new Error(`Unit type not found for unit ${u.unit_code}`);
+        }
+        return {
+          unitCode: u.unit_code.trim(),
+          name: u.name?.trim() || '',
+          creditPoints: u.credit_points ? Number(u.credit_points) : 12.5,
+          unitTypeName: localType.name,
+        };
+      });
+
+      const saveRes = await SecureFrontendAuthHelper.authenticatedFetch('/api/study-planner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: plannerName.trim(),
+          units: unitsToSave,
+        }),
+      });
+
+      const saveResult = await saveRes.json();
+      if (!saveRes.ok || !saveResult.success) {
+        throw new Error(saveResult.message || `Save failed (${saveRes.status})`);
+      }
+
+      setMessage(`✓ "${plannerName}" saved successfully with ${unitsToSave.length} units.`);
+      setStep(4);
+    } catch (err) {
+      const msg = err.message || 'Unknown error';
+      if (msg.includes('already exists')) {
+        setError('A planner with this name already exists. Please choose a different name.');
+      } else {
+        setError(`Failed to save: ${msg}`);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const isLoading = isExtracting || isSaving;
 
@@ -741,10 +688,7 @@ const handleSave = async () => {
           />
         )}
 
-        {/* ── Left column: scrollable units panel ── */}
         <div className="w-1/2 flex-shrink-0 flex flex-col bg-gray-50 border-r border-gray-200 overflow-y-auto">
-
-          {/* Sticky header */}
           <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4">
             <div className="flex items-center justify-between mb-1">
               <h1 className="text-base font-bold text-gray-900">Review Extracted Units</h1>
@@ -764,7 +708,6 @@ const handleSave = async () => {
             </div>
           </div>
 
-          {/* Planner name */}
           <div className="px-6 pt-4 pb-2">
             <label className="block">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Planner Name</span>
@@ -777,7 +720,6 @@ const handleSave = async () => {
             </label>
           </div>
 
-          {/* ── Unit type colour manager ── */}
           <div className="px-6 py-3 border-b border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Unit Type Colours</p>
             <div className="flex flex-wrap gap-2">
@@ -785,9 +727,7 @@ const handleSave = async () => {
                 <label
                   key={opt.id}
                   className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white shadow-sm cursor-pointer hover:border-gray-300 transition-all group"
-                  title={`Click swatch to change colour for "${opt.name}"`}
                 >
-                  {/* Colour swatch — clicking it opens native colour picker */}
                   <div className="relative flex-shrink-0">
                     <input
                       type="color"
@@ -797,7 +737,6 @@ const handleSave = async () => {
                           prev.map(o => o.id === opt.id ? { ...o, colour: e.target.value } : o)
                         )
                       }
-                      // Position the hidden input over just the swatch area
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onClick={(e) => e.stopPropagation()}
                     />
@@ -813,7 +752,6 @@ const handleSave = async () => {
             <p className="text-[10px] text-gray-400 mt-1.5">Click the coloured square to change a type's row colour — table updates instantly.</p>
           </div>
 
-          {/* Table */}
           <div className="px-6 py-4 flex-1">
             <EditableUnitsTable
               units={editableUnits}
@@ -827,7 +765,6 @@ const handleSave = async () => {
             )}
           </div>
 
-          {/* Debug raw text */}
           {rawPdfText && (
             <div className="px-6 pb-4">
               <details>
@@ -837,7 +774,6 @@ const handleSave = async () => {
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div className="mx-6 mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-start gap-2">
               <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -847,7 +783,6 @@ const handleSave = async () => {
             </div>
           )}
 
-          {/* Sticky bottom action bar */}
           <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center gap-3">
             <button onClick={resetAll}
               className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-all">
@@ -874,7 +809,6 @@ const handleSave = async () => {
           </div>
         </div>
 
-        {/* ── Right column: PDF preview — full height, nothing above iframe ── */}
         <div className="w-1/2 flex flex-col bg-gray-900 overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-700 flex-shrink-0 flex items-center gap-3">
             <span className="text-sm font-semibold text-gray-200">PDF Preview</span>
@@ -950,7 +884,7 @@ const handleSave = async () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z" />
                 </svg>
                 <p className="text-sm text-gray-500">{step === 4 ? 'Upload complete' : 'Click to upload a PDF study planner'}</p>
-                {step !== 4 && <p className="text-xs text-gray-400 mt-1">Powered by Ollama {OLLAMA_MODEL} — runs locally</p>}
+                {step !== 4 && <p className="text-xs text-gray-400 mt-1">Units are extracted using pattern matching and enriched from the database.</p>}
               </div>
             ) : (
               <div className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50">
@@ -975,7 +909,7 @@ const handleSave = async () => {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
               <div>
-                <p className="text-sm font-medium text-gray-900">Extracting units with AI…</p>
+                <p className="text-sm font-medium text-gray-900">Extracting units…</p>
                 <p className="text-xs text-gray-400 mt-0.5">{extractProgress || 'Working…'}</p>
               </div>
             </div>
