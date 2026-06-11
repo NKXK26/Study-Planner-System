@@ -104,7 +104,6 @@ export const isAvailableInSemester = (unit, _year, semester) => {
 };
 
 // ========================= FYP CONFLICT DETECTION =========================
-// Returns true if adding 'unit' to 'existingUnits' would put both FYP A and FYP B in the same semester
 export function hasFypConflict(unit, existingUnits) {
     const code = (unit.UnitCode || unit.code || '').toUpperCase();
     const normCode = getNormalizedUnitCode(code);
@@ -121,24 +120,32 @@ export function hasFypConflict(unit, existingUnits) {
     return false;
 }
 
-// ========================= CENTRAL REQUIREMENTS FUNCTION =========================
-export const getRemainingRequirements = (completedCore, completedMajor, completedElective) => ({
-    needCore: Math.max(0, REQUIRED_CORE - completedCore),
-    needMajor: Math.max(0, REQUIRED_MAJOR - completedMajor),
-    needElective: Math.max(0, REQUIRED_ELECTIVE - completedElective),
-});
+// ========================= DYNAMIC REQUIREMENT HELPER =========================
+/**
+ * Convert planner template requirements into a map of category → remaining needed
+ * @param {Array} templateRequirements - array of { unitType: { Name }, requiredCount }
+ * @param {Object} completedCountsByCategory - e.g. { core: 5, major: 3, elective: 2, wil: 1 }
+ * @returns {Object} remaining needs per category
+ */
+export const getRemainingRequirementsFromTemplate = (templateRequirements, completedCountsByCategory = {}) => {
+    const remaining = {};
+    templateRequirements.forEach(req => {
+        const catName = req.unitType.Name.toLowerCase();
+        const completed = completedCountsByCategory[catName] || 0;
+        remaining[catName] = Math.max(0, req.requiredCount - completed);
+    });
+    return remaining;
+};
 
-// ========================= CORE SCHEDULING FUNCTION =========================
+// ========================= CORE SCHEDULING FUNCTION (DYNAMIC CATEGORIES) =========================
 export const scheduleRemainingUnits = (
-    missingUnits,
-    completedUnitsMap,
-    _totalCredits,
+    missingUnits,           // units that are not yet completed (from planner)
+    completedUnitsMap,      // Map of already completed unit codes (original + mapped)
+    totalCredits,           // unused, kept for compatibility
     currentYear,
     currentSemester,
-    totalUnitsCompleted,
-    remainingCoreNeeded,
-    remainingMajorNeeded,
-    electiveNeeded
+    totalUnitsCompleted,    // total completed unit count (for ICT20016 eligibility)
+    categoryNeeds           // e.g. { core: 8, major: 8, elective: 8, wil: 1 }
 ) => {
     let remaining = [...missingUnits];
     const schedule = [];
@@ -149,30 +156,23 @@ export const scheduleRemainingUnits = (
         plannedCompletedCodes.add(getNormalizedUnitCode(code));
     });
     let plannedSemesters = [];
-    let scheduledCore = 0,
-        scheduledElective = 0,
-        scheduledMajor = 0;
+    let scheduledCounts = {};
+    // Initialize scheduled counts for each needed category
+    Object.keys(categoryNeeds).forEach(cat => scheduledCounts[cat] = 0);
     let semesterCounter = 0;
     const MAX_SEMESTERS = 12;
 
     const getPriorityBonus = (unit) => {
         const cat = getUnitCategory(unit);
-        const code = (unit.UnitCode || unit.code || '').toUpperCase();
-        if (cat === 'core' && scheduledCore < remainingCoreNeeded) return 30;
-        if (cat === 'major' && scheduledMajor < remainingMajorNeeded) return 30;
-        if (cat === 'elective' && scheduledElective < electiveNeeded) return 30;
-        if (code === 'ICT20016' && scheduledElective < electiveNeeded) return 40;
+        const remaining = categoryNeeds[cat] - scheduledCounts[cat];
+        if (remaining > 0) return 30;   // still need this category
         return 0;
     };
 
     while (remaining.length > 0 && semesterCounter < MAX_SEMESTERS) {
-        if (
-            scheduledCore >= remainingCoreNeeded &&
-            scheduledMajor >= remainingMajorNeeded &&
-            scheduledElective >= electiveNeeded
-        ) {
-            break;
-        }
+        // Check if all category needs are satisfied
+        const allMet = Object.keys(categoryNeeds).every(cat => scheduledCounts[cat] >= categoryNeeds[cat]);
+        if (allMet) break;
 
         const currentOrder = getSemesterOrderValue(current.year, current.semester);
         const available = [];
@@ -181,9 +181,8 @@ export const scheduleRemainingUnits = (
             const code = (unit.UnitCode || unit.code || '').toUpperCase();
             const normalizedCode = getNormalizedUnitCode(code);
 
-            if (cat === 'core' && scheduledCore >= remainingCoreNeeded) continue;
-            if (cat === 'major' && scheduledMajor >= remainingMajorNeeded) continue;
-            if (cat === 'elective' && scheduledElective >= electiveNeeded) continue;
+            // Skip if we already have enough of this category
+            if (categoryNeeds[cat] !== undefined && scheduledCounts[cat] >= categoryNeeds[cat]) continue;
 
             // FYP B needs FYP A
             if (code === 'COS40006' || code === 'SWE40002') {
@@ -220,7 +219,7 @@ export const scheduleRemainingUnits = (
             }
             if (!prereqsMet) continue;
 
-            // ICT20016 eligibility
+            // ICT20016 eligibility (double‑count WIL unit)
             if (
                 code === 'ICT20016' &&
                 !(
@@ -249,9 +248,8 @@ export const scheduleRemainingUnits = (
         for (const unit of available) {
             const code = (unit.UnitCode || unit.code || '').toUpperCase();
             const cat = getUnitCategory(unit);
-            if (cat === 'core' && scheduledCore >= remainingCoreNeeded) continue;
-            if (cat === 'major' && scheduledMajor >= remainingMajorNeeded) continue;
-            if (cat === 'elective' && scheduledElective >= electiveNeeded) continue;
+            // Skip if category already satisfied
+            if (categoryNeeds[cat] !== undefined && scheduledCounts[cat] >= categoryNeeds[cat]) continue;
 
             // Prevent FYP A and FYP B in the same semester
             if (hasFypConflict(unit, semesterUnits)) continue;
@@ -264,11 +262,12 @@ export const scheduleRemainingUnits = (
                 semesterUnits.push(unit);
                 semesterCredits += credits;
 
-                if (cat === 'core') scheduledCore++;
-                else if (cat === 'major') scheduledMajor++;
-                else if (cat === 'elective') {
-                    scheduledElective++;
-                    if (code === 'ICT20016') scheduledElective++; // double count
+                // Increment scheduled count for the category
+                scheduledCounts[cat] = (scheduledCounts[cat] || 0) + 1;
+
+                // Special double‑count for ICT20016 (WIL unit)
+                if (cat === 'wil' && code === 'ICT20016') {
+                    scheduledCounts[cat] = (scheduledCounts[cat] || 0) + 1;
                 }
             }
         }
@@ -303,17 +302,14 @@ export const scheduleRemainingUnits = (
 };
 
 // ========================= OPTIMISATION FUNCTIONS =========================
-// Redistribute units to avoid very light semesters (e.g., 4+1 → 3+2)
 export function balanceSemesterLoads(schedule, completedUnitsMap) {
     if (schedule.length < 2) return schedule;
 
-    // Create a mutable copy
     const balanced = schedule.map(sem => ({
         ...sem,
         units: [...sem.units],
     }));
 
-    // Keep track of completed codes for prerequisite checks (including previous semesters)
     let cumulativeCompleted = new Set(completedUnitsMap.keys());
     const semesterOrders = balanced.map(sem => sem.order);
 
@@ -321,24 +317,18 @@ export function balanceSemesterLoads(schedule, completedUnitsMap) {
         const currentSem = balanced[i];
         const nextSem = balanced[i + 1];
 
-        // Only attempt to rebalance if next semester is light (≤2 units) and current has ≥3
         if (nextSem.units.length > 2 || currentSem.units.length < 3) continue;
 
-        // Try to move one unit from current to next
         for (let uIdx = 0; uIdx < currentSem.units.length; uIdx++) {
             const unit = currentSem.units[uIdx];
             const code = (unit.UnitCode || unit.code || '').toUpperCase();
 
-            // Check if unit can be moved to next semester
             if (!isAvailableInSemester(unit, nextSem.year, nextSem.semester)) continue;
 
-            // Prerequisite check: all prerequisites must be satisfied by cumulative completed up to next semester
             let prereqsMet = true;
             for (const prereq of unit.prerequisites || []) {
                 const normPrereq = getNormalizedUnitCode(prereq);
                 if (cumulativeCompleted.has(prereq) || cumulativeCompleted.has(normPrereq)) continue;
-                // Also need to check if prereq is scheduled in currentSem or earlier? Since we are moving
-                // unit from current to next, the prereq could be in currentSem (which will still be taken before nextSem)
                 let found = false;
                 for (let k = 0; k <= i; k++) {
                     if (balanced[k].units.some(u => {
@@ -356,35 +346,25 @@ export function balanceSemesterLoads(schedule, completedUnitsMap) {
             }
             if (!prereqsMet) continue;
 
-            // Prevent FYP A/B conflict in next semester
             if (hasFypConflict(unit, nextSem.units)) continue;
 
-            // Capacity check
             const credits = unit.CreditPoints || DEFAULT_CREDIT_POINTS;
             if (nextSem.units.length >= MAX_UNITS_PER_SEMESTER) continue;
             if (nextSem.totalCredits + credits > MAX_CREDITS_PER_SEMESTER) continue;
 
-            // Also ensure current semester still respects its own limits after removal
-            if (currentSem.units.length - 1 < 0) continue; // safety
-
-            // Perform the move
             currentSem.units.splice(uIdx, 1);
             currentSem.unitCount = currentSem.units.length;
             currentSem.totalCredits -= credits;
             nextSem.units.push(unit);
             nextSem.unitCount = nextSem.units.length;
             nextSem.totalCredits += credits;
-
-            // Update cumulative completed set for future checks (add the moved unit as if taken in current semester)
-            // Actually we keep cumulative as is – the unit is still completed before next semester.
-            // No need to add because it's already considered via the loop over semesters.
-            break; // Only move one unit per pair
+            break;
         }
     }
 
-    // Remove any empty semesters (should not happen with this balancing, but safe)
     return balanced.filter(sem => sem.units.length > 0);
 }
+
 export function optimizeFinalSemester(schedule) {
     if (schedule.length < 2) return schedule;
     const last = schedule[schedule.length - 1];
@@ -435,7 +415,6 @@ export function compactFinalSemesters(schedule, completedUnitsMap) {
                     if (!found) { prereqsMet = false; break; }
                 }
                 if (!prereqsMet) continue;
-                // Prevent FYP A and FYP B from being moved into the same semester
                 if (hasFypConflict(unit, currentSem.units)) continue;
                 const credits = unit.CreditPoints || DEFAULT_CREDIT_POINTS;
                 if (currentSem.units.length >= MAX_UNITS_PER_SEMESTER) break;

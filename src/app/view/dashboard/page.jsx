@@ -233,8 +233,9 @@ const Dashboard = () => {
 				permission: 'system',
 				isNew: true,
 				links: [
+					{ name: 'Study Planner Templates', href: '/view/planner-templates', permission: 'planner:read' },
 					{ name: 'Upload Study Planner', href: '/view/upload_planner', permission: 'planner:read' },
-					{ name: 'Compare Completed Units', href: '/view/compare_study_planner', permission: 'planner:read' },
+					{ name: 'Unit Suggestions', href: '/view/compare_study_planner', permission: 'planner:read' },
 					{ name: 'Study Planner Maker', href: '/view/study-planner-maker', permission: 'planner:read' },
 					{ name: 'Study Planner Management', href: '/view/study-planner', permission: 'planner:read' },
 					{ name: 'Differentiate Study Planners', href: '/view/compare-planners', permission: 'planner:read' },

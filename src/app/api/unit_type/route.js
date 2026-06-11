@@ -1,6 +1,7 @@
-import prisma from "@utils/db/db";
-import { NextResponse } from "next/server";
-import SecureSessionManager from "@utils/auth/SimpleSessionManager";
+// app/api/unit_type/route.js
+import { NextResponse } from 'next/server';
+import prisma from '@utils/db/db';
+import SecureSessionManager from '@utils/auth/SimpleSessionManager';
 
 /**
  * Validate authenticated request (same as study-planner route)
@@ -32,21 +33,33 @@ async function validateAuthenticatedRequest(req) {
 
 /**
  * GET /api/unit_type
- * Returns all unit types (id, name, colour)
+ * Returns all unit types (ID, Name, Colour) → transforms to { id, name, colour }
  */
 export async function GET(req) {
     const authResult = await validateAuthenticatedRequest(req);
     if (authResult.error) return authResult.error;
 
     try {
+        // Use correct uppercase field names from the model
         const unitTypes = await prisma.unitType.findMany({
-            select: { id: true, name: true, colour: true },
-            orderBy: { name: 'asc' },
+            select: {
+                ID: true,
+                Name: true,
+                Colour: true,
+            },
+            orderBy: { Name: 'asc' },
         });
+
+        // Transform to camelCase for the frontend
+        const formatted = unitTypes.map(t => ({
+            id: t.ID,
+            name: t.Name,
+            colour: t.Colour,
+        }));
 
         return NextResponse.json({
             success: true,
-            data: unitTypes,
+            data: formatted,
         });
     } catch (error) {
         console.error('GET /api/unit_type error:', error);
@@ -80,9 +93,9 @@ export async function POST(req) {
             return NextResponse.json({ success: false, message: 'Unit type name is required' }, { status: 400 });
         }
 
-        // Check for duplicate (case‑insensitive)
+        // Check for duplicate (case‑insensitive) – use Name field
         const existing = await prisma.unitType.findFirst({
-            where: { name: { equals: name.trim(), mode: 'insensitive' } },
+            where: { Name: { equals: name.trim(), mode: 'insensitive' } },
         });
         if (existing) {
             return NextResponse.json(
@@ -93,15 +106,15 @@ export async function POST(req) {
 
         const newType = await prisma.unitType.create({
             data: {
-                name: name.trim(),
-                colour: colour || '#cccccc',
+                Name: name.trim(),
+                Colour: colour || '#cccccc',
             },
-            select: { id: true, name: true, colour: true },
+            select: { ID: true, Name: true, Colour: true },
         });
 
         return NextResponse.json({
             success: true,
-            data: { id: newType.id, name: newType.name, colour: newType.colour },
+            data: { id: newType.ID, name: newType.Name, colour: newType.Colour },
         }, { status: 201 });
     } catch (error) {
         console.error('POST /api/unit_type error:', error);

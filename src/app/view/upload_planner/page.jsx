@@ -36,7 +36,7 @@ const Step = ({ n, label, active, done }) => (
 
 const StepDivider = () => <div className="flex-1 h-px bg-gray-200 mx-1" />;
 
-// ─── Inline colour picker for a unit type ─────────────────────────────────────
+// ─── Inline colour picker ─────────────────────────────────────────────────────
 const UnitTypeColourPicker = ({ typeOpt, onChange }) => {
   const inputRef = useRef(null);
   return (
@@ -61,7 +61,7 @@ const UnitTypeColourPicker = ({ typeOpt, onChange }) => {
   );
 };
 
-// ─── Unit type legend / colour manager ────────────────────────────────────────
+// ─── Unit type legend ────────────────────────────────────────────────────────
 const UnitTypeLegend = ({ unitTypeOptions, setUnitTypeOptions }) => {
   const updateColour = (id, colour) =>
     setUnitTypeOptions(prev => prev.map(opt => opt.id === id ? { ...opt, colour } : opt));
@@ -83,9 +83,45 @@ const UnitTypeLegend = ({ unitTypeOptions, setUnitTypeOptions }) => {
 };
 
 // ─── Mapping modal ─────────────────────────────────────────────────────────────
+// onConfirm now receives (mappedColors, selectedTemplateId, selectedTemplateName)
 const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions, onConfirm, onCancel, isParsing }) => {
   const [localColors, setLocalColors] = useState(colors);
   const [newTypeName, setNewTypeName] = useState('');
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      setLoadingTemplates(true);
+      try {
+        const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/planner-templates');
+        const json = await res.json();
+        if (json.success) setTemplates(json.data);
+      } catch (err) {
+        console.error('Failed to fetch templates', err);
+      } finally {
+        setLoadingTemplates(false);
+      }
+    };
+    fetchTemplates();
+  }, []);
+
+  const handleTemplateChange = (templateId) => {
+    const template = templates.find(t => t.id === parseInt(templateId));
+    if (!template) {
+      setSelectedTemplateId('');
+      return;
+    }
+    const requiredNames = Object.keys(template.requirements);
+    const newOptions = requiredNames.map((name, idx) => ({
+      id: -(idx + 1000),
+      name,
+      colour: '#cccccc',
+    }));
+    setUnitTypeOptions(newOptions);
+    setSelectedTemplateId(templateId);
+  };
 
   useEffect(() => setLocalColors(colors), [colors]);
 
@@ -126,6 +162,13 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
 
   const mappedCount = localColors.filter(c => c.selectedTypeId).length;
 
+  // Pass selected template info up to parent on confirm
+  const handleConfirm = () => {
+    const tplId = selectedTemplateId ? parseInt(selectedTemplateId) : null;
+    const tplName = templates.find(t => t.id === tplId)?.name ?? null;
+    onConfirm(localColors, tplId, tplName);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-stretch">
       <div className="flex w-full h-full">
@@ -136,6 +179,27 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
             <p className="text-sm text-gray-500 mt-1">Add unit types, set their row colour, then map each PDF colour.</p>
           </div>
 
+          {/* Template selector */}
+          <div className="px-5 pt-4 pb-2 border-b border-gray-200 bg-gray-50">
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Load from template (optional)</label>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => handleTemplateChange(e.target.value)}
+              disabled={loadingTemplates}
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm bg-white
+                         focus:outline-none focus:ring-2 focus:ring-[#cc2131]/30"
+            >
+              <option value="">— Manual (start from empty) —</option>
+              {templates.map(tpl => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-400 mt-1">
+              {selectedTemplateId ? 'Unit types replaced with template requirements' : 'Select a template to auto‑fill unit types'}
+            </p>
+          </div>
+
+          {/* Unit type management */}
           <div className="px-5 pt-4 pb-3 border-b border-gray-200 bg-gray-50">
             <div className="flex gap-2 mb-3">
               <input
@@ -151,9 +215,9 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
               </button>
             </div>
             {unitTypeOptions.length === 0
-              ? <p className="text-xs text-gray-400 italic">No unit types yet. Add one above.</p>
+              ? <p className="text-xs text-gray-400 italic">No unit types yet. Add one above or load a template.</p>
               : (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
                   {unitTypeOptions.map(opt => (
                     <div key={opt.id}
                       className="flex items-center gap-1.5 bg-white rounded-full border border-gray-200 px-2.5 py-1 text-sm">
@@ -180,6 +244,7 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
             }
           </div>
 
+          {/* Colour mapping rows */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
             {localColors.length === 0
               ? <p className="text-sm text-gray-400 text-center py-8">No colours detected in the PDF.</p>
@@ -211,7 +276,7 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
               Cancel
             </button>
             <button
-              onClick={() => onConfirm(localColors)}
+              onClick={handleConfirm}
               disabled={mappedCount === 0 || isParsing || unitTypeOptions.length === 0}
               className="flex-1 px-4 py-2 rounded-lg bg-[#cc2131] hover:bg-[#b01d2c] disabled:bg-gray-300
                          text-white text-sm font-semibold transition-all flex items-center justify-center gap-2"
@@ -231,6 +296,7 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
           </div>
         </div>
 
+        {/* Right panel: PDF preview */}
         <div className="flex-1 bg-gray-900 flex flex-col">
           <div className="px-5 py-3 border-b border-gray-700 flex items-center justify-between">
             <span className="text-sm font-medium text-gray-300">PDF Preview</span>
@@ -254,7 +320,41 @@ const MappingModal = ({ pdfBlobUrl, colors, unitTypeOptions, setUnitTypeOptions,
   );
 };
 
-// ─── Editable units table ──────────────────────────────────────────────────────
+// ─── Template selector banner (used on review step) ───────────────────────────
+const ReviewTemplateBanner = ({ allTemplates, selectedTemplateId, selectedTemplateName, onChange }) => {
+  return (
+    <div className="px-6 py-3 border-b border-gray-100 bg-blue-50">
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <p className="text-xs font-semibold text-blue-800">Degree Programme Template</p>
+          <p className="text-[10px] text-blue-500 mt-0.5">
+            This links the saved planner to the selected template for graduation progress tracking.
+          </p>
+        </div>
+        <select
+          value={selectedTemplateId ?? ''}
+          onChange={e => onChange(e.target.value ? parseInt(e.target.value) : null)}
+          className="border border-blue-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[200px]"
+        >
+          <option value="">— No template —</option>
+          {allTemplates.map(t => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+      </div>
+      {selectedTemplateName && (
+        <p className="text-[10px] text-blue-600 mt-1.5 flex items-center gap-1">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          Linked to: <span className="font-semibold ml-0.5">{selectedTemplateName}</span>
+        </p>
+      )}
+    </div>
+  );
+};
+
+// ─── Editable units table ─────────────────────────────────────────────────────
 const EditableUnitsTable = ({ units, setUnits, unitTypeOptions }) => {
   const getTypeColor = (typeId) =>
     unitTypeOptions.find(t => t.id === typeId)?.colour || '#f9fafb';
@@ -373,7 +473,7 @@ const EditableUnitsTable = ({ units, setUnits, unitTypeOptions }) => {
   );
 };
 
-// ─── Regex extraction (no AI) ─────────────────────────────────────────────────
+// ─── Regex extraction ──────────────────────────────────────────────────────────
 function extractUnitsWithRegex(rawText, onProgress) {
   onProgress?.('Extracting units using pattern matching…');
   let text = rawText.replace(/([A-Z]{2,4})\s+(\d{4,5})/gi, '$1$2');
@@ -417,7 +517,7 @@ function extractUnitsWithRegex(rawText, onProgress) {
   return units;
 }
 
-// ─── Main page component ───────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
 const UploadPlannerPage = () => {
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
@@ -436,6 +536,19 @@ const UploadPlannerPage = () => {
   const [error, setError] = useState(null);
   const [step, setStep] = useState(1);
   const fileInputRef = useRef(null);
+
+  // Template state — set from modal, editable on review step
+  const [allTemplates, setAllTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(null);
+  const selectedTemplateName = allTemplates.find(t => t.id === selectedTemplateId)?.name ?? null;
+
+  // Fetch templates once for the review-step banner (modal fetches its own copy)
+  useEffect(() => {
+    SecureFrontendAuthHelper.authenticatedFetch('/api/planner-templates')
+      .then(r => r.json())
+      .then(json => { if (json.success) setAllTemplates(json.data); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl); }, [pdfBlobUrl]);
   useEffect(() => {
@@ -457,6 +570,7 @@ const UploadPlannerPage = () => {
     setRawPdfText('');
     setEditableUnits([]);
     setUnitTypeOptions([...DEFAULT_UNIT_TYPES]);
+    setSelectedTemplateId(null);
     setMessage(null);
     setError(null);
     setStep(1);
@@ -493,7 +607,6 @@ const UploadPlannerPage = () => {
     }
   };
 
-  // Helper to enrich units with database information (name, credit points)
   async function enrichUnitsWithDatabase(units) {
     try {
       const unitsRes = await SecureFrontendAuthHelper.authenticatedFetch('/api/units');
@@ -525,9 +638,14 @@ const UploadPlannerPage = () => {
     }
   }
 
-  const handleMappingConfirm = async (mappedColors) => {
+  // Now receives templateId and templateName from modal
+  const handleMappingConfirm = async (mappedColors, tplId, tplName) => {
     const colorMapping = {};
     for (const c of mappedColors) if (c.selectedTypeId) colorMapping[c.color.toLowerCase()] = c.selectedTypeId;
+
+    // Persist the template selection from the modal
+    setSelectedTemplateId(tplId);
+
     setShowModal(false);
     setIsExtracting(true);
     setError(null);
@@ -591,16 +709,9 @@ const UploadPlannerPage = () => {
   }
 
   const handleSave = async () => {
-    if (!plannerName.trim()) {
-      setError('Please enter a planner name.');
-      return;
-    }
-
+    if (!plannerName.trim()) { setError('Please enter a planner name.'); return; }
     const validUnits = editableUnits.filter(u => u.unit_code?.trim());
-    if (validUnits.length === 0) {
-      setError('No units to save.');
-      return;
-    }
+    if (validUnits.length === 0) { setError('No units to save.'); return; }
 
     setIsSaving(true);
     setError(null);
@@ -616,10 +727,8 @@ const UploadPlannerPage = () => {
         colour: t.colour,
       }));
 
-      const localTypes = unitTypeOptions;
       const typeNameToRealId = new Map();
-
-      for (const localType of localTypes) {
+      for (const localType of unitTypeOptions) {
         const existing = existingTypes.find(et => et.name === localType.name.toLowerCase());
         if (existing) {
           typeNameToRealId.set(localType.name, existing.id);
@@ -631,9 +740,7 @@ const UploadPlannerPage = () => {
 
       const unitsToSave = validUnits.map(u => {
         const localType = unitTypeOptions.find(opt => opt.id === u.unit_type_id);
-        if (!localType) {
-          throw new Error(`Unit type not found for unit ${u.unit_code}`);
-        }
+        if (!localType) throw new Error(`Unit type not found for unit ${u.unit_code}`);
         return {
           unitCode: u.unit_code.trim(),
           name: u.name?.trim() || '',
@@ -647,6 +754,8 @@ const UploadPlannerPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: plannerName.trim(),
+          // Include the linked template ID (null if none selected)
+          plannerTemplateId: selectedTemplateId ?? null,
           units: unitsToSave,
         }),
       });
@@ -656,7 +765,8 @@ const UploadPlannerPage = () => {
         throw new Error(saveResult.message || `Save failed (${saveRes.status})`);
       }
 
-      setMessage(`✓ "${plannerName}" saved successfully with ${unitsToSave.length} units.`);
+      const tplNote = selectedTemplateName ? ` linked to "${selectedTemplateName}"` : '';
+      setMessage(`✓ "${plannerName}" saved successfully with ${unitsToSave.length} units${tplNote}.`);
       setStep(4);
     } catch (err) {
       const msg = err.message || 'Unknown error';
@@ -689,6 +799,7 @@ const UploadPlannerPage = () => {
         )}
 
         <div className="w-1/2 flex-shrink-0 flex flex-col bg-gray-50 border-r border-gray-200 overflow-y-auto">
+          {/* Sticky header */}
           <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4">
             <div className="flex items-center justify-between mb-1">
               <h1 className="text-base font-bold text-gray-900">Review Extracted Units</h1>
@@ -708,6 +819,7 @@ const UploadPlannerPage = () => {
             </div>
           </div>
 
+          {/* Planner name */}
           <div className="px-6 pt-4 pb-2">
             <label className="block">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Planner Name</span>
@@ -720,38 +832,21 @@ const UploadPlannerPage = () => {
             </label>
           </div>
 
+          {/* Template selector banner — pre-filled from modal choice, still editable */}
+          <ReviewTemplateBanner
+            allTemplates={allTemplates}
+            selectedTemplateId={selectedTemplateId}
+            selectedTemplateName={selectedTemplateName}
+            onChange={setSelectedTemplateId}
+          />
+
+          {/* Colour legend */}
           <div className="px-6 py-3 border-b border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Unit Type Colours</p>
-            <div className="flex flex-wrap gap-2">
-              {unitTypeOptions.map(opt => (
-                <label
-                  key={opt.id}
-                  className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white shadow-sm cursor-pointer hover:border-gray-300 transition-all group"
-                >
-                  <div className="relative flex-shrink-0">
-                    <input
-                      type="color"
-                      value={opt.colour || '#cccccc'}
-                      onChange={(e) =>
-                        setUnitTypeOptions(prev =>
-                          prev.map(o => o.id === opt.id ? { ...o, colour: e.target.value } : o)
-                        )
-                      }
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <div
-                      className="w-5 h-5 rounded-md border border-gray-300 shadow-inner transition-transform group-hover:scale-110"
-                      style={{ backgroundColor: opt.colour || '#cccccc' }}
-                    />
-                  </div>
-                  <span className="text-xs font-medium text-gray-700 select-none">{opt.name}</span>
-                </label>
-              ))}
-            </div>
-            <p className="text-[10px] text-gray-400 mt-1.5">Click the coloured square to change a type's row colour — table updates instantly.</p>
+            <UnitTypeLegend unitTypeOptions={unitTypeOptions} setUnitTypeOptions={setUnitTypeOptions} />
           </div>
 
+          {/* Units table */}
           <div className="px-6 py-4 flex-1">
             <EditableUnitsTable
               units={editableUnits}
@@ -765,6 +860,7 @@ const UploadPlannerPage = () => {
             )}
           </div>
 
+          {/* Debug raw text */}
           {rawPdfText && (
             <div className="px-6 pb-4">
               <details>
@@ -783,6 +879,7 @@ const UploadPlannerPage = () => {
             </div>
           )}
 
+          {/* Sticky footer */}
           <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex items-center gap-3">
             <button onClick={resetAll}
               className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-all">
@@ -809,6 +906,7 @@ const UploadPlannerPage = () => {
           </div>
         </div>
 
+        {/* PDF preview panel */}
         <div className="w-1/2 flex flex-col bg-gray-900 overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-700 flex-shrink-0 flex items-center gap-3">
             <span className="text-sm font-semibold text-gray-200">PDF Preview</span>
@@ -832,7 +930,7 @@ const UploadPlannerPage = () => {
     );
   }
 
-  // ── Steps 1, 2, 4: centred single-column layout ───────────────────────────
+  // ── Steps 1, 2, 4 ──────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50">
       {showModal && (
@@ -873,6 +971,7 @@ const UploadPlannerPage = () => {
               placeholder="e.g. CS Software Development 2025"
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#cc2131]/30 focus:border-[#cc2131] disabled:bg-gray-50 disabled:text-gray-400" />
           </label>
+
           <div>
             <span className="text-sm font-semibold text-gray-700 mb-2 block">Planner PDF</span>
             {step <= 1 || step === 4 ? (

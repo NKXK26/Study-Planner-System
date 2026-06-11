@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "name": "123",
+    "requirements": {
+      "Core": 10,
+      "Major": 18,
+      "Elective": 4
+    },
+    "createdAt": "2026-06-08T10:23:38.275Z"
+  }
+]

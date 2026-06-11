@@ -70,6 +70,9 @@ const GraduationDashboard = ({ recommendations, studentInfo, completedUnits, edi
     ? actualTotalCredits
     : actualTotalCredits.toFixed(1);
 
+  // Filter out categories with 0 required units (optional)
+  const displayCategories = Object.entries(categoryReqs).filter(([_, data]) => data.required > 0);
+
   return (
     <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">
       <div className="flex items-center gap-2 mb-4">
@@ -132,25 +135,6 @@ const GraduationDashboard = ({ recommendations, studentInfo, completedUnits, edi
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Category progress bars */}
-      <div className="mt-5 grid grid-cols-3 gap-2">
-        {['core', 'major', 'elective'].map(cat => {
-          const data = categoryReqs[cat] || { completed: 0, required: 8 };
-          const percent = (data.completed / data.required) * 100;
-          return (
-            <div key={cat}>
-              <div className="flex justify-between text-xs text-gray-600 mb-0.5">
-                <span className="capitalize">{cat}</span>
-                <span>{data.completed}/{data.required}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                <div className="bg-[#cc2131] h-1.5 rounded-full" style={{ width: `${percent}%` }} />
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );

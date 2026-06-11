@@ -46,6 +46,13 @@ export async function GET(req) {
             studyPlannerUnits: {
                 include: { unit: true, unitType: true },
             },
+            plannerTemplate: {                      // ✅ added
+                include: {
+                    requirements: {
+                        include: { unitType: true },
+                    },
+                },
+            },
         },
     });
 
@@ -57,6 +64,8 @@ export async function GET(req) {
         id: planner.id,
         name: planner.name,
         createdAt: planner.createdAt,
+        plannerTemplateId: planner.plannerTemplateId ?? null,
+        plannerTemplate: planner.plannerTemplate,   // ✅ added
         units: planner.studyPlannerUnits.map(j => ({
             ID: j.unit.ID,
             UnitCode: j.unit.UnitCode,
@@ -116,6 +125,11 @@ export async function POST(req) {
         const name = typeof body.name === 'string' ? body.name.trim() : '';
         const units = Array.isArray(body.units) ? body.units : [];
 
+        // Resolve plannerTemplateId: accept number or null, ignore anything else
+        const plannerTemplateId = Number.isInteger(body.plannerTemplateId) && body.plannerTemplateId > 0
+            ? body.plannerTemplateId
+            : null;
+
         if (!name) {
             return NextResponse.json({ success: false, message: 'Study planner name is required' }, { status: 400 });
         }
@@ -130,6 +144,17 @@ export async function POST(req) {
 
         if (units.length === 0) {
             return NextResponse.json({ success: false, message: 'At least one unit is required' }, { status: 400 });
+        }
+
+        // Validate plannerTemplateId exists if provided
+        if (plannerTemplateId !== null) {
+            const tpl = await prisma.plannerTemplate.findUnique({ where: { id: plannerTemplateId }, select: { id: true } });
+            if (!tpl) {
+                return NextResponse.json(
+                    { success: false, message: `Planner template ID ${plannerTemplateId} does not exist.` },
+                    { status: 400 }
+                );
+            }
         }
 
         // ─── Detect payload format ─────────────────────────────────────────────
@@ -157,7 +182,6 @@ export async function POST(req) {
         }
         // ─── New format: { unitCode, name?, creditPoints?, unitTypeName } ─────
         else if (isNewFormat) {
-            // Fetch all unit types once
             const allUnitTypes = await prisma.unitType.findMany({
                 select: { ID: true, Name: true },
             });
@@ -169,7 +193,6 @@ export async function POST(req) {
                     return NextResponse.json({ success: false, message: 'Missing unitCode in one of the units' }, { status: 400 });
                 }
 
-                // Resolve unitTypeId from unitTypeName
                 let unitTypeId = null;
                 if (unit.unitTypeName) {
                     const typeName = unit.unitTypeName.trim();
@@ -182,12 +205,9 @@ export async function POST(req) {
                     }
                     unitTypeId = typeId;
                 } else if (typeof unit.unitTypeId === 'number') {
-                    // Fallback: allow direct unitTypeId if provided
-                    const exists = allUnitTypes.some(t => t.ID === unit.unitTypeId);
-                    unitTypeId = unit.unitTypeId; // this line is fine, it's from the request body
+                    unitTypeId = unit.unitTypeId;
                 }
 
-                // Find or create the unit by UnitCode
                 const unitName = unit.name?.trim() || `Unknown: ${unitCode}`;
                 const creditPoints = unit.creditPoints ? parseFloat(unit.creditPoints) : 12.5;
 
@@ -214,7 +234,7 @@ export async function POST(req) {
                 });
             }
         }
-        // ─── Unknown format ─────────────────────────────────────────────────
+        // ─── Unknown format ──────────────────────────────────────────────────
         else {
             return NextResponse.json(
                 { success: false, message: 'Invalid unit format. Provide either { unitId, unitTypeId } or { unitCode, unitTypeName }' },
@@ -222,10 +242,11 @@ export async function POST(req) {
             );
         }
 
-        // ─── Create planner and join records ────────────────────────────────
+        // ─── Create planner and join records ─────────────────────────────────
         const studyPlannerWithUnits = await prisma.studyPlanner.create({
             data: {
                 name,
+                plannerTemplateId,
                 studyPlannerUnits: {
                     create: unitLinkData.map(({ unitId, unitTypeId }) => ({
                         unitId,
@@ -237,6 +258,13 @@ export async function POST(req) {
                 studyPlannerUnits: {
                     include: { unit: true, unitType: true },
                 },
+                plannerTemplate: {                      // ✅ also include on create response
+                    include: {
+                        requirements: {
+                            include: { unitType: true },
+                        },
+                    },
+                },
             },
         });
 
@@ -244,6 +272,8 @@ export async function POST(req) {
             id: studyPlannerWithUnits.id,
             name: studyPlannerWithUnits.name,
             createdAt: studyPlannerWithUnits.createdAt,
+            plannerTemplateId: studyPlannerWithUnits.plannerTemplateId ?? null,
+            plannerTemplate: studyPlannerWithUnits.plannerTemplate,   // ✅ added
             units: studyPlannerWithUnits.studyPlannerUnits.map(j => ({
                 ID: j.unit.ID,
                 UnitCode: j.unit.UnitCode,

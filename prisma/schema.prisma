@@ -131,31 +131,34 @@ model Unit {
 model UnitType {
   ID                                         Int                              @id @default(autoincrement())
   Name                                       String
-  Colour                                     String?  // primary color (still useful as display)
-  colors                                     UnitTypeColor[]                  // renamed to lowercase for clarity
+  Colour                                     String? // primary color (still useful as display)
+  colors                                     UnitTypeColor[] // renamed to lowercase for clarity
   StudentStudyPlannerAmmendments_OldUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_OldUnitType")
   StudentStudyPlannerAmmendments_NewUnitType StudentStudyPlannerAmmendments[] @relation("StudentStudyPlannerAmmendments_NewUnitType")
   studyPlannerUnits                          StudyPlannerUnit[]
   units                                      Unit[]
   UnitInSemesterStudyPlanner                 UnitInSemesterStudyPlanner[]
+  plannerTemplateRequirements                PlannerTemplateRequirement[]
 
   @@unique([ID, Name])
 }
+
 model UnitTypeColor {
   id         Int      @id @default(autoincrement())
   unitTypeId Int
-  color      String   // store hex code, e.g. "#c5d9f0"
+  color      String // store hex code, e.g. "#c5d9f0"
   unitType   UnitType @relation(fields: [unitTypeId], references: [ID], onDelete: Cascade)
 
   @@unique([unitTypeId, color])
 }
 
-
 model StudyPlanner {
   id                Int                @id @default(autoincrement())
   name              String
+  plannerTemplateId Int?
   createdAt         DateTime           @default(now())
   studyPlannerUnits StudyPlannerUnit[]
+  plannerTemplate   PlannerTemplate?   @relation(fields: [plannerTemplateId], references: [id], onDelete: SetNull)
 }
 
 model StudyPlannerUnit {
@@ -168,6 +171,28 @@ model StudyPlannerUnit {
   studyPlanner   StudyPlanner @relation(fields: [studyPlannerId], references: [id], onDelete: Cascade)
 
   @@unique([studyPlannerId, unitId])
+}
+
+model PlannerTemplate {
+  id        Int      @id @default(autoincrement())
+  name      String // e.g., "Civil / Business (Management)"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studyPlanners StudyPlanner[]
+  requirements  PlannerTemplateRequirement[]
+}
+
+model PlannerTemplateRequirement {
+  id                Int @id @default(autoincrement())
+  plannerTemplateId Int
+  unitTypeId        Int
+  requiredCount     Int
+
+  plannerTemplate PlannerTemplate @relation(fields: [plannerTemplateId], references: [id], onDelete: Cascade)
+  unitType        UnitType        @relation(fields: [unitTypeId], references: [ID], onDelete: Cascade)
+
+  @@unique([plannerTemplateId, unitTypeId])
 }
 
 model UnitHistory {

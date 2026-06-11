@@ -1,7 +1,7 @@
 const path = require('path')
 const fs = require('fs')
 
-const SCHEMA_VERSION = 5
+const SCHEMA_VERSION = 6
 
 async function runDbSetup() {
   const { app } = require('electron')
