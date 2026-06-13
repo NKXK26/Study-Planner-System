@@ -216,7 +216,6 @@ function getNeededUnitsPerCategory(planner, completedMap, mappedExternalUnits) {
 	const plannerUnits = planner.units || [];
 	const template = planner.plannerTemplate;
 	
-	// Debug logging to console
 	console.group('🔍 getNeededUnitsPerCategory');
 	console.log('Planner name:', planner.name);
 	console.log('Template requirements:', template?.requirements);
@@ -231,13 +230,11 @@ function getNeededUnitsPerCategory(planner, completedMap, mappedExternalUnits) {
 		return missing;
 	}
 
-	// 1. Build completed counts per category (including mapped external)
 	const completedCountByCategory = new Map();
 	template.requirements.forEach(req => {
 		completedCountByCategory.set(req.unitType.Name, 0);
 	});
 
-	// Count completed standard planner units
 	plannerUnits.forEach(unit => {
 		const cat = unit.unitType?.Name;
 		if (!cat) return;
@@ -247,7 +244,6 @@ function getNeededUnitsPerCategory(planner, completedMap, mappedExternalUnits) {
 		}
 	});
 
-	// Count mapped external units (they are attached to a category)
 	Object.entries(mappedExternalUnits).forEach(([cat, units]) => {
 		const current = completedCountByCategory.get(cat) || 0;
 		completedCountByCategory.set(cat, current + units.length);
@@ -255,7 +251,6 @@ function getNeededUnitsPerCategory(planner, completedMap, mappedExternalUnits) {
 
 	console.log('Completed counts per category:', Object.fromEntries(completedCountByCategory));
 
-	// 2. Compute needed counts
 	const neededByCategory = new Map();
 	template.requirements.forEach(req => {
 		const completed = completedCountByCategory.get(req.unitType.Name) || 0;
@@ -264,7 +259,6 @@ function getNeededUnitsPerCategory(planner, completedMap, mappedExternalUnits) {
 	});
 	console.log('Needed per category:', Object.fromEntries(neededByCategory));
 
-	// 3. Gather pending units from the planner (not completed) grouped by category
 	const pendingByCategory = new Map();
 	plannerUnits.forEach(unit => {
 		const cat = unit.unitType?.Name;
@@ -280,12 +274,11 @@ function getNeededUnitsPerCategory(planner, completedMap, mappedExternalUnits) {
 		[...pendingByCategory.entries()].map(([k, v]) => [k, v.map(u => u.UnitCode)])
 	));
 
-	// 4. Take only the needed number from each category
 	const unitsToSchedule = [];
 	for (const [cat, needed] of neededByCategory.entries()) {
 		const pending = pendingByCategory.get(cat) || [];
 		const take = pending.slice(0, needed);
-		console.log(`Taking ${take.length} of ${pending.length} pending units from category "${cat}" (need ${needed})`);
+		console.log(`Taking ${take.length} of ${pending.length} pending units from "${cat}" (need ${needed})`);
 		unitsToSchedule.push(...take);
 	}
 	console.log('Final units to schedule:', unitsToSchedule.map(u => u.UnitCode));
@@ -353,6 +346,52 @@ const EditableSemesterHeader = ({ year, semester, onYearChange, onSemesterChange
 	);
 };
 
+// ─── Add Unit Modal ──────────────────────────────────────────────────────────
+const AddUnitModal = ({ isOpen, onClose, availableUnits, onAddUnit }) => {
+	if (!isOpen) return null;
+
+	return (
+		<div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+			<div className="bg-white rounded-xl max-w-md w-full max-h-[80vh] flex flex-col shadow-2xl">
+				<div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+					<h3 className="text-lg font-semibold text-gray-900">Add Unit to Semester</h3>
+					<button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+						<XMarkIcon className="h-5 w-5" />
+					</button>
+				</div>
+				<div className="flex-1 overflow-y-auto p-4 space-y-2">
+					{availableUnits.length === 0 ? (
+						<p className="text-center text-gray-500 py-8">No units available to add.</p>
+					) : (
+						availableUnits.map(unit => {
+							const unitType = unit.unitType?.Name || 'Elective';
+							let badgeColor = 'bg-gray-100 text-gray-700';
+							if (unitType === 'Core') badgeColor = 'bg-blue-100 text-blue-700';
+							else if (unitType === 'Major') badgeColor = 'bg-purple-100 text-purple-700';
+							else if (unitType === 'WIL') badgeColor = 'bg-green-100 text-green-700';
+							return (
+								<div key={unit.UnitCode} className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => onAddUnit(unit)}>
+									<div className="flex justify-between items-start">
+										<div className="flex-1">
+											<div className="font-mono text-sm font-semibold">{unit.UnitCode}</div>
+											<div className="text-xs text-gray-600">{unit.Name}</div>
+											<div className="text-xs text-gray-400 mt-1">{unit.CreditPoints || DEFAULT_CREDIT_POINTS} CP</div>
+										</div>
+										<span className={`text-xs px-2 py-0.5 rounded-full ${badgeColor}`}>{unitType}</span>
+									</div>
+								</div>
+							);
+						})
+					)}
+				</div>
+				<div className="px-6 py-3 border-t border-gray-100 flex justify-end">
+					<button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50">Close</button>
+				</div>
+			</div>
+		</div>
+	);
+};
+
 // ─── Inline Study Planner ─────────────────────────────────────────────────────
 const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) => {
 	const [allPlanners, setAllPlanners] = useState([]);
@@ -367,9 +406,6 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 	const [unrecognisedUnits, setUnrecognisedUnits] = useState([]);
 	const [selectedFieldPlanner, setSelectedFieldPlanner] = useState(null);
 	const [mappedExternalUnits, setMappedExternalUnits] = useState({});
-	const [dragSource, setDragSource] = useState(null);
-	const [dragTarget, setDragTarget] = useState(null);
-	const [dragOverPanel, setDragOverPanel] = useState(null);
 	const [showToolbox, setShowToolbox] = useState(false);
 	const [pdfLoading, setPdfLoading] = useState(false);
 	const [allPlannersWithScores, setAllPlannersWithScores] = useState([]);
@@ -378,6 +414,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 	const [equivModal, setEquivModal] = useState({ open: false, unit: null });
 	const [showDebug, setShowDebug] = useState(false);
 	const [debugInfo, setDebugInfo] = useState(null);
+	const [addUnitModal, setAddUnitModal] = useState({ isOpen: false, semesterIdx: null, availableUnits: [] });
 	const hasInitiallySelected = useRef(false);
 
 	const intakeYear = studentInfo?.intakeYear ?? studentInfo?.intake_year ?? (new Date().getFullYear() - 1);
@@ -589,48 +626,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 		setEquivModal({ open: false, unit: null });
 	}, [handleMapExternalToCategory, equivModal.unit]);
 
-	// Drag handlers
-	const handleDragStart = (info) => setDragSource(info);
-	const handleDragEnter = (target) => setDragTarget(target);
-
-	const handleNativeDropIntoSemester = useCallback((semIdx, insertAt, rawUnit) => {
-		setEditableSchedule(prev => {
-			const s = prev.map(x => ({ ...x, units: [...x.units] }));
-			s[semIdx]?.units.splice(insertAt, 0, { ...rawUnit });
-			if (s[semIdx]) { s[semIdx].unitCount = s[semIdx].units.length; s[semIdx].totalCredits = s[semIdx].units.reduce((t, u) => t + (u.CreditPoints || DEFAULT_CREDIT_POINTS), 0); }
-			return s;
-		});
-		setDragSource(null); setDragTarget(null);
-	}, []);
-
-	const handleDrop = useCallback((target) => {
-		if (!dragSource) return;
-		const s = editableSchedule.map(x => ({ ...x, units: [...x.units] }));
-		if (dragSource.fromPanel) {
-			const sem = s[target?.semIdx];
-			if (!sem) return;
-			sem.units.splice(typeof target.unitIdx === 'number' ? target.unitIdx : sem.units.length, 0, { ...dragSource.unit });
-			sem.unitCount = sem.units.length;
-			sem.totalCredits = sem.units.reduce((t, u) => t + (u.CreditPoints || DEFAULT_CREDIT_POINTS), 0);
-			setEditableSchedule(s.filter(x => x.units.length > 0));
-		} else if (dragSource.semIdx !== undefined) {
-			// move within schedule (original logic)
-		}
-		setDragSource(null); setDragTarget(null); setDragOverPanel(null);
-	}, [dragSource, editableSchedule]);
-
-	const handleDropOnPanel = useCallback(() => {
-		if (!dragSource || dragSource.semIdx === undefined) return;
-		setEditableSchedule(prev =>
-			prev.map((sem, i) => {
-				if (i !== dragSource.semIdx) return sem;
-				const units = sem.units.filter((_, j) => j !== dragSource.unitIdx);
-				return { ...sem, units, unitCount: units.length, totalCredits: units.reduce((t, u) => t + (u.CreditPoints || DEFAULT_CREDIT_POINTS), 0) };
-			}).filter(sem => sem.units.length > 0)
-		);
-		setDragSource(null); setDragTarget(null); setDragOverPanel(null);
-	}, [dragSource]);
-
+	// Remove unit from semester
 	const handleRemoveUnit = useCallback((semIdx, unitIdx) => {
 		setEditableSchedule(prev => {
 			const s = prev.map(x => ({ ...x, units: [...x.units] }));
@@ -653,7 +649,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 		finally { setPdfLoading(false); }
 	}, [editableSchedule, recommendations, studentInfo, completedUnits]);
 
-	// ─── New: Add Semester ──────────────────────────────────────────────────────
+	// Add semester
 	const handleAddSemester = () => {
 		const lastSem = editableSchedule[editableSchedule.length - 1];
 		let newYear = 1;
@@ -676,7 +672,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 		setEditableSchedule(prev => [...prev, newSem]);
 	};
 
-	// ─── New: Update semester metadata ──────────────────────────────────────────
+	// Update semester metadata
 	const handleSemesterYearChange = (idx, newYear) => {
 		setEditableSchedule(prev => prev.map((sem, i) => i === idx ? { ...sem, year: newYear } : sem));
 	};
@@ -685,6 +681,52 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 	};
 	const handleRemoveSemester = (idx) => {
 		setEditableSchedule(prev => prev.filter((_, i) => i !== idx));
+	};
+
+	// Get all units from panels (including pending, scheduled, completed) but exclude those already in the target semester
+	const getAllPanelUnits = () => {
+		const grouped = getPlannerUnitsWithStatus();
+		const allUnits = [];
+		Object.entries(grouped).forEach(([category, units]) => {
+			units.forEach(unit => {
+				allUnits.push({ ...unit, category }); // attach category for display
+			});
+		});
+		return allUnits;
+	};
+
+	// Add unit to semester
+	const handleAddUnitToSemester = (semesterIdx, unit) => {
+		setEditableSchedule(prev => {
+			const newSchedule = [...prev];
+			const sem = newSchedule[semesterIdx];
+			if (!sem) return prev;
+			// Avoid duplicates by code
+			if (sem.units.some(u => extractUnitCode(u.UnitCode) === extractUnitCode(unit.UnitCode))) {
+				alert('Unit already in this semester');
+				return prev;
+			}
+			const newUnits = [...sem.units, unit];
+			const totalCredits = newUnits.reduce((sum, u) => sum + (u.CreditPoints || DEFAULT_CREDIT_POINTS), 0);
+			newSchedule[semesterIdx] = {
+				...sem,
+				units: newUnits,
+				unitCount: newUnits.length,
+				totalCredits,
+			};
+			return newSchedule;
+		});
+		setAddUnitModal({ isOpen: false, semesterIdx: null, availableUnits: [] });
+	};
+
+	// Open add unit modal for a specific semester
+	const openAddUnitModal = (semesterIdx) => {
+		const allPanelUnits = getAllPanelUnits();
+		const currentSemesterUnits = editableSchedule[semesterIdx]?.units || [];
+		const currentCodes = new Set(currentSemesterUnits.map(u => extractUnitCode(u.UnitCode).toUpperCase()));
+		// Show units that are not already in this semester (regardless of status)
+		const available = allPanelUnits.filter(unit => !currentCodes.has(extractUnitCode(unit.UnitCode).toUpperCase()));
+		setAddUnitModal({ isOpen: true, semesterIdx, availableUnits: available });
 	};
 
 	// Effects
@@ -758,7 +800,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 			<div className="p-6 bg-gray-50/40 space-y-5">
 				{plannersError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm flex items-center gap-2"><ExclamationTriangleIcon className="h-4 w-4" />{plannersError}</div>}
 
-				{/* Debug Panel */}
+				{/* Debug Panel - Enhanced to show all panel units */}
 				{showDebug && debugInfo && (
 					<div className="bg-gray-900 text-gray-100 rounded-xl p-4 font-mono text-xs overflow-auto max-h-96">
 						<h3 className="text-sm font-bold text-white mb-2">🔍 Debug: Category Requirement Analysis</h3>
@@ -770,6 +812,42 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 							<div><span className="text-green-400">Selected Units to Schedule:</span> {JSON.stringify(debugInfo.selectedUnits, null, 2)}</div>
 						</div>
 						<p className="text-gray-400 mt-3 border-t border-gray-700 pt-2">If a category is missing from "Needed Counts", either it's already satisfied or the template doesn't require it.</p>
+					</div>
+				)}
+
+				{/* Debug: Show all panel units and their status */}
+				{showDebug && selectedFieldPlanner && (
+					<div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+						<h3 className="text-sm font-bold text-blue-800 mb-2">📋 All Panel Units (from getPlannerUnitsWithStatus)</h3>
+						<div className="max-h-60 overflow-y-auto">
+							<table className="w-full text-xs">
+								<thead className="bg-blue-100 sticky top-0">
+									<tr>
+										<th className="text-left p-1">Code</th>
+										<th className="text-left p-1">Name</th>
+										<th className="text-left p-1">Category</th>
+										<th className="text-left p-1">Status</th>
+									</tr>
+								</thead>
+								<tbody>
+									{Object.entries(groupedUnits).map(([cat, units]) =>
+										units.map((unit, idx) => (
+											<tr key={`${cat}-${idx}`} className="border-t border-blue-200">
+												<td className="p-1 font-mono">{unit.UnitCode || unit.code}</td>
+												<td className="p-1 truncate max-w-[200px]">{unit.Name || unit.name}</td>
+												<td className="p-1">{cat}</td>
+												<td className="p-1">
+													<span className={`px-1.5 py-0.5 rounded-full ${unit.status === 'completed' ? 'bg-green-200 text-green-800' : unit.status === 'scheduled' ? 'bg-yellow-200 text-yellow-800' : 'bg-gray-200 text-gray-800'}`}>
+														{unit.status}
+													</span>
+												</td>
+											</tr>
+										))
+									)}
+								</tbody>
+							</table>
+						</div>
+						<p className="text-xs text-blue-600 mt-2">Units with status 'pending' are not yet scheduled or completed.</p>
 					</div>
 				)}
 
@@ -808,22 +886,37 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 						{Object.entries(groupedUnits).map(([catName, units]) => (
 							<div key={catName}
-								className={`bg-white rounded-xl border-2 border-red-500 p-3 flex flex-col transition-all ${dragOverPanel === catName ? 'ring-2 ring-red-500 bg-red-50/30' : ''}`}
-								onDragOver={e => { e.preventDefault(); setDragOverPanel(catName); }}
-								onDragLeave={() => setDragOverPanel(null)}
-								onDrop={() => { handleDropOnPanel(catName); setDragOverPanel(null); }}>
+								className="bg-white rounded-xl border-2 border-red-500 p-3 flex flex-col">
 								<div className="flex items-center justify-between mb-2">
 									<h4 className="font-semibold text-gray-800 text-sm capitalize">{catName}</h4>
 									<span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{units.length} units</span>
 								</div>
 								<div className="space-y-2 max-h-80 overflow-y-auto pr-1 flex-1">
-									{units.map((unit, idx) => (
-										<PanelUnitCard key={`${catName}-${idx}-${unit.UnitCode || unit.code}`}
-											unit={unit} status={unit.status} category={catName}
-											onDragStart={handleDragStart}
-											isDragging={dragSource?.fromPanel && extractUnitCode(dragSource.unit?.UnitCode) === extractUnitCode(unit.UnitCode)}
-											onRemove={unit.isMappedExternal ? (u) => handleRemoveMappedUnit(catName, u) : null} />
-									))}
+									{units.map((unit, idx) => {
+										let badgeColor = 'bg-gray-100 text-gray-700';
+										if (catName === 'Core') badgeColor = 'bg-blue-100 text-blue-700';
+										else if (catName === 'Major') badgeColor = 'bg-purple-100 text-purple-700';
+										else if (catName === 'WIL') badgeColor = 'bg-green-100 text-green-700';
+										return (
+											<div key={`${catName}-${idx}-${unit.UnitCode || unit.code}`} className="border border-gray-200 rounded-lg p-2 bg-white">
+												<div className="flex justify-between items-start">
+													<div className="flex-1">
+														<div className="font-mono text-xs font-semibold">{unit.UnitCode || unit.code}</div>
+														<div className="text-xs text-gray-600">{unit.Name || unit.name}</div>
+														<div className="text-xs text-gray-400">{unit.CreditPoints || DEFAULT_CREDIT_POINTS} CP</div>
+													</div>
+													<div className="flex flex-col items-end gap-1">
+														<span className={`text-xs px-1.5 py-0.5 rounded-full ${badgeColor}`}>{catName}</span>
+														{unit.status === 'completed' && <span className="text-xs text-green-600">✓ Completed</span>}
+														{unit.status === 'scheduled' && <span className="text-xs text-yellow-600">📅 Scheduled</span>}
+														{unit.isMappedExternal && (
+															<button onClick={() => handleRemoveMappedUnit(catName, unit)} className="text-xs text-red-500 hover:text-red-700">Remove mapping</button>
+														)}
+													</div>
+												</div>
+											</div>
+										);
+									})}
 								</div>
 							</div>
 						))}
@@ -897,7 +990,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 					{!allExternalMapped && !scheduleLoading && <p className="text-xs text-amber-600 mt-2 text-right">⚠️ Map all external units first</p>}
 				</div>
 
-				{/* Schedule display with editable headers and add semester button */}
+				{/* Schedule display with Add Unit buttons and unit badges */}
 				{scheduleLoading || plannersLoading ? (
 					<div className="text-center py-12">
 						<ArrowPathIcon className="h-10 w-10 text-[#cc2131] animate-spin mx-auto mb-3" />
@@ -937,25 +1030,47 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 											onSemesterChange={(newSem) => handleSemesterSemesterChange(semIdx, newSem)}
 											onRemove={() => handleRemoveSemester(semIdx)}
 										/>
-										<span className="text-xs text-gray-500">{sem.unitCount} unit(s) · {sem.totalCredits} CP</span>
+										<div className="flex items-center gap-3">
+											<span className="text-xs text-gray-500">{sem.unitCount} unit(s) · {sem.totalCredits} CP</span>
+											<button
+												onClick={() => openAddUnitModal(semIdx)}
+												className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+											>
+												<PlusIcon className="h-3 w-3" /> Add Unit
+											</button>
+										</div>
 									</div>
 									<div className="p-3 space-y-1.5">
-										{sem.units.map((unit, unitIdx) => (
-											<DraggableUnitCard key={`${semIdx}-${unitIdx}-${unit.UnitCode}`}
-												unit={unit} semIdx={semIdx} unitIdx={unitIdx}
-												onDragStart={handleDragStart} onDragEnter={handleDragEnter} onDrop={handleDrop}
-												isDragOver={dragTarget?.semIdx === semIdx && dragTarget?.unitIdx === unitIdx && dragSource && !dragSource.fromPanel}
-												isSource={dragSource && !dragSource.fromPanel && dragSource.semIdx === semIdx && dragSource.unitIdx === unitIdx}
-												onRemove={handleRemoveUnit} />
-										))}
-										<SemesterDropZone sem={sem} semIdx={semIdx}
-											onDragEnter={handleDragEnter} onDrop={handleDrop} onNativeDrop={handleNativeDropIntoSemester}
-											isDragOver={dragTarget?.semIdx === semIdx && dragTarget?.unitIdx === sem.units.length && dragSource} />
+										{sem.units.map((unit, unitIdx) => {
+											const unitType = unit.unitType?.Name || 'Elective';
+											let badgeColor = 'bg-gray-100 text-gray-700';
+											if (unitType === 'Core') badgeColor = 'bg-blue-100 text-blue-700';
+											else if (unitType === 'Major') badgeColor = 'bg-purple-100 text-purple-700';
+											else if (unitType === 'WIL') badgeColor = 'bg-green-100 text-green-700';
+											return (
+												<div key={`${semIdx}-${unitIdx}-${unit.UnitCode}`} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg p-2 hover:shadow-sm transition-shadow">
+													<div className="flex-1">
+														<div className="flex items-center gap-2">
+															<span className="font-mono text-sm font-semibold">{unit.UnitCode}</span>
+															<span className={`text-xs px-1.5 py-0.5 rounded-full ${badgeColor}`}>{unitType}</span>
+														</div>
+														<div className="text-xs text-gray-600">{unit.Name}</div>
+														<div className="text-xs text-gray-400">{unit.CreditPoints || DEFAULT_CREDIT_POINTS} CP</div>
+													</div>
+													<button
+														onClick={() => handleRemoveUnit(semIdx, unitIdx)}
+														className="text-red-500 hover:text-red-700"
+													>
+														<XMarkIcon className="h-4 w-4" />
+													</button>
+												</div>
+											);
+										})}
 									</div>
 								</div>
 							))}
 							<div className="flex items-center justify-between pt-3 border-t border-gray-200">
-								<p className="text-xs text-gray-500 flex items-center gap-1"><ArrowsRightLeftIcon className="h-3.5 w-3.5" /> Drag units between semesters to customise.</p>
+								<p className="text-xs text-gray-500">Click "Add Unit" to add units from the panels.</p>
 								<button onClick={handleExportPdf} disabled={pdfLoading}
 									className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${pdfLoading ? 'bg-gray-100 border border-gray-300 text-gray-400 cursor-not-allowed' : 'bg-[#cc2131] hover:bg-[#b01d2c] text-white'}`}>
 									{pdfLoading ? <ArrowPathIcon className="h-4 w-4 animate-spin" /> : <ArrowDownTrayIcon className="h-4 w-4" />}
@@ -970,6 +1085,14 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 			<UnitPoolToolbox isOpen={showToolbox} onClose={() => setShowToolbox(false)} />
 			<EquivalencyModal isOpen={equivModal.open} onClose={() => setEquivModal({ open: false, unit: null })}
 				oldUnit={equivModal.unit} intakeYear={intakeYear} currentSem={currentSem} onReplace={handleReplaceUnrecognisedUnit} />
+			
+			{/* Add Unit Modal */}
+			<AddUnitModal
+				isOpen={addUnitModal.isOpen}
+				onClose={() => setAddUnitModal({ isOpen: false, semesterIdx: null, availableUnits: [] })}
+				availableUnits={addUnitModal.availableUnits}
+				onAddUnit={(unit) => handleAddUnitToSemester(addUnitModal.semesterIdx, unit)}
+			/>
 		</div>
 	);
 };
@@ -1066,7 +1189,7 @@ export default function CompareStudyPlannerPage() {
 		finally { setLoading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
 	};
 
-	const showStudyPlanner = matchedPlanners.length > 0 && studentInfo && studentInfo.totalCredits < 300;
+	const showStudyPlanner = matchedPlanners.length > 0 && studentInfo; // Removed credit limit
 
 	return (
 		<ConditionalRequireAuth>
@@ -1085,7 +1208,6 @@ export default function CompareStudyPlannerPage() {
 										<button onClick={exportToExcel} disabled={exporting} className="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
 											<DocumentArrowDownIcon className="h-5 w-5" />{exporting ? 'Exporting…' : 'Export to Excel'}
 										</button>
-										{studentInfo.totalCredits >= 300 && <div className="text-xs text-green-600 bg-green-50 border border-green-200 rounded-md px-3 py-2 flex items-center">🎓 Student has completed 300 credits.</div>}
 									</div>
 								)}
 							</div>
