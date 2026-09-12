@@ -4,26 +4,18 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
 
-const SUGGESTED_QUESTIONS = [
-  "Which students are eligible to graduate this semester?",
-  "Who is at risk of not graduating on time?",
-  "Is student X ready to graduate?",
-  "How many students are graduating on time this year?",
-  "List students who meet all graduation requirements",
-  "Which students have exceeded maximum study duration?",
-  "Show students missing compulsory units",
-  "What is blocking student X from graduating?",
-];
+const SUGGESTED_QUESTIONS = ["Where can I check my double major?", "How do I find a replacement for an expired unit?", "Where do I upload my transcript?", "What information is stored for COS20031?"];
 
 const WELCOME_MESSAGE = {
   role: 'assistant',
-  content: `Hello 👋 I am your **Graduation Eligibility Assistant**.\n\nI can help academic advisors with:\n- **Eligibility** — who is ready to graduate this semester\n- **At-Risk** — students behind schedule or at risk of delay\n- **Overdue** — students who have exceeded maximum study duration\n- **Blockers** — what specific units or requirements are missing\n- **Progress** — credit hour completion rates by student\n\nAsk me anything about student graduation progress.`,
+  content: `Hello! I am your Study Planner Assistant. Ask about unit replacements, double-major checks, prerequisites, unit information or where to find a page. Answers use retrieved planner guidance and unit records. Use the page buttons to navigate. Personal student records are not retrieved by this assistant.`,
   timestamp: new Date(),
 };
 
 // ── Markdown formatter ────────────────────────────────────────────────────────
 function formatMessage(content) {
   return content
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/^### (.*?)$/gm, '<h4 class="text-indigo-700 font-semibold mt-4 mb-1.5 text-sm tracking-wide uppercase">$1</h4>')
     .replace(/^## (.*?)$/gm, '<h3 class="text-gray-800 font-bold mt-4 mb-2 text-base">$1</h3>')
     .replace(/^# (.*?)$/gm,  '<h2 class="text-gray-900 font-bold mt-4 mb-2 text-lg">$1</h2>')
@@ -130,10 +122,11 @@ function MessageBubble({ msg }) {
             }`}
           dangerouslySetInnerHTML={{
             __html: isUser
-              ? msg.content
+              ? msg.content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
               : `<p class="text-sm text-gray-600 leading-relaxed">${formatMessage(msg.content)}</p>`
           }}
         />
+        {msg.sources?.length > 0 && <div className="flex flex-wrap gap-2">{msg.sources.map(s => <Link key={s.id} href={s.href} className="text-xs rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-800 px-3 py-2">Open {s.title} · [{s.id}]</Link>)}</div>}
         <div className="flex items-center gap-2 px-1">
           <span className="text-xs text-gray-400">
             {msg.timestamp?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -174,13 +167,12 @@ export default function AIAssistantPage() {
   // ── Check Ollama ──────────────────────────────────────────────────────────
   const checkOllamaStatus = useCallback(async () => {
     try {
-      const res = await fetch('http://localhost:11434/api/tags', {
+      const res = await fetch('/api/planner-assistant', {
         signal: AbortSignal.timeout(5000),
       });
       if (res.ok) {
         const data = await res.json();
-        const hasModel = data.models?.some(m => m.name.includes('llama3.2'));
-        const status = hasModel ? 'ready' : 'no-model';
+        const status = data.status;
         setOllamaStatus(status);
         return status;
       }
@@ -248,7 +240,7 @@ export default function AIAssistantPage() {
 
   // ── Send message ──────────────────────────────────────────────────────────
   const handleSend = async () => {
-    if (!input.trim() || isLoading || ollamaStatus !== 'ready') return;
+    if (!input.trim() || isLoading) return;
 
     const question = input.trim();
     setInput('');
@@ -258,7 +250,7 @@ export default function AIAssistantPage() {
     const updatedHistory = [...conversationHistory, { role: 'user', content: question }];
 
     try {
-      const response = await SecureFrontendAuthHelper.authenticatedFetch('/api/ai-assistant', {
+      const response = await SecureFrontendAuthHelper.authenticatedFetch('/api/planner-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, conversationHistory: updatedHistory }),
@@ -270,6 +262,7 @@ export default function AIAssistantPage() {
         content: data.success ? data.answer : `❌ Error: ${data.message}`,
         timestamp: new Date(),
         source: data.source || null,
+        sources: data.sources || [],
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -294,7 +287,7 @@ export default function AIAssistantPage() {
     setConversationHistory([]);
   };
 
-  const isInputDisabled = ollamaStatus !== 'ready' || isPulling || isLoading;
+  const isInputDisabled = isLoading;
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50/20 to-blue-50/30 overflow-hidden">
@@ -315,7 +308,7 @@ export default function AIAssistantPage() {
                 <span className="text-white text-xs font-bold">AI</span>
               </div>
               <div>
-                <div className="text-sm font-semibold text-gray-800">Graduation Assistant</div>
+                <div className="text-sm font-semibold text-gray-800">Study Planner Assistant</div>
                 <div className="text-xs text-gray-400">Eligibility & Progress Tracking</div>
               </div>
             </div>
@@ -372,7 +365,7 @@ export default function AIAssistantPage() {
                 {[0, 150, 300].map(d => (
                   <div key={d} className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
                 ))}
-                <span className="text-xs text-gray-400 ml-2">Analysing graduation data…</span>
+                <span className="text-xs text-gray-400 ml-2">Retrieving planner evidence…</span>
               </div>
             </div>
           )}
@@ -409,11 +402,7 @@ export default function AIAssistantPage() {
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={2}
-              placeholder={
-                isPulling         ? 'Setting up AI model, please wait…' :
-                ollamaStatus !== 'ready' ? 'AI is offline — check Ollama status' :
-                'Ask about graduation eligibility, at-risk students, credit completion… (Enter to send)'
-              }
+              placeholder="Ask a study planner question or tell me which page you need…"
               className="flex-1 bg-gray-50 border border-gray-200 focus:border-indigo-400 focus:bg-white rounded-xl px-4 py-3 text-sm resize-none outline-none transition-all text-gray-700 placeholder-gray-400 disabled:opacity-50"
               disabled={isInputDisabled}
             />
@@ -429,7 +418,7 @@ export default function AIAssistantPage() {
             </button>
           </div>
           <p className="text-center text-xs text-gray-400 mt-2">
-            🔒 Runs locally — no student data leaves your system
+            🔒 Answers use your configured Ollama service and retrieved planner evidence
           </p>
         </div>
       </div>

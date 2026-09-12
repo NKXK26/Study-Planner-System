@@ -76,7 +76,6 @@ export async function POST(request) {
         const allUnits = await prisma.unit.findMany({
             where: { Availability: 'published' },
             select: { ID: true, UnitCode: true, Name: true, CreditPoints: true },
-            take: 500,
         });
 
         console.log(`[unit-rag] DB returned ${allUnits.length} published units`);
@@ -91,7 +90,7 @@ export async function POST(request) {
 
         // ── 2. Score & retrieve top candidates (RAG retrieval step) ───────────────
         const scored = allUnits
-            .filter(unit => unit.UnitCode !== missingUnit.code) // ← ADD THIS LINE
+            .filter(unit => unit.UnitCode.trim().toUpperCase() !== missingUnit.code.trim().toUpperCase())
             .map(unit => ({ unit, score: scoreCandidate(unit, missingUnit) }))
             .filter(({ score }) => score > 0)
             .sort((a, b) => b.score - a.score)
@@ -107,6 +106,7 @@ export async function POST(request) {
         const systemPrompt =
             `You are a university academic advisor. Your job is to find equivalent replacement units.
 You MUST ONLY suggest units from the provided list — never invent codes or names.
+You have titles and credits only, not syllabuses or approved replacement records. Never claim syllabus equivalence, retirement, approval or guaranteed offering. Describe candidates for academic review only.
 Respond ONLY with valid JSON (no markdown fences, no explanation text before or after).`;
 
         const userPrompt =
@@ -187,7 +187,10 @@ Respond ONLY with this JSON (no other text):
                         ollamaError = 'All LLM suggestions were hallucinated and removed';
                         console.warn(`[unit-rag] ${ollamaError}`);
                     } else {
-                        aiSuggestions = validated;
+                        aiSuggestions = validated.slice(0, 3).map(s => {
+                            const candidate = scored.find(c => c.unit.UnitCode.toUpperCase() === s.code.toUpperCase());
+                            return { ...s, code: candidate.unit.UnitCode, name: candidate.unit.Name, creditPoints: candidate.unit.CreditPoints, matchScore: candidate.score, caveats: 'Candidate only: syllabus equivalence, intake applicability and HOD approval have not been verified.' };
+                        });
                         aiReasoning = parsed.reasoning ?? null;
                         ollamaSuccess = true;
                         console.log(`[unit-rag] ✓ Ollama success — ${aiSuggestions.length} validated suggestion(s) in ${Date.now() - startTime}ms`);

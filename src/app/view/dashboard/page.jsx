@@ -239,6 +239,7 @@ const Dashboard = () => {
 					{ name: 'Study Planner Maker', href: '/view/study-planner-maker', permission: 'planner:read' },
 					{ name: 'Study Planner Management', href: '/view/study-planner', permission: 'planner:read' },
 					{ name: 'Differentiate Study Planners', href: '/view/compare-planners', permission: 'planner:read' },
+					{ name: 'Double Major Checker', href: '/view/double-major-checker', permission: 'planner:read' },
 				],
 				gradient: 'from-rose-500 to-red-600',
 				bgGradient: 'from-rose-50 to-red-50 dark:from-rose-900/20 dark:to-red-900/10',

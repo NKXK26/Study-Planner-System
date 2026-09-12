@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const path = require("path");
+const { PHASE_DEVELOPMENT_SERVER } = require('next/constants');
 
 const nextConfig = {
   output: "standalone",
@@ -24,4 +25,8 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+// Keep a running dev server isolated from production builds (including Electron).
+module.exports = (phase) => ({
+  ...nextConfig,
+  distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
+});

@@ -13,6 +13,8 @@ import {
 	BugAntIcon, PlusIcon, PencilIcon,
 } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
+import ReplacementWorkspace from '@/app/view/unit_suggestion/ReplacementWorkspace';
+import Link from 'next/link';
 import UnitPoolToolbox from '@/app/view/unit_suggestion/UnitPoolToolbox';
 import { generateStudyPlannerPdf } from '@/app/view/unit_suggestion/Exportstudyplannerpdf';
 import {
@@ -54,7 +56,7 @@ const CategorySelector = ({ unit, onConfirm, onCancel }) => {
 			</div>
 			<div className="flex gap-2 justify-end">
 				<button onClick={onCancel} className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-				<button onClick={() => onConfirm(selected)} className="px-4 py-1.5 rounded-lg bg-[#cc2131] text-white text-sm font-medium hover:bg-[#b01d2c]">Confirm mapping</button>
+				<button onClick={() => onConfirm(selected)} className="px-4 py-1.5 rounded-lg bg-[#cc2131] text-white text-sm font-medium hover:bg-[#b01d2c]">Apply to draft</button>
 			</div>
 		</div>
 	);
@@ -100,7 +102,7 @@ const EquivalencyModal = ({ isOpen, onClose, oldUnit, intakeYear, currentSem, on
 				<div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center flex-shrink-0">
 					<div>
 						<h2 className="text-base font-bold text-gray-900">
-							Find equivalent for <code className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-[#cc2131]">{oldUnit?.code}</code>
+							Review replacement candidates for <code className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-[#cc2131]">{oldUnit?.code}</code>
 						</h2>
 						{oldUnit?.name && oldUnit.name !== oldUnit.code && <p className="text-xs text-gray-500 mt-0.5">{oldUnit.name}</p>}
 					</div>
@@ -115,6 +117,7 @@ const EquivalencyModal = ({ isOpen, onClose, oldUnit, intakeYear, currentSem, on
 				</div>
 
 				<div className="flex-1 overflow-y-auto p-6 space-y-4">
+					<p className="p-3 rounded-lg bg-amber-50 text-amber-900 text-sm">These are replacement candidates, not approved equivalents. Title and credit similarities do not confirm syllabus coverage. Confirm learning outcomes, prerequisites, intake and semester availability with your HOD before enrolment.</p>
 					{loading && (
 						<div className="flex items-center gap-3 text-gray-600">
 							<svg className="w-5 h-5 animate-spin text-[#cc2131] flex-shrink-0" viewBox="0 0 24 24">
@@ -154,7 +157,7 @@ const EquivalencyModal = ({ isOpen, onClose, oldUnit, intakeYear, currentSem, on
 												<div className="flex items-center gap-2 flex-wrap">
 													<code className="text-xs font-mono font-bold bg-gray-100 px-1.5 py-0.5 rounded">{sug.code}</code>
 													<span className="text-sm font-medium text-gray-900">{sug.name}</span>
-													{isBest && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">Best match</span>}
+													{isBest && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">Highest ranked</span>}
 												</div>
 												{sug.creditPoints && <p className="text-xs text-gray-400 mt-0.5">{sug.creditPoints} CP</p>}
 											</div>
@@ -162,7 +165,7 @@ const EquivalencyModal = ({ isOpen, onClose, oldUnit, intakeYear, currentSem, on
 												<div className={`text-sm font-bold rounded-lg px-2 py-1 ${(sug.matchScore ?? 0) >= 80 ? 'bg-emerald-100 text-emerald-700' : (sug.matchScore ?? 0) >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
 													{sug.matchScore ?? '—'}%
 												</div>
-												<p className="text-xs text-gray-400 mt-0.5">match</p>
+												<p className="text-xs text-gray-400 mt-0.5">title / code score</p>
 											</div>
 										</div>
 										<p className="text-xs text-gray-500 mt-2 italic bg-gray-50 px-3 py-2 rounded-lg">{sug.reason}</p>
@@ -173,7 +176,7 @@ const EquivalencyModal = ({ isOpen, onClose, oldUnit, intakeYear, currentSem, on
 											</div>
 										)}
 										{!isPending
-											? <button onClick={() => setState(s => ({ ...s, pendingUnit: sug }))} className="mt-3 px-3 py-1.5 rounded-lg bg-[#cc2131] text-white text-xs font-medium hover:bg-[#b01d2c]">Use this unit</button>
+											? <button onClick={() => setState(s => ({ ...s, pendingUnit: sug }))} className="mt-3 px-3 py-1.5 rounded-lg bg-[#cc2131] text-white text-xs font-medium hover:bg-[#b01d2c]">Use in draft plan</button>
 											: <CategorySelector unit={sug}
 												onConfirm={(category) => {
 													onReplace({ UnitCode: sug.code, Name: sug.name, CreditPoints: sug.creditPoints ?? DEFAULT_CREDIT_POINTS }, category);
@@ -1201,7 +1204,7 @@ export default function CompareStudyPlannerPage() {
 							<div className="mb-8 flex justify-between items-center flex-wrap gap-3">
 								<div>
 									<h1 className="title-text text-3xl font-bold">Unit Suggestions</h1>
-									<p className="text-muted text-sm mt-1">Upload a student transcript file</p>
+									<p className="text-muted text-sm mt-1">Explore replacement units and plan your remaining studies.</p>
 								</div>
 								{matchedPlanners.length > 0 && studentInfo && (
 									<div className="flex gap-3">
@@ -1212,6 +1215,10 @@ export default function CompareStudyPlannerPage() {
 								)}
 							</div>
 
+							<ReplacementWorkspace />
+							<Link href="/view/ai-assistant" className="inline-block mb-6 rounded-lg bg-indigo-700 text-white px-4 py-3">Ask the Study Planner Assistant</Link>
+							<h2 className="text-2xl font-bold heading-text mb-2">Plan from your transcript</h2>
+							<p className="text-muted mb-5">Upload your results to identify remaining units and build a study plan.</p>
 							{/* Upload area */}
 							<div className="card-bg p-6 rounded-theme shadow-theme mb-8">
 								<label className="label-text-alt block mb-2 text-sm font-medium">Upload Student Transcript (XLSX)</label>
