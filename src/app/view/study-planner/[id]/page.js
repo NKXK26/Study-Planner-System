@@ -44,7 +44,7 @@ function TemplateSelectorBanner({ templates, selectedTemplateId, onChange, savin
             <div className="flex-1">
                 <p className="text-sm font-semibold text-blue-800 mb-0.5">Degree Programme Template</p>
                 <p className="text-xs text-blue-600">
-                    Selecting a template sets which unit types appear in the dropdowns below.
+                    Select a template to use its unit types, or choose no template to use all unit types.
                 </p>
             </div>
             <select
@@ -111,12 +111,13 @@ export default function StudyPlannerEditPage() {
 
     // All templates from the API (for the selector dropdown)
     const [allTemplates, setAllTemplates] = useState([]);
+    const [allUnitTypes, setAllUnitTypes] = useState([]);
     // Currently selected template ID (may differ from saved until Save is clicked)
     const [selectedTemplateId, setSelectedTemplateId] = useState(null);
 
     // Derived from selectedTemplateId
     const selectedTemplate = allTemplates.find(t => t.id === selectedTemplateId) ?? null;
-    const activeUnitTypes = selectedTemplate ? selectedTemplate.unitTypes : [];
+    const activeUnitTypes = selectedTemplate ? selectedTemplate.unitTypes : allUnitTypes;
     const typeOrder = activeUnitTypes.map(ut => ut.ID);
     const colourMap = buildColourMap(activeUnitTypes);
 
@@ -133,6 +134,7 @@ export default function StudyPlannerEditPage() {
             if (data.success) {
                 setPlanner(data.data);
                 setAllTemplates(data.data.templates ?? []);
+                setAllUnitTypes(data.data.unitTypes ?? []);
                 setSelectedTemplateId(data.data.plannerTemplateId ?? null);
                 setUnits(data.data.units.map(u => ({ ...u })));
             } else {
@@ -340,18 +342,18 @@ export default function StudyPlannerEditPage() {
                                                 value={unit.unitTypeId ?? ''}
                                                 onChange={e => handleUnitTypeChange(unit.joinId, e.target.value)}
                                                 className="border rounded px-2 py-1 text-sm w-full max-w-[180px] bg-white"
-                                                disabled={activeUnitTypes.length === 0}
+                                                disabled={saving || activeUnitTypes.length === 0}
                                             >
                                                 <option value="">— None —</option>
-                                                {/* Show template unit types when a template is selected,
-                                                    otherwise fall back to the unit's own type if it has one */}
+                                                {/* Preserve an existing assignment outside the template's choices. */}
+                                                {unit.unitType && !activeUnitTypes.some(ut => ut.ID === unit.unitTypeId) && (
+                                                    <option value={unit.unitTypeId}>{unit.unitType.Name}</option>
+                                                )}
                                                 {activeUnitTypes.length > 0
                                                     ? activeUnitTypes.map(ut => (
                                                         <option key={ut.ID} value={ut.ID}>{ut.Name}</option>
                                                     ))
-                                                    : unit.unitType
-                                                        ? [<option key={unit.unitType.ID} value={unit.unitType.ID}>{unit.unitType.Name}</option>]
-                                                        : null
+                                                    : null
                                                 }
                                             </select>
                                         </td>

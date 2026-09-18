@@ -24,7 +24,7 @@ export async function GET(req, { params }) {
     const id = parseInt(params.id, 10);
     if (isNaN(id)) return NextResponse.json({ success: false, message: 'Invalid ID' }, { status: 400 });
 
-    const [planner, templates] = await Promise.all([
+    const [planner, templates, unitTypes] = await Promise.all([
         prisma.studyPlanner.findUnique({
             where: { id },
             include: {
@@ -43,6 +43,10 @@ export async function GET(req, { params }) {
             },
             orderBy: { name: 'asc' },
         }),
+        prisma.unitType.findMany({
+            select: { ID: true, Name: true, Colour: true },
+            orderBy: { Name: 'asc' },
+        }),
     ]);
 
     if (!planner) return NextResponse.json({ success: false, message: 'Not found' }, { status: 404 });
@@ -54,6 +58,7 @@ export async function GET(req, { params }) {
             name: planner.name,
             createdAt: planner.createdAt,
             plannerTemplateId: planner.plannerTemplateId ?? null,
+            unitTypes,
             units: planner.studyPlannerUnits.map(j => ({
                 joinId: j.id,
                 ID: j.unit.ID,

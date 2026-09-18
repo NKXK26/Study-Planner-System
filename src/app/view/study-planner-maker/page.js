@@ -29,6 +29,7 @@ export default function StudyPlannerMakerPage() {
   const [error, setError] = useState(null);
 
   const [sourceId, setSourceId] = useState('');
+  const [creationMode, setCreationMode] = useState('copy');
   const [name, setName] = useState('');
   const [draftUnits, setDraftUnits] = useState([]);
   const [addUnitId, setAddUnitId] = useState('');
@@ -106,6 +107,24 @@ export default function StudyPlannerMakerPage() {
     }));
     setDraftUnits(units);
     setName(planner.name + ' (Copy)');
+  };
+
+  const handleStartFromScratch = () => {
+    setCreationMode('scratch');
+    setSourceId('');
+    setDraftUnits([]);
+    setName('');
+    setResult(null);
+    setError(null);
+  };
+
+  const handleCopyMode = () => {
+    setCreationMode('copy');
+    setSourceId('');
+    setDraftUnits([]);
+    setName('');
+    setResult(null);
+    setError(null);
   };
 
   const setUnitField = (index, field, value) => {
@@ -255,8 +274,8 @@ export default function StudyPlannerMakerPage() {
                 <div>
                   <h1 className="title-text text-3xl font-bold">Study Planner Maker</h1>
                   <p className="text-muted text-sm mt-1">
-                    Copy an existing study planner, add or remove units, adjust unit types,
-                    and save it as a new version.
+                    Start with an empty planner or copy an existing one, then add units,
+                    assign unit types, and save it.
                   </p>
                 </div>
               </div>
@@ -310,31 +329,50 @@ export default function StudyPlannerMakerPage() {
                         1
                       </span>
                       <h2 className="heading-text font-semibold">
-                        Pick a study planner to copy from
+                        Choose how to create the planner
                       </h2>
                     </div>
-                    {planners.length === 0 ? (
-                      <p className="text-muted text-sm">
-                        No study planners exist yet. Upload one first using the Upload
-                        Study Planner feature.
-                      </p>
-                    ) : (
-                      <select
-                        value={sourceId}
-                        onChange={handlePickSource}
-                        className="input-field w-full p-2 border border-gray-300 rounded-md bg-white"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={handleStartFromScratch}
+                        className={`text-left border rounded-lg p-4 transition-colors ${creationMode === 'scratch' ? 'border-red-500 bg-red-50 ring-1 ring-red-500' : 'border-gray-300 bg-white hover:border-red-300'}`}
                       >
-                        <option value="">Select a study planner</option>
-                        {planners.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} ({p.units?.length || 0} units)
-                          </option>
-                        ))}
-                      </select>
+                        <span className="block font-semibold text-gray-800">Start from scratch</span>
+                        <span className="block text-sm text-gray-500 mt-1">Name a new planner and select every unit yourself.</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCopyMode}
+                        className={`text-left border rounded-lg p-4 transition-colors ${creationMode === 'copy' ? 'border-red-500 bg-red-50 ring-1 ring-red-500' : 'border-gray-300 bg-white hover:border-red-300'}`}
+                      >
+                        <span className="block font-semibold text-gray-800">Copy an existing planner</span>
+                        <span className="block text-sm text-gray-500 mt-1">Use an existing planner as a starting point, then edit it.</span>
+                      </button>
+                    </div>
+                    {creationMode === 'copy' && (
+                      <div className="mt-4">
+                        {planners.length === 0 ? (
+                          <p className="text-muted text-sm">No existing planners are available to copy yet.</p>
+                        ) : (
+                          <select
+                            value={sourceId}
+                            onChange={handlePickSource}
+                            className="input-field w-full p-2 border border-gray-300 rounded-md bg-white"
+                          >
+                            <option value="">Select a study planner to copy</option>
+                            {planners.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} ({p.units?.length || 0} units)
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
                     )}
                   </div>
 
-                  {sourceId && (
+                  {(creationMode === 'scratch' || sourceId) && (
                     <>
                       <div className={cardBase + ' mb-6'}>
                         <div className="flex items-center gap-2 mb-4">
