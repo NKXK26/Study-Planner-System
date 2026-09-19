@@ -3,6 +3,13 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
+import {
+  AcademicCapIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  ArrowPathIcon,
+  CalendarIcon,
+} from '@heroicons/react/24/outline';
 
 // ─── constants ─────────────────────────────────────────────────────────────────
 const DEFAULT_CREDIT_POINTS = '12.5';
@@ -532,6 +539,11 @@ const UploadPlannerPage = () => {
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
   const [step, setStep] = useState(1);
+  const [graduationCheck, setGraduationCheck] = useState(null);
+  const [graduationLoading, setGraduationLoading] = useState(false);
+  const [graduationError, setGraduationError] = useState(null);
+  const [graduationEligibility, setGraduationEligibility] = useState(null);
+  const [studentInfo, setStudentInfo] = useState(null);
   const fileInputRef = useRef(null);
 
   // Template state — set from modal, editable on review step
@@ -572,7 +584,58 @@ const UploadPlannerPage = () => {
     setError(null);
     setStep(1);
     setExtractProgress('');
+    setGraduationCheck(null);
+    setGraduationLoading(false);
+    setGraduationError(null);
+    setGraduationEligibility(null);
+    setStudentInfo(null);
   }, []);
+
+  const calculateGraduationEligibility = useCallback((unitsToSave) => {
+    const selectedTemplate = allTemplates.find(t => t.id === selectedTemplateId);
+    const requirementEntries = selectedTemplate?.requirements
+      ? Object.entries(selectedTemplate.requirements)
+      : [];
+
+    if (requirementEntries.length > 0) {
+      const completedByType = unitsToSave.reduce((counts, unit) => {
+        counts[unit.unitTypeName] = (counts[unit.unitTypeName] || 0) + 1;
+        return counts;
+      }, {});
+
+      let completedRequiredUnits = 0;
+      let requiredUnits = 0;
+      let missingUnits = 0;
+
+      requirementEntries.forEach(([unitTypeName, requiredCount]) => {
+        const required = Number(requiredCount) || 0;
+        const completed = completedByType[unitTypeName] || 0;
+        requiredUnits += required;
+        completedRequiredUnits += Math.min(completed, required);
+        missingUnits += Math.max(0, required - completed);
+      });
+
+      return {
+        isEligible: missingUnits === 0,
+        completedUnits: completedRequiredUnits,
+        requiredUnits,
+        missingUnits,
+        templateName: selectedTemplate.name,
+      };
+    }
+
+    const requiredUnits = 24;
+    const completedUnits = unitsToSave.length;
+    const missingUnits = Math.max(0, requiredUnits - completedUnits);
+
+    return {
+      isEligible: missingUnits === 0,
+      completedUnits: Math.min(completedUnits, requiredUnits),
+      requiredUnits,
+      missingUnits,
+      templateName: null,
+    };
+  }, [allTemplates, selectedTemplateId]);
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -764,6 +827,30 @@ const UploadPlannerPage = () => {
 
       const tplNote = selectedTemplateName ? ` linked to "${selectedTemplateName}"` : '';
       setMessage(`✓ "${plannerName}" saved successfully with ${unitsToSave.length} units${tplNote}.`);
+      setGraduationEligibility(calculateGraduationEligibility(unitsToSave));
+
+      // Check graduation eligibility if template is linked
+      if (selectedTemplateId && studentInfo?.studentId) {
+        setGraduationLoading(true);
+        try {
+          const res = await SecureFrontendAuthHelper.authenticatedFetch(
+            `/api/graduation-checker?studentId=${studentInfo.studentId}`,
+            { headers: { 'x-dev-override': 'true' } }
+          );
+          const data = await res.json();
+          if (res.ok && data.success) {
+            setGraduationCheck(data.data);
+          } else {
+            setGraduationError(data.message || 'Failed to check graduation eligibility');
+          }
+        } catch (err) {
+          console.error('Graduation check error:', err);
+          setGraduationError('An error occurred while checking eligibility');
+        } finally {
+          setGraduationLoading(false);
+        }
+      }
+
       setStep(4);
     } catch (err) {
       const msg = err.message || 'Unknown error';
@@ -836,6 +923,21 @@ const UploadPlannerPage = () => {
             selectedTemplateName={selectedTemplateName}
             onChange={setSelectedTemplateId}
           />
+
+          {/* Student Info for Graduation Check */}
+          <div className="px-6 py-3 border-b border-gray-100">
+            <label className="block">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Student ID (for Graduation Check)</span>
+              <input
+                type="text"
+                value={studentInfo?.studentId || ''}
+                onChange={e => setStudentInfo({ studentId: e.target.value })}
+                placeholder="Enter your student ID (e.g., 2201234)"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#cc2131]/30 focus:border-[#cc2131]"
+              />
+              <p className="text-xs text-gray-400 mt-1">Optional: Enter your student ID to check graduation eligibility after saving.</p>
+            </label>
+          </div>
 
           {/* Colour legend */}
           <div className="px-6 py-3 border-b border-gray-100">
@@ -1013,17 +1115,241 @@ const UploadPlannerPage = () => {
         )}
 
         {step === 4 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-            <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+          <div className="bg-white rounded-xl border border-gray-200 p-10">
+            <div className="text-center mb-8">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Planner saved!</h3>
+              <p className="text-sm text-gray-500 mb-6">{message}</p>
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-1">Planner saved!</h3>
-            <p className="text-sm text-gray-500 mb-6">{message}</p>
-            <button onClick={resetAll} className="px-6 py-2.5 rounded-lg bg-[#cc2131] hover:bg-[#b01d2c] text-white text-sm font-semibold transition-all">
-              Upload another planner
-            </button>
+
+            {graduationEligibility && (
+              <div className={`border rounded-xl p-5 ${graduationEligibility.isEligible ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                <div className="flex items-start gap-3">
+                  {graduationEligibility.isEligible ? (
+                    <CheckCircleIcon className="h-6 w-6 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <ExclamationTriangleIcon className="h-6 w-6 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <h4 className="text-lg font-bold">
+                      {graduationEligibility.isEligible
+                        ? 'Student is eligible for graduation'
+                        : 'Student is not eligible for graduation'}
+                    </h4>
+                    <p className="text-sm mt-1">
+                      {graduationEligibility.isEligible
+                        ? 'The uploaded study planner has completed all required units.'
+                        : `${graduationEligibility.missingUnits} required unit(s) still need to be completed.`}
+                    </p>
+                    <p className="text-xs mt-2 opacity-80">
+                      Completed {graduationEligibility.completedUnits} of {graduationEligibility.requiredUnits} required units
+                      {graduationEligibility.templateName ? ` for ${graduationEligibility.templateName}` : ''}.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Graduation Eligibility Check */}
+            {false && (graduationCheck || graduationLoading || graduationError) && (
+              <div className="border-t border-gray-200 pt-8 mt-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <AcademicCapIcon className="h-5 w-5 text-[#cc2131]" />
+                    Graduation Eligibility Check
+                  </h4>
+                  {selectedTemplateId && studentInfo?.studentId && (
+                    <button
+                      onClick={async () => {
+                        setGraduationLoading(true);
+                        try {
+                          const res = await SecureFrontendAuthHelper.authenticatedFetch(
+                            `/api/graduation-checker?studentId=${studentInfo.studentId}`,
+                            { headers: { 'x-dev-override': 'true' } }
+                          );
+                          const data = await res.json();
+                          if (res.ok && data.success) {
+                            setGraduationCheck(data.data);
+                          } else {
+                            setGraduationError(data.message || 'Failed to check graduation eligibility');
+                          }
+                        } catch (err) {
+                          console.error('Graduation check error:', err);
+                          setGraduationError('An error occurred while checking eligibility');
+                        } finally {
+                          setGraduationLoading(false);
+                        }
+                      }}
+                      disabled={graduationLoading}
+                      className="text-xs text-[#cc2131] hover:underline flex items-center gap-1"
+                    >
+                      <ArrowPathIcon className={`h-4 w-4 ${graduationLoading ? 'animate-spin' : ''}`} />
+                      Re-check
+                    </button>
+                  )}
+                </div>
+
+                {graduationLoading && (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="flex items-center gap-3">
+                      <ArrowPathIcon className="h-6 w-6 text-[#cc2131] animate-spin" />
+                      <span className="text-gray-600">Checking graduation eligibility...</span>
+                    </div>
+                  </div>
+                )}
+
+                {graduationError && !graduationCheck && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
+                    <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />
+                    <span>{graduationError}</span>
+                  </div>
+                )}
+
+                {graduationCheck && (
+                  <div className="space-y-6">
+                    {/* Status Header */}
+                    <div className={`p-4 rounded-lg border ${graduationCheck.status === 'eligible' ? 'bg-green-50 border-green-200 text-green-800' : graduationCheck.status === 'not_eligible' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' : 'bg-blue-50 border-blue-200 text-blue-800'} flex items-center gap-4`}>
+                      <span className="text-3xl">{graduationCheck.status === 'eligible' ? '✅' : graduationCheck.status === 'not_eligible' ? '⚠️' : '📋'}</span>
+                      <div>
+                        <h3 className="text-xl font-bold">{graduationCheck.status === 'eligible' ? 'Eligible to Graduate' : graduationCheck.status === 'not_eligible' ? 'Not Yet Eligible' : 'In Progress'}</h3>
+                        <p className="text-sm opacity-80">
+                          {graduationCheck.studentInfo ? `${graduationCheck.studentInfo.studentId} - ${graduationCheck.studentInfo.course} (${graduationCheck.studentInfo.major})` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Progress Summary */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 rounded-lg border bg-blue-50 text-blue-700 border-blue-200">
+                        <p className="text-xs font-medium uppercase tracking-wide mb-1">Total Credits</p>
+                        <p className="text-2xl font-bold">{graduationCheck.credits?.completed || 0} / {graduationCheck.credits?.required || 0}</p>
+                        {graduationCheck.credits?.remaining > 0 && (
+                          <p className="text-sm mt-1">{graduationCheck.credits.remaining} remaining</p>
+                        )}
+                      </div>
+                      <div className="p-4 rounded-lg border bg-green-50 text-green-700 border-green-200">
+                        <p className="text-xs font-medium uppercase tracking-wide mb-1">Core Units</p>
+                        <p className="text-2xl font-bold">{graduationCheck.coreUnits?.completed || 0} / {graduationCheck.coreUnits?.required || 0}</p>
+                        {graduationCheck.coreUnits?.remaining > 0 && (
+                          <p className="text-sm mt-1">{graduationCheck.coreUnits.remaining} remaining</p>
+                        )}
+                      </div>
+                      <div className="p-4 rounded-lg border bg-purple-50 text-purple-700 border-purple-200">
+                        <p className="text-xs font-medium uppercase tracking-wide mb-1">Major Units</p>
+                        <p className="text-2xl font-bold">{graduationCheck.majorUnits?.completed || 0} / {graduationCheck.majorUnits?.required || 0}</p>
+                        {graduationCheck.majorUnits?.remaining > 0 && (
+                          <p className="text-sm mt-1">{graduationCheck.majorUnits.remaining} remaining</p>
+                        )}
+                      </div>
+                      <div className="p-4 rounded-lg border bg-orange-50 text-orange-700 border-orange-200">
+                        <p className="text-xs font-medium uppercase tracking-wide mb-1">Electives</p>
+                        <p className="text-2xl font-bold">{graduationCheck.electives?.completed || 0} / {graduationCheck.electives?.required || 0}</p>
+                        {graduationCheck.electives?.remaining > 0 && (
+                          <p className="text-sm mt-1">{graduationCheck.electives.remaining} remaining</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Missing Requirements */}
+                    {(graduationCheck.missingRequirements?.length > 0) && (
+                      <div className="space-y-3">
+                        <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                          <span className="text-red-500">⚠️</span>
+                          Missing Requirements ({graduationCheck.missingRequirements.length})
+                        </h4>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {graduationCheck.missingRequirements.map((req, idx) => (
+                            <div key={idx} className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <span className="text-red-500">•</span>
+                                <div>
+                                  <p className="font-medium text-red-800">{req.unitCode} - {req.unitName}</p>
+                                  <p className="text-sm text-red-600">{req.type} • {req.creditPoints} CP</p>
+                                </div>
+                              </div>
+                              {req.prerequisites && req.prerequisites.length > 0 && (
+                                <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                                  Prereqs: {req.prerequisites.join(', ')}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Completed Requirements */}
+                    {(graduationCheck.completedRequirements?.length > 0) && (
+                      <details className="border border-gray-200 rounded-lg">
+                        <summary className="p-4 font-medium text-gray-700 cursor-pointer flex items-center gap-2">
+                          <span>✅</span>
+                          Completed Requirements ({graduationCheck.completedRequirements.length})
+                        </summary>
+                        <div className="px-4 pb-4 space-y-1 max-h-60 overflow-y-auto">
+                          {graduationCheck.completedRequirements.map((req, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+                              <span className="text-green-700">{req.unitCode} - {req.unitName}</span>
+                              <span className="text-gray-500">{req.creditPoints} CP</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+
+                    {/* Failed/Incomplete Units */}
+                    {(graduationCheck.failedUnits?.length > 0) && (
+                      <details className="border border-gray-200 rounded-lg">
+                        <summary className="p-4 font-medium text-gray-700 cursor-pointer flex items-center gap-2">
+                          <span>❌</span>
+                          Failed / Incomplete Units ({graduationCheck.failedUnits.length})
+                        </summary>
+                        <div className="px-4 pb-4 space-y-1 max-h-60 overflow-y-auto">
+                          {graduationCheck.failedUnits.map((unit, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0">
+                              <span className="text-red-700">{unit.unitCode} - {unit.unitName}</span>
+                              <span className="text-gray-500 capitalize">{unit.status}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+
+                    {/* WIL / Double Count Info */}
+                    {(graduationCheck.wilInfo) && (
+                      <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                        <h5 className="font-medium text-purple-800 mb-2">WIL / Double Count Information</h5>
+                        <p className="text-sm text-purple-700">{graduationCheck.wilInfo}</p>
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    {(graduationCheck.notes && graduationCheck.notes.length > 0) && (
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h5 className="font-medium text-blue-800 mb-2">Notes</h5>
+                        <ul className="text-sm text-blue-700 space-y-1">
+                          {graduationCheck.notes.map((note, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span>•</span>
+                              <span>{note}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="text-center pt-6">
+              <button onClick={resetAll} className="px-6 py-2.5 rounded-lg bg-[#cc2131] hover:bg-[#b01d2c] text-white text-sm font-semibold transition-all">
+                Upload another planner
+              </button>
+            </div>
           </div>
         )}
 

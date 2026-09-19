@@ -39,22 +39,28 @@ export async function GET(req) {
         return NextResponse.json({ success: false, message: 'Invalid planner ID' }, { status: 400 });
     }
 
-    const studyPlanners = await prisma.studyPlanner.findMany({
-        where: id ? { id } : {},
-        orderBy: { createdAt: 'desc' },
-        include: {
-            studyPlannerUnits: {
-                include: { unit: true, unitType: true },
-            },
-            plannerTemplate: {                      // ✅ added
-                include: {
-                    requirements: {
-                        include: { unitType: true },
+    let studyPlanners;
+    try {
+        studyPlanners = await prisma.studyPlanner.findMany({
+            where: id ? { id } : {},
+            orderBy: { createdAt: 'desc' },
+            include: {
+                studyPlannerUnits: {
+                    include: { unit: true, unitType: true },
+                },
+                plannerTemplate: {
+                    include: {
+                        requirements: {
+                            include: { unitType: true },
+                        },
                     },
                 },
             },
-        },
-    });
+        });
+    } catch (error) {
+        console.error('GET /api/study-planner error:', error);
+        return NextResponse.json({ success: false, message: 'Failed to load study planners', details: error?.message ?? 'Unknown error' }, { status: 500 });
+    }
 
     if (id && studyPlanners.length === 0) {
         return NextResponse.json({ success: false, message: 'Study planner not found' }, { status: 404 });

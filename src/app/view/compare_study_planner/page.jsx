@@ -457,6 +457,12 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 			);
 
 			const neededUnits = getNeededUnitsPerCategory(planner, completedMap, mapped);
+
+			let totalCompleted = 0;
+			for (const code of completedMap.keys()) {
+				if (plannerUnitByCode.has(code)) totalCompleted++;
+			}
+			const totalCredits = totalCompleted * DEFAULT_CREDIT_POINTS;
 			
 			// Store debug info for UI
 			if (planner.plannerTemplate?.requirements) {
@@ -503,7 +509,17 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 			if (neededUnits.length === 0) {
 				setEditableSchedule([]);
 				setShowFullPlan(true);
-				setRecommendations(prev => ({ ...(prev || {}), unitsToGraduate: 0 }));
+				setRecommendations({
+					totalCompleted,
+					totalCredits,
+					plannerName: planner.name,
+					completedPercent: plannerUnits.length ? (totalCompleted / plannerUnits.length) * 100 : 100,
+					currentYear,
+					currentSemester,
+					creditsToGraduate: Math.max(0, (plannerUnits.length * DEFAULT_CREDIT_POINTS) - totalCredits),
+					unitsToGraduate: 0,
+					requiredUnitCount: plannerUnits.length,
+				});
 				return;
 			}
 
@@ -513,12 +529,6 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 				prereqMap.set(extractUnitCode(u.UnitCode), ['unit', 'and', 'or'].includes(parsed.type) ? parsed.conditions.filter(c => c.type === 'unit').map(c => c.code) : []);
 			});
 			const unitsWithPrereqs = neededUnits.map(u => ({ ...u, prerequisites: prereqMap.get(extractUnitCode(u.UnitCode)) || [] }));
-
-			let totalCompleted = 0;
-			for (const code of completedMap.keys()) {
-				if (plannerUnitByCode.has(code)) totalCompleted++;
-			}
-			const totalCredits = totalCompleted * DEFAULT_CREDIT_POINTS;
 
 			let { schedule } = scheduleRemainingUnits(unitsWithPrereqs, completedMap, totalCredits, currentYear, currentSemester, completedUnits.length, 100, 100, 100);
 
@@ -546,6 +556,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 				currentSemester,
 				creditsToGraduate: Math.max(0, (plannerUnits.length * DEFAULT_CREDIT_POINTS) - totalCredits),
 				unitsToGraduate: neededUnits.length,
+				requiredUnitCount: plannerUnits.length,
 			});
 		} catch (e) { console.error(e); }
 		finally { setScheduleLoading(false); }
@@ -774,6 +785,8 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 
 	const groupedUnits = getPlannerUnitsWithStatus();
 	const allExternalMapped = unrecognisedUnits.length === 0;
+	const hasGraduationResult = selectedFieldPlanner && recommendations;
+	const isEligibleForGraduation = hasGraduationResult && recommendations.unitsToGraduate === 0;
 
 	return (
 		<div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
@@ -884,6 +897,31 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 					</div>
 				)}
 
+				{hasGraduationResult && (
+					<div className={`rounded-xl border p-4 ${isEligibleForGraduation ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+						<div className="flex items-start gap-3">
+							{isEligibleForGraduation ? (
+								<CheckCircleIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
+							) : (
+								<ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
+							)}
+							<div>
+								<h3 className="font-semibold">
+									{isEligibleForGraduation ? 'Student is eligible for graduation' : 'Student is not eligible for graduation'}
+								</h3>
+								<p className="text-sm mt-1">
+									{isEligibleForGraduation
+										? 'The uploaded study planner shows that all required units have been completed.'
+										: `${recommendations.unitsToGraduate} required unit(s) still need to be completed.`}
+								</p>
+								<p className="text-xs mt-2 opacity-80">
+									Completed {recommendations.totalCompleted || 0} of {recommendations.requiredUnitCount || selectedFieldPlanner.units?.length || 0} required units.
+								</p>
+							</div>
+						</div>
+					</div>
+				)}
+
 				{/* Category panels */}
 				{selectedFieldPlanner && (
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -927,7 +965,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 				)}
 
 				{/* Graduation requirements progress */}
-				{selectedFieldPlanner?.plannerTemplate?.requirements && (
+				{false && selectedFieldPlanner?.plannerTemplate?.requirements && (
 					<div className="bg-white rounded-xl border border-gray-200 p-4">
 						<h4 className="font-semibold text-[#111827] text-sm mb-3 flex items-center gap-2">
 							<CheckCircleIcon className="h-4 w-4 text-green-600" />Graduation Requirements Progress
@@ -1193,6 +1231,16 @@ export default function CompareStudyPlannerPage() {
 	};
 
 	const showStudyPlanner = matchedPlanners.length > 0 && studentInfo; // Removed credit limit
+	const topMatchedPlanner = matchedPlanners[0] || null;
+	const graduationEligibility = topMatchedPlanner
+		? {
+			isEligible: topMatchedPlanner.overlapCount >= (topMatchedPlanner.plannerUnitCount || 24),
+			completedUnits: topMatchedPlanner.overlapCount,
+			requiredUnits: topMatchedPlanner.plannerUnitCount || 24,
+			missingUnits: Math.max(0, (topMatchedPlanner.plannerUnitCount || 24) - topMatchedPlanner.overlapCount),
+			plannerName: topMatchedPlanner.plannerName,
+		}
+		: null;
 
 	return (
 		<ConditionalRequireAuth>
@@ -1254,6 +1302,33 @@ export default function CompareStudyPlannerPage() {
 											))}
 										</div>
 									</details>
+								</div>
+							)}
+
+							{graduationEligibility && (
+								<div className={`rounded-theme border p-5 mb-8 shadow-theme ${graduationEligibility.isEligible ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+									<div className="flex items-start gap-3">
+										{graduationEligibility.isEligible ? (
+											<CheckCircleIcon className="h-6 w-6 flex-shrink-0 mt-0.5" />
+										) : (
+											<ExclamationTriangleIcon className="h-6 w-6 flex-shrink-0 mt-0.5" />
+										)}
+										<div>
+											<h2 className="text-lg font-bold">
+												{graduationEligibility.isEligible
+													? 'Student is eligible for graduation'
+													: 'Student is not eligible for graduation'}
+											</h2>
+											<p className="text-sm mt-1">
+												{graduationEligibility.isEligible
+													? `All required units are completed for ${graduationEligibility.plannerName}.`
+													: `${graduationEligibility.missingUnits} required unit(s) still need to be completed for ${graduationEligibility.plannerName}.`}
+											</p>
+											<p className="text-xs mt-2 opacity-80">
+												Completed {graduationEligibility.completedUnits} of {graduationEligibility.requiredUnits} required units.
+											</p>
+										</div>
+									</div>
 								</div>
 							)}
 
