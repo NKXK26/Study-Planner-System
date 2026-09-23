@@ -1127,28 +1127,19 @@ const UploadPlannerPage = () => {
             </div>
 
             {graduationEligibility && (
-              <div className={`border rounded-xl p-5 ${graduationEligibility.isEligible ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                <div className="flex items-start gap-3">
+              <div className={`border rounded-xl p-5 ${graduationEligibility.isEligible ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                <div className="flex items-center gap-3">
                   {graduationEligibility.isEligible ? (
-                    <CheckCircleIcon className="h-6 w-6 flex-shrink-0 mt-0.5" />
+                    <CheckCircleIcon className="h-6 w-6 flex-shrink-0" />
                   ) : (
-                    <ExclamationTriangleIcon className="h-6 w-6 flex-shrink-0 mt-0.5" />
+                    <ExclamationTriangleIcon className="h-6 w-6 flex-shrink-0" />
                   )}
                   <div>
                     <h4 className="text-lg font-bold">
                       {graduationEligibility.isEligible
-                        ? 'Student is eligible for graduation'
-                        : 'Student is not eligible for graduation'}
+                        ? 'Eligible to Graduate'
+                        : 'Not Eligible to Graduate'}
                     </h4>
-                    <p className="text-sm mt-1">
-                      {graduationEligibility.isEligible
-                        ? 'The uploaded study planner has completed all required units.'
-                        : `${graduationEligibility.missingUnits} required unit(s) still need to be completed.`}
-                    </p>
-                    <p className="text-xs mt-2 opacity-80">
-                      Completed {graduationEligibility.completedUnits} of {graduationEligibility.requiredUnits} required units
-                      {graduationEligibility.templateName ? ` for ${graduationEligibility.templateName}` : ''}.
-                    </p>
                   </div>
                 </div>
               </div>

@@ -545,25 +545,17 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
             )}
 
             {hasGraduationResult && (
-              <div className={`mb-4 rounded-xl border p-4 ${isEligibleForGraduation ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                <div className="flex items-start gap-3">
+              <div className={`mb-4 rounded-xl border p-4 ${isEligibleForGraduation ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                <div className="flex items-center gap-3">
                   {isEligibleForGraduation ? (
-                    <CheckCircleIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                    <CheckCircleIcon className="h-5 w-5 flex-shrink-0" />
                   ) : (
-                    <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                    <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />
                   )}
                   <div>
                     <h3 className="font-semibold">
-                      {isEligibleForGraduation ? 'Student is eligible for graduation' : 'Student is not eligible for graduation'}
+                      {isEligibleForGraduation ? 'Eligible to Graduate' : 'Not Eligible to Graduate'}
                     </h3>
-                    <p className="text-sm mt-1">
-                      {isEligibleForGraduation
-                        ? 'The uploaded study planner shows that all required units have been completed.'
-                        : `${recommendations.unitsToGraduate} required unit(s) still need to be completed.`}
-                    </p>
-                    <p className="text-xs mt-2 opacity-80">
-                      Completed {recommendations.totalCompleted || 0} of {recommendations.requiredUnitCount || selectedFieldPlanner.units?.length || 0} required units.
-                    </p>
                   </div>
                 </div>
               </div>
