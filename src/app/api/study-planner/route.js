@@ -80,6 +80,10 @@ export async function GET(req) {
             Availability: j.unit.Availability,
             unitTypeId: j.unitTypeId,
             unitType: j.unitType,
+            plannedYear: j.plannedYear,
+            plannedSemester: j.plannedSemester,
+            plannedDates: j.plannedDates,
+            sortOrder: j.sortOrder,
         })),
     }));
 
@@ -184,7 +188,14 @@ export async function POST(req) {
                     { status: 400 }
                 );
             }
-            unitLinkData = units.map(({ unitId, unitTypeId }) => ({ unitId, unitTypeId }));
+            unitLinkData = units.map(({ unitId, unitTypeId, plannedYear, plannedSemester, plannedDates, sortOrder }) => ({
+                unitId,
+                unitTypeId,
+                plannedYear: Number.isInteger(plannedYear) ? plannedYear : null,
+                plannedSemester: typeof plannedSemester === 'string' ? plannedSemester.trim() || null : null,
+                plannedDates: typeof plannedDates === 'string' ? plannedDates.trim() || null : null,
+                sortOrder: Number.isInteger(sortOrder) ? sortOrder : 0,
+            }));
         }
         // ─── New format: { unitCode, name?, creditPoints?, unitTypeName } ─────
         else if (isNewFormat) {
@@ -237,6 +248,10 @@ export async function POST(req) {
                 unitLinkData.push({
                     unitId: dbUnit.ID,
                     unitTypeId: unitTypeId || null,
+                    plannedYear: Number.isInteger(unit.plannedYear) ? unit.plannedYear : null,
+                    plannedSemester: typeof unit.plannedSemester === 'string' ? unit.plannedSemester.trim() || null : null,
+                    plannedDates: typeof unit.plannedDates === 'string' ? unit.plannedDates.trim() || null : null,
+                    sortOrder: Number.isInteger(unit.sortOrder) ? unit.sortOrder : 0,
                 });
             }
         }
@@ -254,9 +269,13 @@ export async function POST(req) {
                 name,
                 plannerTemplateId,
                 studyPlannerUnits: {
-                    create: unitLinkData.map(({ unitId, unitTypeId }) => ({
+                    create: unitLinkData.map(({ unitId, unitTypeId, plannedYear, plannedSemester, plannedDates, sortOrder }) => ({
                         unitId,
                         unitTypeId: unitTypeId || null,
+                        plannedYear,
+                        plannedSemester,
+                        plannedDates,
+                        sortOrder,
                     })),
                 },
             },
@@ -288,6 +307,10 @@ export async function POST(req) {
                 Availability: j.unit.Availability,
                 unitTypeId: j.unitTypeId,
                 unitType: j.unitType,
+                plannedYear: j.plannedYear,
+                plannedSemester: j.plannedSemester,
+                plannedDates: j.plannedDates,
+                sortOrder: j.sortOrder,
             })),
         };
 
