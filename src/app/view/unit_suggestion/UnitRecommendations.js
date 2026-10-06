@@ -10,7 +10,6 @@ import {
 } from '@heroicons/react/24/outline';
 import UnitPoolToolbox from '@/app/view/unit_suggestion/UnitPoolToolbox';
 import { generateStudyPlannerPdf } from '@/app/view/unit_suggestion/Exportstudyplannerpdf';
-import GraduationDashboard from './GraduationDashboard';
 import {
   CategoryBadge,
   DraggableUnitCard,
@@ -77,6 +76,40 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
     return `${now.getFullYear()} Sem ${now.getMonth() < 6 ? 1 : 2}`;
   })();
 
+  const buildCompletedUnitsMap = useCallback((mapped = mappedExternalUnits) => {
+    const completedUnitsMap = new Map();
+    const addUnit = (unit) => {
+      const code = (unit?.code || unit?.UnitCode || '').toUpperCase();
+      if (!code) return;
+      completedUnitsMap.set(code, unit);
+      completedUnitsMap.set(getNormalizedUnitCode(code), unit);
+    };
+
+    (completedUnits || []).forEach(addUnit);
+    Object.values(mapped || {}).flat().forEach(addUnit);
+    return completedUnitsMap;
+  }, [completedUnits, mappedExternalUnits]);
+
+  const buildSimpleSchedule = useCallback((units) => {
+    const schedule = [];
+    const startOrder = (currentYear - 1) * 2 + currentSemester;
+
+    for (let i = 0; i < units.length; i += MAX_UNITS_PER_SEMESTER) {
+      const semesterUnits = units.slice(i, i + MAX_UNITS_PER_SEMESTER);
+      const order = startOrder + Math.floor(i / MAX_UNITS_PER_SEMESTER);
+      schedule.push({
+        year: Math.floor((order - 1) / 2) + 1,
+        semester: (order - 1) % 2 === 0 ? 1 : 2,
+        units: semesterUnits,
+        unitCount: semesterUnits.length,
+        totalCredits: semesterUnits.reduce((sum, unit) => sum + (unit.CreditPoints || DEFAULT_CREDIT_POINTS), 0),
+        order,
+      });
+    }
+
+    return schedule;
+  }, [currentYear, currentSemester]);
+
   // Helper: get category name for a unit from its unitType.Name
   const getUnitCategoryName = (unit) => {
     if (unit.unitType?.Name) return unit.unitType.Name;
@@ -123,11 +156,13 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
         plannerUnitByCode.set(extractUnitCode(u.UnitCode).toUpperCase(), u);
       });
 
-      const completedUnitsMap = new Map();
-      (completedUnits || []).forEach(u => {
+      const completedUnitsMap = buildCompletedUnitsMap({});
+
+      const uncountedUnits = (completedUnits || []).filter(u => {
         const code = u.code?.toUpperCase();
-        if (code) { completedUnitsMap.set(code, u); completedUnitsMap.set(getNormalizedUnitCode(code), u); }
+        return code && !plannerUnitByCode.has(code) && !plannerUnitByCode.has(getNormalizedUnitCode(code));
       });
+      setUnrecognisedUnits(uncountedUnits);
 
       // Count completed units per category
       const completedCounts = getCategoryCountsFromUnits(completedUnits || [], plannerUnitByCode);
@@ -148,11 +183,18 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
       });
 
       // For simplicity, we'll allow scheduling of all missing units, ignoring category counts.
+      const categoryNeeds = Object.fromEntries(
+        Object.entries(requiredCounts).map(([cat, required]) => [cat.toLowerCase(), required])
+      );
+
       let { schedule } = scheduleRemainingUnits(
         allMissingUnits, completedUnitsMap, totalCredits,
         currentYear, currentSemester, completedUnits.length,
-        100, 100, 100 // high thresholds to not filter by core/major/elective
+        categoryNeeds
       );
+      if (!schedule?.length && allMissingUnits.length > 0) {
+        schedule = buildSimpleSchedule(allMissingUnits);
+      }
       schedule = compactFinalSemesters(schedule, completedUnitsMap);
       schedule = balanceSemesterLoads(schedule, completedUnitsMap);
       schedule = optimizeFinalSemester(schedule);
@@ -166,10 +208,11 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
         currentYear, currentSemester,
         creditsToGraduate: Math.max(0, (plannerUnits.length * DEFAULT_CREDIT_POINTS) - totalCredits),
         unitsToGraduate: allMissingUnits.length,
+        requiredUnitCount: plannerUnits.length,
         categoryRequirements: requiredCounts,
       });
     } catch (e) { console.error(e); } finally { setScheduleLoading(false); }
-  }, [currentYear, currentSemester, completedUnits]);
+  }, [currentYear, currentSemester, completedUnits, buildCompletedUnitsMap, buildSimpleSchedule]);
 
   const regenerateFromMapped = useCallback(() => {
     if (!selectedFieldPlanner) return;
@@ -184,19 +227,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
         plannerUnitByCode.set(extractUnitCode(u.UnitCode).toUpperCase(), u);
       });
 
-      const completedUnitsMap = new Map();
-      (completedUnits || []).forEach(u => {
-        const code = u.code?.toUpperCase();
-        if (code) { completedUnitsMap.set(code, u); completedUnitsMap.set(getNormalizedUnitCode(code), u); }
-      });
-
-      // Add mapped external units
-      for (const [cat, extUnits] of Object.entries(mappedExternalUnits)) {
-        extUnits.forEach(extUnit => {
-          const code = extUnit.code?.toUpperCase();
-          if (code) { completedUnitsMap.set(code, extUnit); completedUnitsMap.set(getNormalizedUnitCode(code), extUnit); }
-        });
-      }
+      const completedUnitsMap = buildCompletedUnitsMap(mappedExternalUnits);
 
       // Recompute completed counts
       const completedCounts = getCategoryCountsFromUnits(
@@ -211,11 +242,20 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
         return !completedUnitsMap.has(code) && !completedUnitsMap.has(getNormalizedUnitCode(code));
       });
 
+      const requiredCounts = {};
+      plannerUnits.forEach(u => {
+        const cat = getUnitCategoryName(u);
+        requiredCounts[cat.toLowerCase()] = (requiredCounts[cat.toLowerCase()] || 0) + 1;
+      });
+
       let { schedule } = scheduleRemainingUnits(
         allMissingUnits, completedUnitsMap, totalCredits,
         currentYear, currentSemester, completedUnits.length,
-        100, 100, 100
+        requiredCounts
       );
+      if (!schedule?.length && allMissingUnits.length > 0) {
+        schedule = buildSimpleSchedule(allMissingUnits);
+      }
       schedule = compactFinalSemesters(schedule, completedUnitsMap);
       schedule = balanceSemesterLoads(schedule, completedUnitsMap);
       schedule = optimizeFinalSemester(schedule);
@@ -226,9 +266,10 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
         totalCredits,
         completedPercent: (totalCompleted / plannerUnits.length) * 100,
         unitsToGraduate: allMissingUnits.length,
+        requiredUnitCount: plannerUnits.length,
       }));
     } catch (e) { console.error(e); } finally { setScheduleLoading(false); }
-  }, [selectedFieldPlanner, completedUnits, currentYear, currentSemester, mappedExternalUnits]);
+  }, [selectedFieldPlanner, completedUnits, currentYear, currentSemester, mappedExternalUnits, buildCompletedUnitsMap, buildSimpleSchedule]);
 
   const handleExportPdf = useCallback(async () => {
     if (!editableSchedule.length) return;
@@ -445,6 +486,8 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
 
   const groupedUnits = getPlannerUnitsWithStatus();
   const allExternalMapped = unrecognisedUnits.length === 0;
+  const hasGraduationResult = selectedFieldPlanner && recommendations;
+  const isEligibleForGraduation = hasGraduationResult && recommendations.unitsToGraduate === 0;
 
   return (
     <>
@@ -470,8 +513,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
           <div className="flex-1 overflow-y-auto p-5 bg-gray-50/40">
             {plannersError && <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm flex items-center gap-2"><ExclamationTriangleIcon className="h-4 w-4" />{plannersError}</div>}
 
-            <GraduationDashboard recommendations={recommendations} studentInfo={studentInfo} completedUnits={completedUnits} editableSchedule={editableSchedule} />
-
+            
             {topPlanners.length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2"><span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Top matching planners</span><span className="text-xs text-gray-400">Match score (completed units)</span></div>
@@ -492,6 +534,23 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
                   <option value="">-- Choose a planner --</option>
                   {allPlannersWithScores.map(planner => <option key={planner.id} value={planner.id}>{planner.name} (matched: {planner.matchedUnits}/{completedUnits?.length || 0})</option>)}
                 </select>
+              </div>
+            )}
+
+            {hasGraduationResult && (
+              <div className={`mb-4 rounded-xl border p-4 ${isEligibleForGraduation ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                <div className="flex items-center gap-3">
+                  {isEligibleForGraduation ? (
+                    <CheckCircleIcon className="h-5 w-5 flex-shrink-0" />
+                  ) : (
+                    <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0" />
+                  )}
+                  <div>
+                    <h3 className="font-semibold">
+                      {isEligibleForGraduation ? 'Eligible to Graduate' : 'Not Eligible to Graduate'}
+                    </h3>
+                  </div>
+                </div>
               </div>
             )}
 

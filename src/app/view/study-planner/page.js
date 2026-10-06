@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
 
 export default function StudyPlannerListPage() {
     const router = useRouter();
