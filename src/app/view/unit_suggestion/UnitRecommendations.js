@@ -1,4 +1,5 @@
 'use client';
+import {rankPlannerMatches} from '@app/libs/plannerMatching.mjs';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   XMarkIcon, CheckCircleIcon, ArrowPathIcon, CalendarIcon,
@@ -105,15 +106,7 @@ const UnitRecommendations = ({ isOpen, onClose, completedUnits, studentInfo }) =
     return counts;
   };
 
-  const computePlannerScores = useCallback((planners, completedUnits) => {
-    if (!planners.length || !completedUnits.length) return [];
-    const completedCodes = new Set(completedUnits.map(u => u.code?.toUpperCase()).filter(Boolean));
-    return planners.map(planner => {
-      const plannerCodes = new Set((planner.units || []).map(u => extractUnitCode(u.UnitCode).toUpperCase()));
-      const matched = [...completedCodes].filter(code => plannerCodes.has(code)).length;
-      return { ...planner, matchedUnits: matched, totalCompleted: completedCodes.size };
-    }).sort((a, b) => b.matchedUnits - a.matchedUnits);
-  }, []);
+  const computePlannerScores = useCallback((planners, completedUnits) => rankPlannerMatches(planners, completedUnits).map(r => ({...r.planner, matchedUnits:r.matched, totalCompleted:r.totalCompleted})), []);
 
   const generateScheduleForPlanner = useCallback((planner) => {
     if (!planner) return;

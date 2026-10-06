@@ -1,0 +1,33 @@
+const assert=require('node:assert/strict');
+(async()=>{
+  const {doubleMajorPathway,closestDistinctMajors}=await import('../src/app/libs/doubleMajorPathway.mjs');
+  const {parseTranscript}=await import('../src/app/libs/doubleMajorChecker.mjs');
+  let id=0;
+  const unit=(code,name=code,type='Major',terms=['Semester 1','Semester 2'])=>({ID:++id,UnitCode:code,Name:name,CreditPoints:12.5,Availability:'Published',unitType:{Name:type},UnitTermOffered:terms.map(TermType=>({TermType})),UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit:[]});
+  const planner=(id,name,units,count=units.filter(u=>u.unitType.Name==='Major').length)=>({id,name,units,plannerTemplate:{requirements:[{unitType:{Name:'Major'},requiredCount:count},...['Core','Elective'].filter(n=>units.some(u=>u.unitType.Name===n)).map(n=>({unitType:{Name:n},requiredCount:units.filter(u=>u.unitType.Name===n).length}))]}});
+  const a=unit('AAA100'),b=unit('BBB100'),shared=unit('SHR200'),projectA=unit('COS40005','Computing Project A'),projectB=unit('COS40006','Computing Project B'),core=unit('CORE100','Core unit','Core');
+  const plans=[planner(1,'AI',[a,shared,projectA,projectB,core]),planner(2,'AI new intake',[a,shared,projectA,projectB,core]),planner(3,'Data Science',[b,shared])];
+  const transcript=parseTranscript([['Course','Status','Earned','Grade'],['AAA100','Complete',12.5,'EXM'],['BBB100','Complete',12.5,'N'],['CORE100','Complete',12.5,'HD']]);
+  const original=JSON.stringify(transcript);
+  const rank=closestDistinctMajors(transcript,plans);assert.deepEqual(rank.map(r=>r.planner.id),[1,3]);
+  const draft=doubleMajorPathway({transcript,planners:plans,term:'Semester 1',year:2027});
+  assert.equal(draft.primary.id,1);assert.equal(draft.secondary.id,3);assert.equal(draft.coverage.majors[0].matched,1);assert.equal(draft.coverage.majors[1].matched,0);assert.equal(draft.completeDraft,true);
+  const all=draft.semesters.flatMap(s=>s.selected);assert(!all.some(u=>u.code==='AAA100'||u.code==='CORE100'));assert(all.some(u=>u.code==='BBB100'));assert.equal(all.filter(u=>u.code==='SHR200').length,1);
+  assert(draft.semesters.findIndex(s=>s.selected.some(u=>u.code==='COS40005'))<draft.semesters.findIndex(s=>s.selected.some(u=>u.code==='COS40006')));
+  assert(draft.semesters.every(s=>s.selected.length<=4&&s.credits<=50));assert.equal(JSON.stringify(transcript),original);
+  assert.equal(draft.semesters[0].selected.find(u=>u.code==='SHR200').countsToward.length,2);
+  // Major templates can offer alternatives; stop at counts instead of scheduling every option.
+  const options=[planner(1,'AI',[a,unit('AAA200'),unit('AAA300')],1),planner(3,'DS',[b,unit('BBB200'),unit('BBB300')],1)];
+  const choice=doubleMajorPathway({transcript,planners:options,term:'Semester 1',year:2027});assert.equal(choice.semesters.flatMap(s=>s.selected).length,1);assert.equal(choice.completeDraft,true);
+  const offered=unit('BBB900','Seasonal unit','Major',['Semester 2']);
+  const seasonal=doubleMajorPathway({transcript,planners:[planner(1,'AI',[a]),planner(3,'DS',[offered])],term:'Semester 1',year:2027});assert.equal(seasonal.semesters[0].selected.length,0);assert.equal(seasonal.semesters[1].selected[0].code,'BBB900');
+  const blocked=unit('BBB901');blocked.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit=[{ID:77,UnitID:blocked.ID,UnitRelationship:'pre',LogicalOperators:'and',Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit:unit('EXT100')}];
+  const incomplete=doubleMajorPathway({transcript,planners:[planner(1,'AI',[a]),planner(3,'DS',[blocked])],term:'Semester 1',year:2027});assert.equal(incomplete.completeDraft,false);assert.equal(incomplete.semesters.length,2);assert.match(incomplete.outstanding[0].reasons.join(' '),/not met/);assert.equal(incomplete.remaining.majors[1].remaining,1);
+  const unknown=unit('BBB902');unknown.UnitTermOffered=[];
+  assert.equal(doubleMajorPathway({transcript,planners:[planner(1,'AI',[a]),planner(3,'DS',[unknown])]}).completeDraft,false);
+  assert.throws(()=>doubleMajorPathway({transcript,planners:plans,primaryId:999}),/no longer available/);
+  assert.throws(()=>doubleMajorPathway({transcript,planners:plans,primaryId:1,secondaryId:2}),/identical/);
+  assert.throws(()=>doubleMajorPathway({transcript,planners:plans,year:0}),/valid/);
+  assert.throws(()=>doubleMajorPathway({transcript:{completed:[]},planners:plans}),/No completed/);
+  console.log('Double-major pathway checks passed: closest distinct majors, N/EXM, shared counts, choices, offerings, FYP sequence, blocked prerequisites and unchanged DPA.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

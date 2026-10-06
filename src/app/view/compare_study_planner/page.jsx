@@ -1,4 +1,5 @@
 'use client';
+import {rankPlannerMatches} from '@app/libs/plannerMatching.mjs';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ConditionalRequireAuth } from '@components/helper';
 import { useRole } from '@app/context/RoleContext';
@@ -13,8 +14,8 @@ import {
 	BugAntIcon, PlusIcon, PencilIcon,
 } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
+import { parseTranscript } from '@app/libs/doubleMajorChecker.mjs';
 import ReplacementWorkspace from '@/app/view/unit_suggestion/ReplacementWorkspace';
-import Link from 'next/link';
 import UnitPoolToolbox from '@/app/view/unit_suggestion/UnitPoolToolbox';
 import { generateStudyPlannerPdf } from '@/app/view/unit_suggestion/Exportstudyplannerpdf';
 import {
@@ -424,14 +425,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId }) =
 	const currentSem = `${new Date().getFullYear()} Sem ${new Date().getMonth() < 6 ? 1 : 2}`;
 
 	// Compute planner scores
-	const computePlannerScores = useCallback((planners, completed) => {
-		if (!planners.length || !completed.length) return [];
-		const completedCodes = new Set(completed.map(u => u.code?.toUpperCase()).filter(Boolean));
-		return planners.map(p => {
-			const plannerCodes = new Set((p.units || []).map(u => extractUnitCode(u.UnitCode).toUpperCase()));
-			return { ...p, matchedUnits: [...completedCodes].filter(c => plannerCodes.has(c)).length, totalCompleted: completedCodes.size };
-		}).sort((a, b) => b.matchedUnits - a.matchedUnits);
-	}, []);
+	const computePlannerScores = useCallback((planners, completed) => rankPlannerMatches(planners, completed).map(r => ({...r.planner, matchedUnits:r.matched, totalCompleted:r.totalCompleted})), []);
 
 	// Core schedule generator (uses category requirements)
 	const generateSchedule = useCallback((planner, mapped = mappedExternalUnits) => {
@@ -1121,14 +1115,11 @@ export default function CompareStudyPlannerPage() {
 		reader.onload = (e) => {
 			try {
 				const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-				const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: null });
-				const units = rows
-					.filter(row => { const g = String(row['Grade'] ?? '').trim().toUpperCase(); return g && g !== 'N'; })
-					.map(row => {
-						const code = String(row['Course'] || '').trim().toUpperCase();
-						const title = String(row['Course Title'] || '').trim();
-						return { id: code, code, name: title, creditPoints: parseFloat(row['Credits'] || row['Earned'] || 0) || 0, grade: String(row['Grade'] || '').trim(), prerequisites: [], unitTypeId: code === 'ICT20016' && title === 'Work Integrated Learning Placement - ICT (3 month)' ? 17 : null };
-					}).filter(u => u.code);
+				const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '' });
+				const units = parseTranscript(rows).completed.map(unit => ({
+					id: unit.code, code: unit.code, name: unit.name, creditPoints: unit.earned, grade: unit.grade,
+					prerequisites: [], unitTypeId: unit.code === 'ICT20016' && unit.name === 'Work Integrated Learning Placement - ICT (3 month)' ? 17 : null,
+				}));
 				resolve(units);
 			} catch (err) { reject(new Error('Failed to parse XLSX: ' + err.message)); }
 		};
@@ -1175,7 +1166,7 @@ export default function CompareStudyPlannerPage() {
 		try {
 			setLoading(true);
 			const units = await parseXlsxFile(file);
-			if (!units.length) { setError('No completed units found. Check that units have a grade other than "N".'); return; }
+			if (!units.length) { setError('No completed or exempted units with positive earned credit found. Grade N is failed, even when Status says Complete.'); return; }
 			const unitsMap = new Map(units.map(u => [u.code.toUpperCase(), u]));
 			setCompletedUnits(Array.from(unitsMap.values()));
 			const totalCredits = Array.from(unitsMap.values()).reduce((s, u) => s + (u.creditPoints || 0), 0);
@@ -1216,7 +1207,6 @@ export default function CompareStudyPlannerPage() {
 							</div>
 
 							<ReplacementWorkspace />
-							<Link href="/view/ai-assistant" className="inline-block mb-6 rounded-lg bg-indigo-700 text-white px-4 py-3">Ask the Study Planner Assistant</Link>
 							<h2 className="text-2xl font-bold heading-text mb-2">Plan from your transcript</h2>
 							<p className="text-muted mb-5">Upload your results to identify remaining units and build a study plan.</p>
 							{/* Upload area */}
@@ -1228,7 +1218,7 @@ export default function CompareStudyPlannerPage() {
 									onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) { const dt = new DataTransfer(); dt.items.add(f); fileInputRef.current.files = dt.files; handleFileChange({ target: { files: dt.files } }); } }}>
 									<ArrowUpTrayIcon className="h-10 w-10 text-gray-400 mb-3" />
 									<p className="text-sm font-medium text-gray-700">{loading ? 'Processing…' : fileName ? `Loaded: ${fileName}` : 'Click or drag & drop an XLSX file here'}</p>
-									<p className="text-xs text-gray-400 mt-1">Completed units: grade = EXM or any grade except N</p>
+									<p className="text-xs text-gray-400 mt-1">N = failed (excluded). EXM = exempted (completed). Only positive earned credit counts; current and future attempts are excluded.</p>
 									<input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFileChange} disabled={loading} />
 								</div>
 							</div>

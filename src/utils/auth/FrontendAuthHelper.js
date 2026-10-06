@@ -30,9 +30,10 @@ export default class SecureFrontendAuthHelper {
      */
     static async authenticatedFetch(url, options = {}) {
         const isGET = (options.method == "GET" || !options.method)
+        const useCache = isGET && options.cache !== 'no-store';
         if (!isGET) {
             const staleKeys = await this.DataCacherObject.RemoveInvalidationKey(url);
-        } else {
+        } else if (useCache) {
             const cachedValue = await this.DataCacherObject.GetCache(url);
             if (cachedValue != null) {
                 return CreateMockResponse(cachedValue, 200);
@@ -111,7 +112,7 @@ export default class SecureFrontendAuthHelper {
             }
         }
 
-        if (isGET) {
+        if (useCache) {
             const clonedResponse = response.clone();
             const data = await clonedResponse.json();
             this.DataCacherObject.SetCache(url, data);

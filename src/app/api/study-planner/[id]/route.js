@@ -30,6 +30,7 @@ export async function GET(req, { params }) {
             include: {
                 studyPlannerUnits: {
                     include: { unit: true, unitType: true },
+                    orderBy: { id: 'asc' },
                 },
             },
         }),
@@ -107,34 +108,20 @@ export async function PUT(req, { params }) {
         : undefined;
 
     try {
-        // Optionally update the planner's linked template
-        if (templateIdProvided) {
-            await prisma.studyPlanner.update({
-                where: { id },
-                data: { plannerTemplateId },
-            });
-        }
-
-        // Update each StudyPlannerUnit's unitTypeId
-        if (units.length > 0) {
-            await Promise.all(
-                units.map(({ joinId, unitTypeId }) =>
-                    prisma.studyPlannerUnit.update({
-                        where: { id: joinId },
-                        data: { unitTypeId: unitTypeId ? parseInt(unitTypeId) : null },
-                    })
-                )
-            );
-        }
-
-        // Return updated planner
-        const updated = await prisma.studyPlanner.findUnique({
-            where: { id },
-            include: {
-                studyPlannerUnits: {
-                    include: { unit: true, unitType: true },
-                },
-            },
+        // Validate ownership and apply the reviewed changes together, or roll back all of them.
+        const updated = await prisma.$transaction(async tx => {
+            const current = await tx.studyPlanner.findUnique({where:{id},include:{studyPlannerUnits:{orderBy:{id:'asc'}}}});
+            const fail = (message,status=400) => { throw Object.assign(new Error(message),{status}); };
+            if (!current) fail('Planner not found',404);
+            if (body.expectedVersion && body.expectedVersion !== JSON.stringify({templateId:current.plannerTemplateId,units:current.studyPlannerUnits.map(u=>[u.id,u.unitTypeId])})) fail('This planner changed. Reload its details before saving.',409);
+            if (new Set(units.map(u=>u.joinId)).size!==units.length || units.some(u=>!Number.isInteger(u.joinId)||!current.studyPlannerUnits.some(v=>v.id===u.joinId))) fail('A unit row does not belong to this planner. Reload its details.');
+            if (units.some(u=>u.unitTypeId!=null && u.unitTypeId!=='' && (!Number.isInteger(Number(u.unitTypeId))||Number(u.unitTypeId)<=0))) fail('Invalid unit category.');
+            const types = await tx.unitType.findMany({select:{ID:true}});
+            if (units.some(u=>u.unitTypeId && !types.some(t=>t.ID===Number(u.unitTypeId)))) fail('Unit category no longer exists.');
+            if (templateIdProvided && plannerTemplateId!==null && (!Number.isInteger(plannerTemplateId)||!(await tx.plannerTemplate.findUnique({where:{id:plannerTemplateId}})))) fail('Template not found.');
+            if (templateIdProvided) await tx.studyPlanner.update({where:{id},data:{plannerTemplateId}});
+            for (const u of units) await tx.studyPlannerUnit.update({where:{id:u.joinId},data:{unitTypeId:u.unitTypeId?Number(u.unitTypeId):null}});
+            return tx.studyPlanner.findUnique({where:{id},include:{studyPlannerUnits:{include:{unit:true,unitType:true},orderBy:{id:'asc'}}}});
         });
 
         return NextResponse.json({
@@ -148,6 +135,8 @@ export async function PUT(req, { params }) {
                     ID: j.unit.ID,
                     UnitCode: j.unit.UnitCode,
                     Name: j.unit.Name,
+                    CreditPoints: j.unit.CreditPoints,
+                    Availability: j.unit.Availability,
                     unitTypeId: j.unitTypeId,
                     unitType: j.unitType,
                 })),
@@ -155,6 +144,6 @@ export async function PUT(req, { params }) {
         });
     } catch (error) {
         console.error('PUT study-planner error:', error);
-        return NextResponse.json({ success: false, message: 'Update failed', details: error.message }, { status: 500 });
+        return NextResponse.json({ success: false, message: error.status ? error.message : 'Update failed. Please retry.' }, { status: error.status || 500 });
     }
 }

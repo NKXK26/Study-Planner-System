@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict');
+(async()=>{
+  const {parseTranscript}=await import('../src/app/libs/doubleMajorChecker.mjs');
+  const {semesterPlan}=await import('../src/app/libs/academicPlanning.mjs');
+  const {courseCompletionAudit,formatCompletionAudit}=await import('../src/app/libs/courseCompletion.mjs');
+  const make=(code,category,cp=12.5)=>({ID:code,UnitCode:code,Name:code,CreditPoints:cp,unitType:{Name:category},Availability:'published',UnitTermOffered:[{TermType:'Semester 1'}]});
+  const units=[make('ICT20016','WIL Placement',25),...Array.from({length:6},(_,i)=>make('ELE1000'+i,'Elective')),make('COS30001','Major')];
+  const planner={units,plannerTemplate:{requirements:[{unitType:{Name:'Elective'},requiredCount:6},{unitType:{Name:'WIL Placement'},requiredCount:1},{unitType:{Name:'Major'},requiredCount:1}]}};
+  const rows=[['Course','Status','Earned','Grade'],['ICT20016','Complete',25,'P'],['AE1','Complete',12.5,'EXM'],['AE2','Complete',12.5,'EXM'],['AE3','Complete',12.5,'EXM'],['ELE10000','Complete',12.5,'P'],['AE4','Complete',12.5,'N']];
+  const transcript=parseTranscript(rows),plan=semesterPlan({transcript,planner,relations:[],term:'Semester 1',maxUnits:4,maxCredits:50,provisional:true});
+  const audit=courseCompletionAudit({transcript,planner,plan}),elective=audit.categories.find(c=>c.name==='Elective');
+  assert.equal(elective.completedCount,6);assert.equal(elective.remainingCount,0);assert.equal(elective.options.length,0);
+  assert.equal(audit.categories.find(c=>c.name==='WIL Placement').completedCount,1);
+  assert.equal(audit.categories.find(c=>c.name==='Major').remainingCount,1,'Elective slots must not fill specific major requirements');
+  assert(!plan.selected.some(u=>u.category==='Elective'));assert(plan.selected.some(u=>u.category==='Major'));
+  assert.equal(plan.totalEarned,75,'Slot allocation must not duplicate earned CP');assert.deepEqual(audit.unmatched,[]);
+  assert.match(formatCompletionAudit(audit),/ICT20016 counts as 2 elective slots/);
+  const placementInElectives={...planner,units:units.map(u=>u.UnitCode==='ICT20016'?{...u,unitType:{Name:'Elective'}}:u)};
+  assert.equal(courseCompletionAudit({transcript,planner:placementInElectives,plan}).categories.find(c=>c.name==='Elective').completedCount,6,'Placement in elective pool must not count once plus twice');
+  const failed=parseTranscript([rows[0],['ICT20016','Complete',25,'N'],['AE1','Current',12.5,'EXM'],['AE2','Future',0,''],['AE3','Complete',0,'EXM']]);
+  assert.equal(courseCompletionAudit({transcript:failed,planner,plan}).categories.find(c=>c.name==='Elective').completedCount,1,'EXM counts; failed N, zero credits and unfinished attempts do not');
+  console.log('Placement two-slot and approved-elective one-slot allocations, failed attempts, CP deduplication and fulfilled-category scheduling passed.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

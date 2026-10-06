@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-05T20:24:33.652Z",
+  "scope": "Small synthetic regression sample; not a human usability or safety certification. Cold model loading is included in latency.",
+  "configuredModel": "llama3.2:3b",
+  "models": [
+    {
+      "model": "qwen3.5:4b",
+      "routingCorrect": 6,
+      "modelRoutingCorrect": 6,
+      "total": 7,
+      "conversationalReplies": 2,
+      "rows": [
+        {
+          "question": "idk what subjects to pick next term",
+          "expected": "suggest_next_semester",
+          "actual": "suggest_next_semester",
+          "correct": true,
+          "source": "model",
+          "arguments": {},
+          "ms": 12341
+        },
+        {
+          "question": "I want to switch from AI to data science, what should I take?",
+          "expected": "suggest_next_semester",
+          "actual": "suggest_next_semester",
+          "correct": true,
+          "source": "model",
+          "arguments": {
+            "targetMajor": "DS"
+          },
+          "ms": 1955
+        },
+        {
+          "question": "why those?",
+          "expected": "explain_next_semester",
+          "actual": "explain_next_semester",
+          "correct": true,
+          "source": "model",
+          "arguments": {},
+          "ms": 1882
+        },
+        {
+          "question": "compare these",
+          "expected": "compare_planners",
+          "actual": "compare_planners",
+          "correct": true,
+          "source": "model",
+          "arguments": {
+            "plannerA": "12",
+            "plannerB": "18"
+          },
+          "ms": 2017
+        },
+        {
+          "question": "can I take cloud computing instead?",
+          "expected": "explain_next_semester",
+          "actual": "clarify",
+          "correct": false,
+          "source": "model",
+          "ms": 1866
+        },
+        {
+          "question": "What is a double major?",
+          "expected": "answer",
+          "actual": "answer",
+          "correct": true,
+          "source": "model",
+          "ms": 1375
+        },
+        {
+          "question": "AI or data science, which planner should I follow?",
+          "expected": "clarify",
+          "actual": "clarify",
+          "correct": true,
+          "source": "model",
+          "ms": 1900
+        }
+      ],
+      "replies": [
+        {
+          "question": "why did you pick these?",
+          "style": "conversational",
+          "factsPreserved": true,
+          "answer": "Here are the recorded checks behind this draft.\n\nCOS20019 Cloud Computing Architecture: unfinished; Semester 1 offering recorded. Prerequisites satisfied in current DPA.\n\nThis is a provisional draft. Semester/year and recurring offerings need confirmation; recorded checks do not establish enrolment approval.",
+          "ms": 1013
+        },
+        {
+          "question": "explain my DPA please",
+          "style": "conversational",
+          "factsPreserved": true,
+          "answer": "Here is the comparison using your current selections.\n\nCOS10001: 12.5 earned CP. COS40005: failed grade N, not counted. AE1: 12.5 earned CP (EXM).",
+          "ms": 1069
+        }
+      ]
+    }
+  ]
+}

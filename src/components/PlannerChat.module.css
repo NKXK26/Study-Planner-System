@@ -1,0 +1,84 @@
+.chat {
+  color: #171717;
+  background: #fff;
+  font-size: 15px;
+  line-height: 1.65;
+}
+.chat button, .chat a, .chat input, .chat select, .chat textarea, .chat summary {
+  transition: background-color .15s, border-color .15s, box-shadow .15s;
+}
+.chat :is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid #b91c1c;
+  outline-offset: 3px;
+}
+.chat :is(input:not([type=file]):not([type=checkbox]), select, textarea) {
+  min-height: 44px;
+  border-color: #d4d4d4;
+  border-radius: 10px;
+  color: #171717;
+  background: #fff;
+  font-size: 14px;
+}
+.chat input[type=checkbox] { accent-color: #b91c1c; }
+.chat button { min-height: 36px; }
+.chat button:disabled { cursor: not-allowed; }
+.chat details {
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: #fff;
+}
+.chat summary { cursor: pointer; font-weight: 600; }
+.chat details[open] > summary { margin-bottom: 12px; }
+.chat table { border-collapse: collapse; min-width: 440px; line-height: 1.5; }
+.chat th { background: #f5f5f5; color: #404040; font-size: 12px; padding: 10px 12px; }
+.chat td { padding: 12px; vertical-align: top; }
+.chat tbody tr:nth-child(even) { background: #fafafa; }
+.chat h3 { font-size: 16px; line-height: 1.5; }
+.message { overflow-wrap: anywhere; }
+.message p + p { margin-top: 12px; }
+.message ul, .message ol { padding-left: 22px; margin: 12px 0; }
+.message ul { list-style: disc; }
+.message ol { list-style: decimal; }
+.message li + li { margin-top: 6px; }
+.message strong { font-weight: 650; }
+.message pre { white-space: pre-wrap; overflow-x: auto; padding: 14px; border-radius: 10px; background: #f5f5f5; font-size: 13px; }
+.tools { scroll-margin-top: 16px; }
+@media (prefers-reduced-motion: reduce) {
+  .chat * { transition: none !important; }
+}
+
+.body { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+.conversation { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.workspace { min-width: 0; min-height: 0; flex-shrink: 0; border-bottom: 1px solid #e5e5e5; background: #fff; }
+.workspaceHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #f0f0f0; }
+.workspaceToggle { padding: 6px 12px; border: 1px solid #fecaca; border-radius: 8px; color: #b91c1c; background: #fff; font-size: 12px; font-weight: 600; }
+.workspaceToggle:hover { background: #fef2f2; }
+.workspaceContent { display: none; max-height: 35dvh; overflow: auto; overscroll-behavior: contain; padding: 16px; }
+.workspaceContent > * + * { margin-top: 12px; }
+.workspaceExpanded { display: block; }
+.aiSidebar { min-width: 0; min-height: 0; flex-shrink: 0; border-bottom: 1px solid #e5e5e5; background: #fff; }
+.aiSidebarHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; }
+.aiSidebarContent { display: none; max-height: 25dvh; overflow: auto; overscroll-behavior: contain; padding: 10px; overflow-wrap: anywhere; }
+.aiSidebarExpanded { display: block; }
+.aiSidebarContent button { max-width: 100%; white-space: normal; }
+@media (max-width: 1023px) {
+  .workspaceContent { max-height: 25dvh; }
+  .workspaceHeader { padding: 8px 14px; }
+  .chat > header { padding: 10px 14px; }
+  .chat > header h2 { font-size: 18px; }
+  .chat > header h2 + p { display: none; }
+}
+@media (min-width: 1024px) {
+  .body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); }
+  .conversation { grid-column: 1; grid-row: 1; }
+  .workspace { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; border-bottom: 0; border-left: 1px solid #e5e5e5; }
+  .workspaceContent { display: block; flex: 1; min-height: 0; max-height: none; }
+  .workspaceToggle { display: none; }
+  .withAi { grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(260px, 320px); }
+  .withAi .conversation { grid-column: 2; }
+  .withAi .workspace { grid-column: 3; }
+  .aiSidebar { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; border-bottom: 0; border-right: 1px solid #e5e5e5; }
+  .aiSidebarHeader { flex-shrink: 0; }
+  .aiSidebarContent { display: block; flex: 1; min-height: 0; max-height: none; }
+}

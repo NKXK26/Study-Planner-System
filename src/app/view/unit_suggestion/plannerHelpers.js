@@ -1,3 +1,5 @@
+import {MAX_UNITS_PER_SEMESTER,MAX_CREDITS_PER_SEMESTER} from '@app/libs/semesterRules.mjs';
+export {MAX_UNITS_PER_SEMESTER,MAX_CREDITS_PER_SEMESTER};
 // ========================= CONSTANTS =========================
 export const REQUIRED_CORE = 8;
 export const REQUIRED_MAJOR = 8;
@@ -5,8 +7,8 @@ export const REQUIRED_ELECTIVE = 8;
 export const TOTAL_REQUIRED_UNITS = 24;
 export const TOTAL_REQUIRED_CREDITS = 300;
 export const DEFAULT_CREDIT_POINTS = 12.5;
-export const MAX_UNITS_PER_SEMESTER = 4;
-export const MAX_CREDITS_PER_SEMESTER = 50;
+
+
 
 // ========================= CANONICAL UNIT MAPPING =========================
 export const CANONICAL_UNIT = {

@@ -23,6 +23,7 @@ import { ConditionalRequireAuth } from '@components/helper';
 import PageLoadingWrapper from '@components/PageLoadingWrapper';
 import { useRole } from '@app/context/RoleContext';
 import { useLightDarkMode } from '@app/context/LightDarkMode';
+import DashboardChat from '@components/DashboardChat';
 
 // Helper to format numbers with separators
 const formatNumber = (num) => num?.toLocaleString() || 0;
@@ -519,6 +520,7 @@ const statCards = [
 					</div>
 				</div>
 
+				<DashboardChat theme={theme} />
 				<style jsx>{`
           @keyframes blob {
             0% { transform: translate(0px, 0px) scale(1); }

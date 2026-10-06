@@ -1,0 +1,55 @@
+const assert=require('node:assert/strict');
+(async()=>{
+  const {plannerAiStatus,resolvePlannerModel,validateModelName}=await import('../src/app/libs/plannerAiStatus.mjs');
+  const {interpretPlannerRequest}=await import('../src/app/libs/plannerRequest.mjs');
+  const {composeToolReply}=await import('../src/app/libs/plannerResponse.mjs');
+  const env={OLLAMA_MODEL:'base',OLLAMA_ROUTER_MODEL:'router:4b',OLLAMA_RESPONSE_MODEL:'writer:3b'};
+  let calls=[];
+  const fetchImpl=async(url,options)=>{
+    calls.push({url,options});
+    if(url.endsWith('/api/tags'))return {ok:true,json:async()=>({models:[{name:'router:4b'},{name:'writer:3b'}]})};
+    return {ok:true,json:async()=>({done:true,message:{content:'{"ok":true}'}})};
+  };
+  assert.equal((await plannerAiStatus({env,fetchImpl})).status,'installed');
+  assert.equal(calls.length,1,'Passive checks must not run inference');
+  calls=[];
+  const ready=await plannerAiStatus({env,fetchImpl,verify:true});
+  assert.equal(ready.status,'ready');assert.equal(calls.length,3);
+  assert.deepEqual(calls.slice(1).map(c=>JSON.parse(c.options.body).model),['router:4b','writer:3b']);
+  assert.ok(calls.slice(1).every(c=>!c.options.body.includes('DPA')));
+  calls=[];
+  const switched=await plannerAiStatus({env,fetchImpl,verify:true,model:'writer:3b'});
+  assert.deepEqual(switched.models,['writer:3b']);assert.equal(switched.selectedModel,'writer:3b');
+  assert.deepEqual(switched.installedModels,['router:4b','writer:3b']);
+  assert.equal(switched.configuredModels.router,'router:4b','A tab selection must not mutate defaults');
+  assert.equal(calls.length,2,'Check only the selected model');
+  assert.equal(await resolvePlannerModel('writer:3b',{env,fetchImpl}),'writer:3b');
+  assert.equal(await resolvePlannerModel('',{fetchImpl:async()=>assert.fail('Default needs no model lookup')}),undefined);
+  await assert.rejects(()=>resolvePlannerModel('missing:4b',{env,fetchImpl}),e=>e.status===409);
+  await assert.rejects(()=>resolvePlannerModel('writer:3b',{env,fetchImpl:async()=>{throw new Error();}}),e=>e.status===503);
+  assert.throws(()=>validateModelName({model:'writer:3b'}));assert.throws(()=>validateModelName('writer; remove')); 
+  const missing=await plannerAiStatus({env,verify:true,fetchImpl:async()=>({ok:true,json:async()=>({models:[{name:'router:4b'}]})})});
+  assert.equal(missing.status,'no-model');assert.deepEqual(missing.missingModels,['writer:3b']);
+  assert.equal((await plannerAiStatus({env:{OLLAMA_MODEL:'base'},fetchImpl:async()=>({ok:true,json:async()=>({models:[{name:'base:latest'}]})})})).status,'installed');
+  assert.equal((await plannerAiStatus({env,fetchImpl:async()=>{throw new Error('offline');}})).status,'offline');
+  assert.equal((await plannerAiStatus({env,fetchImpl:async()=>({ok:true,json:async()=>({})})})).status,'offline');
+  assert.equal((await plannerAiStatus({env,verify:true,fetchImpl:async(url)=>url.endsWith('/api/tags')?fetchImpl(url):({ok:true,json:async()=>({done:true,message:{content:'nonsense'}})})})).status,'inference-failed');
+  assert.equal((await plannerAiStatus({env:{OLLAMA_URL:'https://model.example',OLLAMA_MODEL:'base'},fetchImpl:async()=>{throw new Error();}})).localService,false);
+  const forbidden=async()=>{assert.fail('Planner mode must not call the model');};
+  const intent=await interpretPlannerRequest({question:'suggest my next semester',planningOnly:true},{fetchImpl:forbidden});
+  assert.equal(intent.source,'fallback');assert.equal(intent.call.name,'suggest_next_semester');
+  const reply=await composeToolReply({tool:'inspect_unit',answer:'COS10001: Recorded unit.',data:{code:'COS10001'}},{question:'Tell me about COS10001',planningOnly:true},{fetchImpl:forbidden});
+  assert.equal(reply.responseStyle,'verified');assert.equal(reply.answer,'COS10001: Recorded unit.');
+  // Fresh status checks must bypass the shared browser cache.
+  const fs=require('node:fs');
+  const helperSource=fs.readFileSync('src/utils/auth/FrontendAuthHelper.js','utf8').replace(/^import .*;?\r?\n/gm,'').replace('export default class','class').replace(/^export /gm,'');
+  let cacheReads=0,cacheWrites=0,networkReads=0;
+  class Cache {async GetCache(){cacheReads++;return {status:'old'};}async SetCache(){cacheWrites++;}}
+  const Helper=new Function('DataCacher','fetch',helperSource+'\nreturn SecureFrontendAuthHelper;')(Cache,async()=>{networkReads++;return new Response('{"status":"offline"}');});
+  Helper.isDevMode=()=>true;
+  await Helper.authenticatedFetch('/api/planner-assistant',{cache:'no-store'});
+  await Helper.authenticatedFetch('/api/planner-assistant',{cache:'no-store'});
+  assert.equal(networkReads,2);assert.equal(cacheReads,0);assert.equal(cacheWrites,0);
+  assert.equal((await (await Helper.authenticatedFetch('/api/other')).json()).status,'old');
+  console.log('AI availability and model-free planning checks passed.');
+})().catch(e=>{console.error(e);process.exitCode=1;});
