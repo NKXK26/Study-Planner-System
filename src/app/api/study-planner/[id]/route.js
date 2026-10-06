@@ -21,7 +21,8 @@ export async function GET(req, { params }) {
     const authResult = await validateAuthenticatedRequest(req);
     if (authResult.error) return authResult.error;
 
-    const id = parseInt(params.id, 10);
+    const { id: idParam } = await params;
+    const id = parseInt(idParam, 10);
     if (isNaN(id)) return NextResponse.json({ success: false, message: 'Invalid ID' }, { status: 400 });
 
     const [planner, templates, unitTypes] = await Promise.all([
@@ -68,6 +69,10 @@ export async function GET(req, { params }) {
                 Availability: j.unit.Availability,
                 unitTypeId: j.unitTypeId,
                 unitType: j.unitType,
+                plannedYear: j.plannedYear,
+                plannedSemester: j.plannedSemester,
+                plannedDates: j.plannedDates,
+                sortOrder: j.sortOrder,
             })),
             // All templates available for the selector
             templates: templates.map(t => ({
@@ -91,7 +96,8 @@ export async function PUT(req, { params }) {
     const authResult = await validateAuthenticatedRequest(req);
     if (authResult.error) return authResult.error;
 
-    const id = parseInt(params.id, 10);
+    const { id: idParam } = await params;
+    const id = parseInt(idParam, 10);
     if (isNaN(id)) return NextResponse.json({ success: false, message: 'Invalid ID' }, { status: 400 });
 
     let body;
@@ -115,17 +121,59 @@ export async function PUT(req, { params }) {
             });
         }
 
-        // Update each StudyPlannerUnit's unitTypeId
-        if (units.length > 0) {
-            await Promise.all(
-                units.map(({ joinId, unitTypeId }) =>
+        // Save the complete unit list: update existing rows, add new catalogue
+        // units, and remove rows that were deleted in the editor.
+        const existingLinks = await prisma.studyPlannerUnit.findMany({
+            where: { studyPlannerId: id },
+            select: { id: true, unitId: true },
+        });
+        const existingById = new Map(existingLinks.map(link => [link.id, link]));
+        const submittedExistingIds = units
+            .map(unit => Number(unit.joinId))
+            .filter(joinId => existingById.has(joinId));
+        const existingUnitIds = new Set(existingLinks.map(link => link.unitId));
+        const newUnits = units.filter(unit => (
+            !existingById.has(Number(unit.joinId))
+            && Number.isInteger(unit.unitId)
+            && unit.unitId > 0
+            && !existingUnitIds.has(unit.unitId)
+        ));
+
+        await prisma.$transaction([
+            prisma.studyPlannerUnit.deleteMany({
+                where: {
+                    studyPlannerId: id,
+                    ...(submittedExistingIds.length ? { id: { notIn: submittedExistingIds } } : {}),
+                },
+            }),
+            ...units
+                .filter(unit => existingById.has(Number(unit.joinId)))
+                .map(({ joinId, unitTypeId, plannedYear, plannedSemester, plannedDates, sortOrder }) =>
                     prisma.studyPlannerUnit.update({
-                        where: { id: joinId },
-                        data: { unitTypeId: unitTypeId ? parseInt(unitTypeId) : null },
+                        where: { id: Number(joinId) },
+                        data: {
+                            unitTypeId: unitTypeId ? parseInt(unitTypeId) : null,
+                            ...(Number.isInteger(plannedYear) ? { plannedYear } : {}),
+                            ...(typeof plannedSemester === 'string' ? { plannedSemester: plannedSemester.trim() || null } : {}),
+                            ...(typeof plannedDates === 'string' ? { plannedDates: plannedDates.trim() || null } : {}),
+                            ...(Number.isInteger(sortOrder) ? { sortOrder } : {}),
+                        },
                     })
-                )
-            );
-        }
+                ),
+            ...newUnits.map(({ unitId, unitTypeId, plannedYear, plannedSemester, plannedDates, sortOrder }) =>
+                prisma.studyPlannerUnit.create({
+                    data: {
+                        studyPlannerId: id,
+                        unitId,
+                        unitTypeId: unitTypeId ? parseInt(unitTypeId) : null,
+                        plannedYear: Number.isInteger(plannedYear) ? plannedYear : null,
+                        plannedSemester: typeof plannedSemester === 'string' ? plannedSemester.trim() || null : null,
+                        plannedDates: typeof plannedDates === 'string' ? plannedDates.trim() || null : null,
+                        sortOrder: Number.isInteger(sortOrder) ? sortOrder : 0,
+                    },
+                })
+            ),
+        ]);
 
         // Return updated planner
         const updated = await prisma.studyPlanner.findUnique({
@@ -150,6 +198,10 @@ export async function PUT(req, { params }) {
                     Name: j.unit.Name,
                     unitTypeId: j.unitTypeId,
                     unitType: j.unitType,
+                    plannedYear: j.plannedYear,
+                    plannedSemester: j.plannedSemester,
+                    plannedDates: j.plannedDates,
+                    sortOrder: j.sortOrder,
                 })),
             },
         });

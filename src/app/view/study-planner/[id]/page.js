@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { Bars3Icon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -108,6 +109,9 @@ export default function StudyPlannerEditPage() {
     const [deletingPlanner, setDeletingPlanner] = useState(false);
     const [error, setError] = useState(null);
     const [successMsg, setSuccessMsg] = useState(null);
+    const [unitCatalog, setUnitCatalog] = useState([]);
+    const [showUnitLibrary, setShowUnitLibrary] = useState(false);
+    const [unitSearch, setUnitSearch] = useState('');
 
     // All templates from the API (for the selector dropdown)
     const [allTemplates, setAllTemplates] = useState([]);
@@ -137,6 +141,11 @@ export default function StudyPlannerEditPage() {
                 setAllUnitTypes(data.data.unitTypes ?? []);
                 setSelectedTemplateId(data.data.plannerTemplateId ?? null);
                 setUnits(data.data.units.map(u => ({ ...u })));
+                const unitRes = await fetch('/api/unit?availability=published', {
+                    headers: { 'x-dev-override': 'true' },
+                });
+                const unitData = await unitRes.json();
+                if (unitRes.ok) setUnitCatalog(unitData.data ?? []);
             } else {
                 setError(data.message);
             }
@@ -177,6 +186,59 @@ export default function StudyPlannerEditPage() {
         }
     }
 
+    function addUnitToPeriod(catalogUnit, period) {
+        if (units.some(unit => unit.ID === catalogUnit.ID || unit.unitId === catalogUnit.ID)) {
+            setError(`${catalogUnit.UnitCode} is already in this planner.`);
+            return;
+        }
+        setUnits(prev => [...prev, {
+            joinId: null,
+            unitId: catalogUnit.ID,
+            ID: catalogUnit.ID,
+            UnitCode: catalogUnit.UnitCode,
+            Name: catalogUnit.Name,
+            CreditPoints: catalogUnit.CreditPoints,
+            unitTypeId: activeUnitTypes[0]?.ID ?? null,
+            plannedYear: period.year,
+            plannedSemester: period.semester,
+            plannedDates: period.dates,
+            sortOrder: prev.length,
+        }]);
+        setError(null);
+    }
+
+    function moveUnitToPeriod(dragged, period) {
+        setUnits(prev => {
+            const nextSortOrder = prev
+                .filter(unit => unit.plannedYear === period.year && unit.plannedSemester === period.semester && unit.plannedDates === period.dates)
+                .reduce((highest, unit) => Math.max(highest, unit.sortOrder ?? 0), -1) + 1;
+            return prev.map(unit => {
+                const isMatch = dragged.joinId
+                    ? unit.joinId === dragged.joinId
+                    : (unit.unitId ?? unit.ID) === dragged.unitId;
+                return isMatch ? {
+                    ...unit,
+                    plannedYear: period.year,
+                    plannedSemester: period.semester,
+                    plannedDates: period.dates,
+                    sortOrder: nextSortOrder,
+                } : unit;
+            });
+        });
+    }
+
+    function handlePeriodDrop(event, period) {
+        event.preventDefault();
+        const catalogRaw = event.dataTransfer.getData('application/study-planner-catalog-unit');
+        const existingRaw = event.dataTransfer.getData('application/study-planner-existing-unit');
+        try {
+            if (catalogRaw) addUnitToPeriod(JSON.parse(catalogRaw), period);
+            if (existingRaw) moveUnitToPeriod(JSON.parse(existingRaw), period);
+        } catch {
+            setError('Unable to move that unit. Please try again.');
+        }
+    }
+
     async function handleSave() {
         setSaving(true);
         setSuccessMsg(null);
@@ -187,7 +249,15 @@ export default function StudyPlannerEditPage() {
                 headers: { 'Content-Type': 'application/json', 'x-dev-override': 'true' },
                 body: JSON.stringify({
                     plannerTemplateId: selectedTemplateId,
-                    units: units.map(u => ({ joinId: u.joinId, unitTypeId: u.unitTypeId })),
+                    units: units.map(u => ({
+                        joinId: u.joinId,
+                        unitTypeId: u.unitTypeId,
+                        plannedYear: u.plannedYear,
+                        plannedSemester: u.plannedSemester,
+                        plannedDates: u.plannedDates,
+                        sortOrder: u.sortOrder,
+                        unitId: u.unitId,
+                    })),
                 }),
             });
             const data = await res.json();
@@ -247,6 +317,20 @@ export default function StudyPlannerEditPage() {
 
     const typeLabelMap = Object.fromEntries(activeUnitTypes.map(ut => [ut.ID, ut.Name]));
 
+    // New planners store their units in study periods. Older planners without
+    // that information remain readable in a default Year 1 / Semester 1 section.
+    const studyPeriods = Object.values(units.reduce((periods, unit) => {
+        const year = unit.plannedYear || 1;
+        const semester = unit.plannedSemester || 'Semester 1';
+        const dates = unit.plannedDates || 'Dates not specified';
+        const key = `${year}|${semester}|${dates}`;
+        if (!periods[key]) periods[key] = { key, year, semester, dates, units: [] };
+        periods[key].units.push(unit);
+        return periods;
+    }, {})).sort((a, b) => (
+        a.year - b.year || a.semester.localeCompare(b.semester) || a.dates.localeCompare(b.dates)
+    ));
+
     if (loading) return <div className="p-6 text-gray-500">Loading...</div>;
     if (error && !planner) return <div className="p-6 text-red-500">{error}</div>;
 
@@ -274,6 +358,13 @@ export default function StudyPlannerEditPage() {
                 {units.length} unit{units.length !== 1 ? 's' : ''}
             </p>
 
+            <button
+                onClick={() => { setShowUnitLibrary(true); setUnitSearch(''); }}
+                className="mb-6 inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+                <PlusIcon className="h-4 w-4" /> Add unit
+            </button>
+
             {/* Template selector */}
             <TemplateSelectorBanner
                 templates={allTemplates}
@@ -289,91 +380,111 @@ export default function StudyPlannerEditPage() {
             {error && <p className="text-red-500 mb-4 text-sm">{error}</p>}
             {successMsg && <p className="text-green-600 mb-4 text-sm">{successMsg}</p>}
 
-            {/* Units table */}
-            <div className="border rounded-lg overflow-hidden mb-6">
-                <table className="w-full text-sm">
-                    <thead className="bg-gray-100 text-left">
-                        <tr>
-                            <th className="px-4 py-3 font-medium text-gray-600">Unit Code</th>
-                            <th className="px-4 py-3 font-medium text-gray-600">Name</th>
-                            <th className="px-4 py-3 font-medium text-gray-600">Credits</th>
-                            <th className="px-4 py-3 font-medium text-gray-600">Unit Type</th>
-                            <th className="px-4 py-3 font-medium text-gray-600 w-12"></th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                        {groupedUnits.length === 0 ? (
-                            <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm">
-                                    No units in this planner.
-                                </td>
-                            </tr>
-                        ) : groupedUnits.map(({ typeId, units: group }) => (
-                            <React.Fragment key={`group-${typeId}`}>
-                                {/* Group header row */}
-                                <tr>
-                                    <td
-                                        colSpan={5}
-                                        className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600"
-                                        style={{
-                                            backgroundColor: typeId && colourMap[typeId]
-                                                ? hexToRgba(colourMap[typeId], 0.55)
-                                                : '#f3f4f6',
-                                        }}
-                                    >
-                                        {typeId ? (typeLabelMap[typeId] ?? `Type ${typeId}`) : 'Unassigned'} ({group.length})
-                                    </td>
-                                </tr>
-                                {/* Unit rows */}
-                                {group.map(unit => (
-                                    <tr
-                                        key={unit.joinId}
-                                        style={{
+            {/* Units grouped as the saved study-plan sequence */}
+            <div className={`mb-6 grid grid-cols-1 gap-6 ${showUnitLibrary ? 'xl:grid-cols-[300px_minmax(0,1fr)]' : ''}`}>
+                {showUnitLibrary && (
+                    <aside className="h-fit rounded-xl border border-gray-200 bg-white p-4 shadow-sm xl:sticky xl:top-6">
+                        <div className="mb-3 flex items-start justify-between gap-2">
+                            <div>
+                                <h2 className="font-semibold text-gray-800">Unit library</h2>
+                                <p className="mt-1 text-xs text-gray-500">Drag a unit into a study period.</p>
+                            </div>
+                            <button onClick={() => setShowUnitLibrary(false)} className="p-1 text-gray-500 hover:text-red-600" title="Close unit library">
+                                <XMarkIcon className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <label className="relative mb-3 block">
+                            <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                            <input autoFocus value={unitSearch} onChange={event => setUnitSearch(event.target.value)} placeholder="Search units"
+                                className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-2 text-sm" />
+                        </label>
+                        <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
+                            {unitCatalog.filter(unit => {
+                                const term = unitSearch.trim().toLowerCase();
+                                return !units.some(item => item.ID === unit.ID || item.unitId === unit.ID)
+                                    && (!term || unit.UnitCode.toLowerCase().includes(term) || unit.Name.toLowerCase().includes(term));
+                            }).map(unit => (
+                                <div key={unit.ID} draggable onDragStart={event => {
+                                    event.dataTransfer.effectAllowed = 'copy';
+                                    event.dataTransfer.setData('application/study-planner-catalog-unit', JSON.stringify(unit));
+                                }} className="flex cursor-grab items-center gap-2 rounded-lg border border-gray-200 p-2.5 hover:border-blue-300 active:cursor-grabbing">
+                                    <Bars3Icon className="h-4 w-4 shrink-0 text-gray-400" />
+                                    <div className="min-w-0"><p className="font-mono text-xs font-semibold">{unit.UnitCode}</p><p className="truncate text-xs text-gray-500">{unit.Name}</p></div>
+                                </div>
+                            ))}
+                        </div>
+                    </aside>
+                )}
+            <div className="space-y-6">
+                {studyPeriods.length === 0 ? (
+                    <div className="border rounded-lg px-4 py-8 text-center text-gray-400 text-sm">
+                        No units in this planner.
+                    </div>
+                ) : studyPeriods.map(period => (
+                    <section key={period.key} onDragOver={event => event.preventDefault()} onDrop={event => handlePeriodDrop(event, period)} className="border rounded-xl overflow-hidden">
+                        <header className="bg-gray-800 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h2 className="font-semibold">Year {period.year} — {period.semester}</h2>
+                                <p className="text-xs text-gray-300 mt-0.5">{period.dates}</p>
+                            </div>
+                            <span className="text-xs bg-white/15 rounded-full px-2.5 py-1">
+                                {period.units.length} unit{period.units.length !== 1 ? 's' : ''}
+                            </span>
+                        </header>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-100 text-left">
+                                    <tr>
+                                        <th className="px-4 py-3 font-medium text-gray-600">Unit Code</th>
+                                        <th className="px-4 py-3 font-medium text-gray-600">Name</th>
+                                        <th className="px-4 py-3 font-medium text-gray-600">Credits</th>
+                                        <th className="px-4 py-3 font-medium text-gray-600">Unit Type</th>
+                                        <th className="px-4 py-3 font-medium text-gray-600 w-12"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {[...period.units].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).map(unit => (
+                                        <tr key={unit.joinId ?? unit.ID} draggable
+                                            onDragStart={event => {
+                                                event.dataTransfer.effectAllowed = 'move';
+                                                event.dataTransfer.setData('application/study-planner-existing-unit', JSON.stringify({
+                                                    joinId: unit.joinId,
+                                                    unitId: unit.unitId ?? unit.ID,
+                                                }));
+                                            }}
+                                            className="cursor-grab active:cursor-grabbing"
+                                            style={{
                                             backgroundColor: unit.unitTypeId && colourMap[unit.unitTypeId]
                                                 ? hexToRgba(colourMap[unit.unitTypeId], 0.18)
                                                 : '#ffffff',
-                                        }}
-                                    >
-                                        <td className="px-4 py-3 font-mono font-medium">{unit.UnitCode}</td>
-                                        <td className="px-4 py-3 text-gray-700">{unit.Name}</td>
-                                        <td className="px-4 py-3 text-gray-500">{unit.CreditPoints ?? '—'}</td>
-                                        <td className="px-4 py-3">
-                                            <select
-                                                value={unit.unitTypeId ?? ''}
-                                                onChange={e => handleUnitTypeChange(unit.joinId, e.target.value)}
-                                                className="border rounded px-2 py-1 text-sm w-full max-w-[180px] bg-white"
-                                                disabled={saving || activeUnitTypes.length === 0}
-                                            >
-                                                <option value="">— None —</option>
-                                                {/* Preserve an existing assignment outside the template's choices. */}
-                                                {unit.unitType && !activeUnitTypes.some(ut => ut.ID === unit.unitTypeId) && (
-                                                    <option value={unit.unitTypeId}>{unit.unitType.Name}</option>
-                                                )}
-                                                {activeUnitTypes.length > 0
-                                                    ? activeUnitTypes.map(ut => (
-                                                        <option key={ut.ID} value={ut.ID}>{ut.Name}</option>
-                                                    ))
-                                                    : null
-                                                }
-                                            </select>
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            <button
-                                                onClick={() => handleRemoveUnit(unit.joinId)}
-                                                className="text-red-400 hover:text-red-600 transition-colors"
-                                                title="Remove from planner"
-                                            >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </React.Fragment>
-                        ))}
-                    </tbody>
-                </table>
+                                        }}>
+                                            <td className="px-4 py-3 font-mono font-medium"><span className="mr-2 inline-flex align-middle text-gray-400" title="Drag to another study period"><Bars3Icon className="h-4 w-4" /></span>{unit.UnitCode}</td>
+                                            <td className="px-4 py-3 text-gray-700">{unit.Name}</td>
+                                            <td className="px-4 py-3 text-gray-500">{unit.CreditPoints ?? '—'}</td>
+                                            <td className="px-4 py-3">
+                                                <select value={unit.unitTypeId ?? ''} onChange={e => handleUnitTypeChange(unit.joinId, e.target.value)}
+                                                    className="border rounded px-2 py-1 text-sm w-full max-w-[180px] bg-white"
+                                                    disabled={saving || activeUnitTypes.length === 0}>
+                                                    <option value="">— None —</option>
+                                                    {unit.unitType && !activeUnitTypes.some(ut => ut.ID === unit.unitTypeId) && <option value={unit.unitTypeId}>{unit.unitType.Name}</option>}
+                                                    {activeUnitTypes.map(ut => <option key={ut.ID} value={ut.ID}>{ut.Name}</option>)}
+                                                </select>
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <button onClick={() => handleRemoveUnit(unit.joinId)} className="text-red-400 hover:text-red-600 transition-colors" title="Remove from planner">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                ))}
+            </div>
             </div>
 
             {/* Save */}
