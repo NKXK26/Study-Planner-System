@@ -153,3 +153,75 @@ Regression: `node scripts/test-double-major-electives.cjs`, `node scripts/test-d
 Completion requests such as "what should I take to complete my study", "what do I need to finish my studies", and "what units do I need to graduate" now run the same full-pathway tool as "Plan all remaining semesters until I finish". No exact command is required, and these tested phrasings work when the intent model is unavailable. Explicit "next semester" requests still produce a single semester plus the remaining-requirements audit. With no DPA, the completion tool asks for an upload and describes the full pathway it will build. Official graduation approval remains outside the chatbot's scope.
 
 Validation: `node scripts/test-study-plan-workflow.cjs` covers paraphrases, confirmed planner preservation, requested major, single-semester scope and refusal/negation boundaries. Keep adding real user-test phrasings to this regression suite when routing errors are found.
+
+
+### Natural requests and multiple tasks
+
+The intent router now accepts an ordered list of up to four read/planning tools. For example, "Explain my DPA and check double major then plan all remaining semesters until I finish" executes all three with verified outputs. Tasks stop on a missing attachment/selection or verification failure; completed results remain visible. An upload-needed multi-task request is remembered and automatically retried after a DPA attachment. No database mutations are exposed through model routing.
+
+Short follow-ups use current planning context: "only two", "what's left for me?", "why not that?", and "again". "Change this" asks what to change. Known task-word typos are normalized; academic codes are never fuzzy-corrected. Novel language can reach the LLM interpreter before being rejected solely for missing a keyword. Unsupported questions still require evidence and do not receive generated academic facts. A model failure uses conservative rules or clarification, not a guessed multi-task answer.
+
+Run `node scripts/test-natural-planner-requests.cjs` for the wording/context/sequence regression suite, and `node scripts/test-planner-tools.cjs` after a production build for API coverage. Model interpretation tests use mocked responses; arbitrary wording on the selected local model still needs real user testing.
+
+API regression setup aligns a disposable database copy with the current Prisma schema and generates its client locally. It does not migrate prisma/app.db. The shared planner-edit endpoint validates that every selected unit row belongs to the requested planner, and applies edits in a transaction.
+
+
+UI cleanup: the main chatbot no longer exposes browser-saved drafts or the Choose a task banner. PDF downloads remain in suggestion replies. The existing header theme toggle now styles the chatbot shell, messages, AI panel, task panel, form controls, tables and expanded details through the global html.dark class. Verify both themes and mobile task access during the UI demo.
+
+
+Contextual follow-up prompts: only the latest verified tool reply shows up to three supported continuations. They are generated from the returned DPA/planner/unit facts, not a fixed starter list. Missing attachments, unverified tables, refusal, clarification and missing selections show no chips. Each chip carries an explicit validated tool call; changed/removed DPAs invalidate old chips. Completion pathways require configured category counts, and questions about blocked units ask for reasons rather than promising enrolment eligibility. Database/service failures can still prevent a tool outcome; chips are supported actions, not a guarantee of service availability.
+Validation: node scripts/test-chat-follow-ups.cjs.
+
+### Follow-up context and attachment isolation
+
+Compound requests preserve explicit workload, semester and year. Separate AI and Data Science requests retain their own destinations. After a double-major result, "again" repeats the same pair; unsupported double-major workload changes ask for clarification rather than silently drafting a single-major plan.
+
+Replacing or removing a DPA starts a new model conversation context while keeping previous messages visible. Planner selections, unit exclusions and deferrals from the previous attachment are cleared. Workload preferences and a pending upload request remain available. The highest-match continuation clears an old planner/major selection before matching again; a suggested match is not treated as confirmed intake.
+
+Run `node scripts/test-planner-context-continuity.cjs`. Demo: request two units starting Semester 2 2028 in a compound question; check a double major then say "again"; replace the DPA and verify that old exclusions and planner choices do not carry across. These tests validate routing and state, not the accuracy of arbitrary local-model interpretation.
+
+
+### Saved planner and feature questions directly in chat
+
+The chatbot reuses GET /api/study-planner, GET /api/study-planner/[id], GET /api/planner-templates and GET /api/compare-planners. Ask "all the units in 23 sep csds" without a DPA. References ignore spaces, underscores, hyphens and case; exact unique records are resolved. Missing or partial/ambiguous names ask for clarification rather than guessing another intake. The answer lists all recorded units by category with names and credits, plus the linked template counts. "Only major units" continues the last inspected planner without changing a confirmed enrolment planner.
+
+Planner search, template counts, comparison differences and replacement candidates are now visible in the conversation. Read replies do not open extra workspace controls. How-to questions cover Templates, Upload, Suggestions, Maker, Management, Differentiate and Double Major, with links to their existing pages. Guidance explains actual page capabilities; importing, creating or editing stored records still uses those pages and existing reviewed forms.
+
+Tests: node scripts/test-planner-record-questions.cjs; node scripts/test-planner-tools.cjs after a production build. Demo: list a planner, show only its major units, compare two planners with spaced names, ask how to upload a planner, and request a nonexistent planner to verify clarification.
+
+Planner read compatibility: the two study-planner GET endpoints select optional scheduling fields only when those columns exist in the SQLite database. Existing unit lists remain readable on older databases; no source migration is performed. The API regression also checks this against its disposable database copy.
+
+Planner catalogue scope: all/list/available planner questions ignore previous major and workspace filters. Explicit AI/DS/SD/IOT/CSCS searches remain supported. Model-proposed search values must be grounded in the current question; the tool also clears stale filters for unfiltered catalogue requests. Filtered replies identify the search and total saved count. Regression covers a preceding AI conversation and an explicit stale CSAI tool argument.
+
+Double-major scheduling correction: uniform recorded AND/OR expressions evaluate across prerequisite and minimum-credit types. COS40007 records COS10009 OR 100 CP; satisfying either alternative can schedule it. Mixed/unsupported operators still hold units for review. Trailing empty semesters are omitted while genuine waits before a later offered semester remain. Scheduled units use Major rather than the internal Pathway category. PDFs label TOTAL SCHEDULED and separately show partial pathways and unscheduled blockers. Tests: test-mixed-requisite-expressions.cjs, test-double-major-pathway.cjs and test-chat-planner-pdf.cjs.
+
+
+### Uploaded planner pathways
+
+- Attach a searchable new planner PDF, without a DPA. Ask "Plan 3 unit per semester for me until finish". Verify the reply uses the uploaded title and at most three units per semester, rather than a database match.
+- Say "only four". Verify the same uploaded source is recalculated with four-unit capacity.
+- Attach a DPA as well. Verified EXM/completed units must not be scheduled again; N/Failed attempts must remain unfinished.
+- Check prerequisite order, Project A before B, seasonal offerings and category/elective counts. An elective option pool must not require every listed option.
+- Download the pathway PDF. It must preserve this exact reply and show any unscheduled requirements.
+- Remove/replace the planner. Old planner context must not affect the next result.
+- With 22-S1-CSCS.pdf, expect 8 core units, 8 major units and 9 elective options for 8 slots. COS20007 has a self-prerequisite in the source and several units are unavailable in current records: expect an honest partial pathway with blockers.
+- Try a scanned PDF, incomplete legend, missing credits, unsupported prerequisite text and a modified attachment token. Expect readable errors or partial results, never a fabricated completion date.
+
+Run: node scripts/test-uploaded-planner.cjs [optional sample PDF path]. Full API coverage also lives in scripts/test-planner-tools.cjs.
+
+
+### Graduation Eligibility (lecturer dashboard)
+
+Open Dashboard > Graduation > Graduation Eligibility. Upload the student's DPA PDF/XLSX. The checker assesses each database planner separately and reports whether any configured requirements are fully covered. Select the actual programme/intake to obtain the final comparison for that record.
+
+- Student has 24 completed entries / 300 CP, but a required core or major unit is missing: Not eligible. Extra unrelated units must not compensate for the missing category.
+- Every recorded category is covered: automatic comparison asks for the actual planner; only the selected planner can produce a positive eligibility result.
+- An elective pool has more options than its required count: completing the required number is enough. Every optional unit is not mandatory.
+- AE entries count as one elective slot each; ICT20016 with 25 earned CP counts as two. Credits are counted once.
+- N/Failed, current and future attempts are excluded. EXM with positive earned credit counts. Retakes must not duplicate credit.
+- Missing template counts, an empty planner or conflicting unit versions: Needs review, never a false positive.
+- Check completed entries outside the planner and exact remaining requirement options. Switching the DPA or planner must immediately clear the old eligibility result.
+- Unauthenticated requests are rejected. The checker uses the rules engine, not the LLM, and makes no database writes.
+
+This result covers stored unit requirements for the selected planner, rather than university clearance conditions that are absent from this database.
+Run: node scripts/test-graduation-eligibility.cjs. Production API and legacy database coverage also runs in scripts/test-planner-tools.cjs.

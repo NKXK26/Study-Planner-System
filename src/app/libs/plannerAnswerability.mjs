@@ -1,16 +1,21 @@
+import {featureGuideRequest} from './plannerFeatureGuides.mjs';
+import {normalizeStudentRequest,contextualRequest} from './plannerLanguage.mjs';
 import {studyPlanRequest} from './studyPlanWorkflow.mjs';
 import {isCourseCompletionRequest} from './courseCompletion.mjs';
 export const UNABLE_TO_ANSWER='I am unable to answer this question reliably with the information available.';
 
 // Evidence gates, not a model's self-reported confidence percentage.
 export function questionBoundary(question,{document=null,workflow=null,suggestionContext=null}={}) {
-  const q=String(question).trim();
+  const q=normalizeStudentRequest(question).trim();
   if(/\b(?:weather|recipe|politic|president|stock price|investment|medical|diagnos|visa|scholarships?|tuition|fees?|refund|lecturer email|phone number)\b/i.test(q))return {status:'refuse',reason:'This question is outside the supported study-planning records.'};
   if(/who (?:teaches|is .*lecturer)|what.*(?:learn|taught)|assessment|learning outcomes|syllabus content|teach me/i.test(q))return {status:'refuse',reason:'Teaching staff, assessment details and learning content are not verified in the available unit records.'};
   if(studyPlanRequest(q))return {status:'supported'};
   if(isCourseCompletionRequest(q))return {status:'supported'};
   if(/\b(?:guarantee|guaranteed|official approval|approve(?:d|s)?|approval|graduat(?:e|ion)|timetable clash|exam date|deadline|university policy|academic regulation|handbook)\b/i.test(q)&&!/^(?:what can|how does) (?:this|the) (?:chatbot|assistant)/i.test(q))return {status:'refuse',reason:'I cannot verify official decisions, policies, dates or graduation eligibility from the stored planning records.'};
   if(/\b(?:offer(?:ed|ing|ings)?|available|availability)\b/i.test(q)&&/\b(?:19|20|21)\d{2}\b|\b(?:this|next) year\b/i.test(q))return {status:'refuse',reason:'The database has recurring semester offerings, not confirmed availability for a particular year.'};
+  if(featureGuideRequest(q))return {status:'supported'};
+  const contextual=contextualRequest({question:q,document,workflow,suggestionContext});
+  if(contextual.kind==='clarify'||contextual.call||contextual.question!==q)return {status:'supported'};
   if(/^(?:hi|hello|hey|thanks|thank you|ok|okay)[!. ]*$/i.test(q))return {status:'answer',answer:/thank/i.test(q)?'You’re welcome.':'Hi! I can explain a DPA, compare planners, draft semester suggestions or check recorded second-major unit coverage.'};
   const definition=/^(?:what (?:is|are|does)|define|meaning of|how does|explain (?:what|the meaning))\b/i.test(q);
   if(definition&&/double\s*major|dual\s*major|second major/i.test(q))return {status:'answer',answer:'A double major involves completing the requirements of two majors within a programme. This system compares stored unit coverage; it cannot confirm whether your university permits a particular combination.'};
@@ -25,7 +30,8 @@ export function questionBoundary(question,{document=null,workflow=null,suggestio
   if((workflow||document)&&/^(?:compare|differentiate)(?: (?:these|those|them|selected)(?: (?:two|planners?|ones))?)?[!.? ]*$/i.test(q))return {status:'supported'};
   if((workflow||suggestionContext)&&/^(?:why[!.? ]*$|why (?:those|these|did you (?:pick|choose|select)|(?:is|was|isn.t|wasn.t) (?:it|that))|(?:is|can|could|does)\b.*\b(?:it|that|same)\b|(?:those|these|that|same|instead)[!.? ]*$)/i.test(q))return {status:'supported'};
   if(/can i take|tell me about|what about/i.test(q))return {status:'supported'}; // The record resolver must clarify unknown names.
-  return {status:'refuse',reason:'I do not have verified information that answers this question.'};
+  if(/^why\b/i.test(q))return {status:'refuse',reason:'I do not have verified information that answers this question.'};
+  return {status:'interpret',reason:'Interpret the request before deciding whether a supported task exists.'};
 }
 
 export function refusal(reason){return {status:'refused',answer:UNABLE_TO_ANSWER+(reason?'\n\n'+reason:''),sources:[]};}

@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {interpretPlannerRequest,parsePlannerDecision}=await import('../src/app/libs/plannerRequest.mjs');
+ const {nextSuggestionContext}=await import('../src/app/libs/plannerConversation.mjs');
+ const {currentDocumentHistory,replacementDocumentContext,followUpContext}=await import('../src/app/libs/chatTurnContext.mjs');
+ const offline=()=>{throw Error('offline');};
+ const current={planner:'53',plannerConfirmed:true,targetMajor:'DS',planMode:'full',preferences:{maxUnits:2,excluded:['COS10001'],deferred:{COS10002:1}}};
+ const multi=await interpretPlannerRequest({question:'Explain my DPA then plan all remaining semesters until I finish, only two units, start semester 2 2028',planningOnly:true},{fetchImpl:offline});
+ const plan=multi.calls.find(c=>c.name==='plan_remaining_studies');
+ assert.equal(String(plan.arguments.maxUnits),'2');assert.equal(plan.arguments.term,'Semester 2');assert.equal(String(plan.arguments.year),'2028');
+ const parsed=parsePlannerDecision({content:JSON.stringify({action:'tasks',tasks:[{name:'suggest_next_semester',arguments:{targetMajor:'AI'}},{name:'suggest_next_semester',arguments:{targetMajor:'DS'}}]})},{question:'Suggest units for artificial intelligence and suggest units for data science',suggestionContext:current});
+ assert.deepEqual(parsed.calls.map(c=>c.arguments.targetMajor),['AI','DS']);assert(!parsed.calls[0].arguments.planner);
+ const pair=nextSuggestionContext(current,{tool:'check_double_major',data:{primary:{id:53,name:'DS'},secondary:{id:46,name:'AI'},term:'Semester 2',year:2028}});
+ assert.equal(pair.planner,null);assert.equal(pair.targetMajor,null);
+ const again=await interpretPlannerRequest({question:'again',suggestionContext:pair,planningOnly:true},{fetchImpl:offline});
+ assert.equal(again.call.name,'check_double_major');assert.deepEqual(again.call.arguments,{primaryPlanner:'53',secondaryPlanner:'46'});
+ const single=nextSuggestionContext(pair,{tool:'suggest_next_semester',data:{plan:{},planMode:'semester',planner:{id:53,name:'DS'}}});assert.equal(single.secondaryPlanner,null);
+ const replaced=replacementDocumentContext({...current,pendingQuestion:'Plan until I finish'});
+ assert.equal(replaced.planner,null);assert.equal(replaced.plannerConfirmed,false);assert.equal(replaced.preferences.maxUnits,2);assert.deepEqual(replaced.preferences.excluded,[]);assert.deepEqual(replaced.preferences.deferred,{});assert.equal(replaced.pendingQuestion,'Plan until I finish');
+ const reset=followUpContext(current,{resetPlannerMatch:true,call:{name:'plan_remaining_studies'}});assert.equal(reset.targetMajor,null);assert.equal(reset.planner,null);assert.equal(reset.plannerConfirmed,false);
+ assert.deepEqual(currentDocumentHistory([{role:'user',content:'Use AI'},{role:'assistant',content:'DPA attached: new.xlsx.'},{role:'user',content:'Explain my DPA'}]),[{role:'user',content:'Explain my DPA'}]);
+ assert.deepEqual(currentDocumentHistory([{role:'user',content:'Use AI'},{role:'assistant',content:'DPA removed.'}]),[]);
+ console.log('Context continuity passed: compound constraints, separate major requests, double-major repeat, new DPA isolation and fresh planner matching.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

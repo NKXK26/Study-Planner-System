@@ -5,9 +5,9 @@ const { PHASE_DEVELOPMENT_SERVER } = require('next/constants');
 const nextConfig = {
   output: "standalone",
   // Keep the PDF parser's worker beside its installed module in server builds.
-  serverExternalPackages: ['pdf-parse'],
+  serverExternalPackages: ['pdf-parse','@napi-rs/canvas'],
   outputFileTracingIncludes: {
-    '/api/planner-assistant/document': ['./node_modules/pdf-parse/**/pdf.worker*.mjs'],
+    '/api/planner-assistant/document': ['./node_modules/pdf-parse/**/pdf.worker*.mjs','./node_modules/@napi-rs/canvas-*/icudtl.dat'],
   },
 
   outputFileTracingRoot: path.join(__dirname),

@@ -236,11 +236,9 @@ const Dashboard = () => {
 				links: [
 					{ name: 'Study Planner Templates', href: '/view/planner-templates', permission: 'planner:read' },
 					{ name: 'Upload Study Planner', href: '/view/upload_planner', permission: 'planner:read' },
-					{ name: 'Unit Suggestions', href: '/view/compare_study_planner', permission: 'planner:read' },
 					{ name: 'Study Planner Maker', href: '/view/study-planner-maker', permission: 'planner:read' },
 					{ name: 'Study Planner Management', href: '/view/study-planner', permission: 'planner:read' },
 					{ name: 'Differentiate Study Planners', href: '/view/compare-planners', permission: 'planner:read' },
-					{ name: 'Double Major Checker', href: '/view/double-major-checker', permission: 'planner:read' },
 				],
 				gradient: 'from-rose-500 to-red-600',
 				bgGradient: 'from-rose-50 to-red-50 dark:from-rose-900/20 dark:to-red-900/10',
@@ -248,33 +246,41 @@ const Dashboard = () => {
 				iconColor: 'text-rose-600 dark:text-rose-400',
 				borderColor: 'hover:border-rose-500/30',
 			},
-			{
-				title: 'Graduation',
-				description: 'Track student eligibility and progress',
+		{
+			title: 'AI Assistant',
+			description: 'Chat about your DPA, units, and study plans',
+			icon: (props) => (
+				<svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+					<path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5M5 3h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9l-6 3V5a2 2 0 0 1 2-2Z" />
+				</svg>
+			),
+			permission: 'system',
+			isNew: true,
+			links: [
+				{ name: 'Study Planner Assistant', href: '/view/ai-assistant', permission: 'planner:read' },
+			],
+			gradient: 'from-rose-500 to-red-600',
+			bgGradient: 'from-rose-50 to-red-50 dark:from-rose-900/20 dark:to-red-900/10',
+			iconBg: 'bg-transparent',
+			iconColor: 'text-rose-600 dark:text-rose-400',
+			borderColor: 'hover:border-rose-500/30',
+		},
+		{
+			title: 'Graduation',
+			description: 'Suggest units, check double majors, and assess graduation requirements',
 				icon: CheckBadgeIcon,
 				permission: 'system',
-				links: [{ name: 'Graduation Dashboard', href: '/view/graduation_dashboard', permission: 'planner:read' }],
+			isNew: true,
+			links: [
+				{ name: 'Unit Suggestions', href: '/view/compare_study_planner', permission: 'planner:read' },
+				{ name: 'Double Major Checker', href: '/view/double-major-checker', permission: 'planner:read' },
+				{ name: 'Graduation Eligibility', href: '/view/graduation-eligibility', permission: 'planner:read' },
+			],
 				gradient: 'from-teal-500 to-cyan-600',
 				bgGradient: 'from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/10',
 				iconBg: 'bg-transparent',
 				iconColor: 'text-teal-600 dark:text-teal-400',
 				borderColor: 'hover:border-teal-500/30',
-			},
-			{
-				title: 'Unit Analytics',
-				description: 'Failure rates, repeat attempts & prerequisite chains',
-				icon: ArrowTrendingUpIcon,
-				permission: 'system',
-				isNew: true,
-				links: [
-					{ name: 'Unit Performance Analytics', href: '/view/unit_analytics', permission: 'planner:read' },
-					{ name: 'Unit Prerequisite Chain', href: '/view/prerequisite-chain', permission: 'planner:read' },
-				],
-				gradient: 'from-violet-500 to-purple-600',
-				bgGradient: 'from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/10',
-				iconBg: 'bg-transparent',
-				iconColor: 'text-violet-600 dark:text-violet-400',
-				borderColor: 'hover:border-violet-500/30',
 			},
 			{
 				title: 'User Management',
@@ -318,7 +324,11 @@ const Dashboard = () => {
 		// Move new modules to the front, keep relative order
 		const newModules = filtered.filter(m => m.isNew);
 		const oldModules = filtered.filter(m => !m.isNew);
-		return [...newModules, ...oldModules];
+		return [
+			...newModules.filter(module => module.title === 'Graduation'),
+			...newModules.filter(module => module.title !== 'Graduation'),
+			...oldModules,
+		];
 	}, [modules, can, isSuperadmin]);
 
 const statCards = [

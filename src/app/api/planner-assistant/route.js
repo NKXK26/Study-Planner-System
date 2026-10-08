@@ -1,3 +1,5 @@
+import {readPlannerDocument} from '@app/libs/uploadedPlanner.server.mjs';
+import {executePlannerTasks} from '@app/libs/plannerTaskRunner.mjs';
 import {questionBoundary,generalEvidenceReply,refusal} from '@app/libs/plannerAnswerability.mjs';
 import { runPlannerTool } from '@app/libs/plannerTools.server';
 import { replacementCandidates } from '@app/libs/unitReplacement.mjs';
@@ -31,6 +33,7 @@ export async function POST(req) {
     try {
       body = await req.json();
       document = validateDocument(body.document);
+      readPlannerDocument(body.plannerDocument);
     } catch (e) { return NextResponse.json({ success: false, message: e.message || 'Invalid request.' }, { status: 400 }); }
     const { question, conversationHistory = [], primaryPlannerId } = body;
     if (typeof question !== 'string' || !question.trim() || question.length > 2000 || !Array.isArray(conversationHistory)) return NextResponse.json({ success: false, message: 'Enter a question of up to 2,000 characters.' }, { status: 400 });
@@ -42,16 +45,22 @@ export async function POST(req) {
     catch(e){return NextResponse.json({success:false,message:e.message},{status:e.status||503});}
     let intent=null;
     if(body.enableTools===true){
-      intent=body.toolCall?{kind:'tool',call:body.toolCall}:await interpretPlannerRequest({question,conversationHistory,workflow:body.workflow,workspaceContext:body.workspaceContext,document,suggestionContext:body.suggestionContext,planningOnly:body.planningOnly===true},{model});
+      intent=body.toolCall?{kind:'tool',call:body.toolCall}:await interpretPlannerRequest({question,conversationHistory,workflow:body.workflow,workspaceContext:body.workspaceContext,document,plannerDocument:body.plannerDocument,suggestionContext:body.suggestionContext,planningOnly:body.planningOnly===true},{model});
       if(intent.kind==='clarify')return NextResponse.json({success:true,answer:intent.message,source:'guide',sources:[]});
+      if(intent.kind==='tasks'){
+        try{
+          const result=await executePlannerTasks(intent.calls,{question,context:{document,plannerDocument:body.plannerDocument,planningContext:body.planningContext,suggestionContext:body.suggestionContext,workflow:body.workflow},run:(call,context)=>runPlannerTool(req,call,context),compose:(verified,input)=>composeToolReply(verified,input,{model})});
+          return NextResponse.json({success:true,answer:result.answer,source:'tool',sources:[],toolResult:result,answerability:result.answerability});
+        }catch(e){if([401,403].includes(e.status))return NextResponse.json({success:false,message:'Please sign in with permission to access this task.'},{status:e.status});return NextResponse.json({success:true,...refusal('This task request could not be validated. Try requesting one task at a time.'),source:'guide',answerability:'refused'});}
+      }
       let inferred=intent.call;
-      if(['suggest_next_semester','plan_remaining_studies'].includes(inferred?.name) && !inferred.arguments?.planner && !inferred.arguments?.targetMajor && typeof body.suggestionContext?.targetMajor==='string')inferred={...inferred,arguments:{...inferred.arguments,targetMajor:body.suggestionContext.targetMajor}};
+      if(!body.plannerDocument&&['suggest_next_semester','plan_remaining_studies'].includes(inferred?.name) && !inferred.arguments?.planner && !inferred.arguments?.targetMajor && typeof body.suggestionContext?.targetMajor==='string')inferred={...inferred,arguments:{...inferred.arguments,targetMajor:body.suggestionContext.targetMajor}};
       if(inferred && !(inferred.name==='open_workflow' && ((inferred.arguments.workflow==='dpa' && document)))){
         try{
-          const verified=await runPlannerTool(req,inferred,{document,planningContext:body.planningContext,suggestionContext:body.suggestionContext,question});
+          const verified=await runPlannerTool(req,inferred,{document,plannerDocument:body.plannerDocument,planningContext:body.planningContext,suggestionContext:body.suggestionContext,question});
           const result=await composeToolReply(verified,{question,conversationHistory,suggestionContext:body.suggestionContext,call:inferred,planningOnly:body.planningOnly===true},{model});
           return NextResponse.json({success:true,answer:result.answer,source:'tool',sources:[],toolResult:result,answerability:result.answerability});
-        }catch(e){if([401,403].includes(e.status))return NextResponse.json({success:false,message:'Please sign in with permission to access this task.'},{status:e.status});return NextResponse.json({success:true,...refusal('The requested task could not be verified. Check the required attachment and selections, or retry when the records are available.'),source:'guide',answerability:'refused'});}
+        }catch(e){if([401,403].includes(e.status))return NextResponse.json({success:false,message:'Please sign in with permission to access this task.'},{status:e.status});if(body.plannerDocument&&['suggest_next_semester','plan_remaining_studies','adjust_study_plan','explain_next_semester'].includes(inferred.name))return NextResponse.json({success:true,answer:e.message||'Reattach the planner PDF and retry.',source:'guide',answerability:'clarification',sources:[]});return NextResponse.json({success:true,...refusal('The requested task could not be verified. Check the required attachment and selections, or retry when the records are available.'),source:'guide',answerability:'refused'});}
       }
     }
     const context = document ? body.planningContext : null;

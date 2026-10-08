@@ -24,3 +24,14 @@ npm run build
 ```
 
 The chat regression checks use controlled authentication/database/model failures and an actual in-memory PDF to test extraction without student data.
+
+
+## Plan from an uploaded study planner PDF
+
+The chat composer has separate **Attach DPA** and **Attach planner PDF** buttons. An uploaded planner is a session attachment, not a new database record. Ask "Plan 3 units per semester for me until finish" or "Plan 4 units per semester until I finish". Later workload changes reuse that uploaded source. Remove it to return to matching stored planners.
+
+A DPA is optional: with one, verified completed/exempted entries are removed from the unfinished pool; without one, planning starts with no earned units. N/Failed entries remain unfinished. The same semester rules, category counts, elective slot allocation and PDF download work with this source.
+
+The PDF reader uses table geometry and a category legend rather than treating every mentioned code as a curriculum unit. It recognizes colour-coded core/major/elective rows (including the supplied 22-S1-CSCS example) and explicit category columns. Recommended elective pools are choices: it fills only the stated number of elective slots. PDF prerequisite groups and explicit offerings are preserved; database unit properties supplement credits and recurring offerings. Recommended sequence terms are labelled assumptions where offerings are absent. Missing credits, unclear rules, unavailable units and source errors are held back. A self-prerequisite is flagged, never silently corrected. Partial pathways list unresolved requirements and omit trailing empty semesters.
+
+Supported input: searchable PDF, up to 5 MB / 10 planner pages / 60,000 extracted characters, with readable unit tables and requirement counts. Scans, ambiguous categories and unsupported layouts request a better source rather than inventing requirements. Completely new codes can be planned when their PDF provides credits, requisites and semester information; a code alone is insufficient. Signatures protect extracted requirements from client tampering. Set a consistent server-only PLANNER_UPLOAD_SECRET for multiple server processes; without it, reattach after a server restart. Clear chat removes both attachments from session recovery.

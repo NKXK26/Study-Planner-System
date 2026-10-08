@@ -1,3 +1,5 @@
+import {plannerRecordRequest} from './plannerRecordRequests.mjs';
+import {featureGuideRequest} from './plannerFeatureGuides.mjs';
 import {studyPlanRequest} from './studyPlanWorkflow.mjs';
 import {isPlannerMatchRequest} from './plannerMatching.mjs';
 import {isCourseCompletionRequest} from './courseCompletion.mjs';
@@ -20,7 +22,8 @@ export const plannerReadTools = [
   schema('open_workflow','Open an interactive workflow inside the chat.',{workflow:{type:'string',enum:chatWorkflows.map(w=>w.id)}},['workflow']),
   schema('match_dpa_planners','Rank all saved planners against completed DPA units using the same matching function as Unit Suggestions. Use for highest, closest or best matching planner requests. Do not inherit previous destination-major filters.'),
   schema('list_planners','Search saved study planners.',{search:{type:'string'}}),
-  schema('inspect_planner','Read a saved planner and its units.',{planner},['planner']),
+  schema('inspect_planner','List recorded units in a saved planner, grouped by category, including casual names such as 23 Sep CSDS. No DPA is required. Copy the planner reference as written.',{planner,category:{type:'string',enum:['core','major','elective','wil']}},['planner']),
+  schema('describe_workflow','Explain supported system features and how to use their pages. This supplies guidance without opening workspace controls.',{workflow:{type:'string',enum:chatWorkflows.filter(w=>w.id!=='dpa').map(w=>w.id)}}),
   schema('compare_planners','Differentiate two saved planners. Ask the user to select missing or ambiguous planners.',{plannerA:planner,plannerB:planner}),
   schema('suggest_next_semester','Audit remaining core, major and elective requirements, then suggest up to four unfinished units for next semester from the selected or highest-matching planner using the DPA. Use for explicit next-semester requests or a remaining-requirements audit.',{term:{type:'string'},planner:planner,targetMajor:{type:'string',description:'Requested destination major, for example AI, DS, SD, IOT or CS. Preserve explicit major-change requests.'}}),
   schema('plan_remaining_studies','Build a provisional schedule through completion, including natural requests such as what should I take to complete my study or what units do I need to graduate. Uses DPA, category counts, prerequisites, offerings and preferences.',{planner,term:{type:'string'},year:{type:'string'},maxUnits:{type:'string'},maxCredits:{type:'string'},targetMajor:{type:'string'}}),
@@ -33,6 +36,8 @@ export const plannerReadTools = [
 export const mutationTools = ['save_planner','save_template','update_template','update_planner'];
 export function inferPlannerTool(question,workflow=null) {
   const q=String(question).toLowerCase();
+  const guide=featureGuideRequest(question);if(guide)return guide;
+  const record=plannerRecordRequest(question);if(record)return record;
   const planning=studyPlanRequest(question);if(planning)return planning.name==='plan_remaining_studies'&&requestedMajor(question)?{...planning,arguments:{...planning.arguments,targetMajor:requestedMajor(question)}}:planning;
   if(isPlannerMatchRequest(question))return {name:'match_dpa_planners',arguments:{}};
   if(isCourseCompletionRequest(question))return {name:'suggest_next_semester',arguments:{...(requestedMajor(question)?{targetMajor:requestedMajor(question)}:{})}};
@@ -51,7 +56,10 @@ export function inferPlannerTool(question,workflow=null) {
   if (/template/.test(q) && !/semester|prereq/.test(q)) return {name:'list_templates',arguments:{}};
   if (/upload|import/.test(q) && /planner/.test(q) && !/transcript|dpa/.test(q)) return {name:'open_workflow',arguments:{workflow:'upload'}};
   if (/make|create|build|copy|clone/.test(q) && /planner/.test(q)) return {name:'open_workflow',arguments:{workflow:'maker'}};
-  if (/manage|edit|saved|list|browse|search|find/.test(q) && /planner/.test(q)) return {name:'list_planners',arguments:{}};
+  if (/manage|edit|saved|list|browse|search|find/.test(q) && /planner/.test(q)) {
+    const search=q.match(/\b(?:search|find)\s+(?:for\s+)?(?:planners?\s+(?:named|matching|for)\s+)?(.+?)(?:\s+planners?)?[.!?]*$/)?.[1]||q.match(/\b(?:list|show|browse)\s+(?:all\s+)?([a-z0-9 -]+?)\s+planners?[.!?]*$/)?.[1];
+    return {name:'list_planners',arguments:search&&!/^(?:all|my|saved|study|the|available)$/.test(search)?{search:search.trim()}:{}};
+  }
   const code=q.match(/\b([a-z]{2,5})[ -]?(\d{3,6})\b/i);
   if (/replace|alternative|expired/.test(q) && code) return {name:'replacement_units',arguments:{code:(code[1]+code[2]).toUpperCase()}};
   if (/prereq|requisite|tell me about|what about|unit.*offered|unit.*available|(?:it|that unit|same unit).*offered|can i take/.test(q)&&!/major|planner/.test(q))return {name:'inspect_unit',arguments:{}};
@@ -67,7 +75,10 @@ export function validateToolCall(call, allowWrites=false) {
     const def=plannerReadTools.find(t=>t.function.name===call.name).function.parameters;
     if(Object.keys(args).some(k=>!Object.hasOwn(def.properties,k)))throw new Error('Unexpected tool arguments.');
     for(const key of def.required)if(!Object.hasOwn(args,key))throw new Error(`Select ${key} first.`);
-    for(const [key,value]of Object.entries(args))if(typeof value!=='string'||value.length>200)throw new Error(`Invalid ${key}. Use a name or ID up to 200 characters.`);
+    for(const [key,value]of Object.entries(args)){
+      if(typeof value!=='string'||value.length>200)throw new Error(`Invalid ${key}. Use a name or ID up to 200 characters.`);
+      if(def.properties[key].enum&&!def.properties[key].enum.includes(value))throw new Error(`Unknown ${key}.`);
+    }
     if(call.name==='adjust_study_plan'&&!['workload','exclude','defer','reset'].includes(args.action))throw new Error('Unknown adjustment.');
     if(call.name==='open_workflow'&&!chatWorkflows.some(w=>w.id===args.workflow))throw new Error('Unknown chat workflow.');
   }

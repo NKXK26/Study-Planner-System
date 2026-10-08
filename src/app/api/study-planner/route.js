@@ -1,3 +1,4 @@
+import {plannerUnitReadSelect} from '@app/libs/plannerReadCompatibility.mjs';
 ﻿import prisma from '@utils/db/db';
 import { NextResponse } from 'next/server';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -41,12 +42,13 @@ export async function GET(req) {
 
     let studyPlanners;
     try {
+        const unitSelect=await plannerUnitReadSelect(prisma);
         studyPlanners = await prisma.studyPlanner.findMany({
             where: id ? { id } : {},
             orderBy: { createdAt: 'desc' },
             include: {
                 studyPlannerUnits: {
-                    include: { unit: true, unitType: true },
+                    select: unitSelect,
                 },
                 plannerTemplate: {
                     include: {

@@ -22,7 +22,7 @@ const assert=require('node:assert/strict');
   const offered=unit('BBB900','Seasonal unit','Major',['Semester 2']);
   const seasonal=doubleMajorPathway({transcript,planners:[planner(1,'AI',[a]),planner(3,'DS',[offered])],term:'Semester 1',year:2027});assert.equal(seasonal.semesters[0].selected.length,0);assert.equal(seasonal.semesters[1].selected[0].code,'BBB900');
   const blocked=unit('BBB901');blocked.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit=[{ID:77,UnitID:blocked.ID,UnitRelationship:'pre',LogicalOperators:'and',Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit:unit('EXT100')}];
-  const incomplete=doubleMajorPathway({transcript,planners:[planner(1,'AI',[a]),planner(3,'DS',[blocked])],term:'Semester 1',year:2027});assert.equal(incomplete.completeDraft,false);assert.equal(incomplete.semesters.length,2);assert.match(incomplete.outstanding[0].reasons.join(' '),/not met/);assert.equal(incomplete.remaining.majors[1].remaining,1);
+  const incomplete=doubleMajorPathway({transcript,planners:[planner(1,'AI',[a]),planner(3,'DS',[blocked])],term:'Semester 1',year:2027});assert.equal(incomplete.completeDraft,false);assert.equal(incomplete.semesters.length,0);assert.match(incomplete.outstanding[0].reasons.join(' '),/not met/);assert.equal(incomplete.remaining.majors[1].remaining,1);
   const unknown=unit('BBB902');unknown.UnitTermOffered=[];
   assert.equal(doubleMajorPathway({transcript,planners:[planner(1,'AI',[a]),planner(3,'DS',[unknown])]}).completeDraft,false);
   assert.throws(()=>doubleMajorPathway({transcript,planners:plans,primaryId:999}),/no longer available/);

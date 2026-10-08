@@ -5,11 +5,11 @@ export function verifiedPresentation(result) {
   const plan=result.data?.plan;
   if(!plan)return {body:result.answer,notes:[]};
   const notes=[...new Set((plan.warnings||[]).filter(v=>typeof v==='string'&&v.trim()).map(v=>v.trim()))];
-  const warningBlock=notes.join('\n');
-  let body=warningBlock&&result.answer.endsWith(warningBlock)?result.answer.slice(0,-warningBlock.length).trim():result.answer;
-  const tie=notes.find(v=>/match equally/i.test(v));
-  const assumptions=notes.some(v=>/assume no additional prerequisites|unfinished pool/i.test(v));
-  body+='\n\n'+(tie?tie+' ':'')+'This is a provisional draft. Semester/year and recurring offerings need confirmation; recorded checks do not establish enrolment approval.'+(assumptions?' Missing prerequisite records and category counts are assumptions in this draft.':'');
+  let body=result.answer;
+  // Keep verification metadata available without repeating boilerplate in the reply.
+  // Remove each full warning even when preferences or saved-plan changes follow it.
+  for(const note of notes)body=body.split(note).join('');
+  body=body.replace('This compares stored planner requirements, not official graduation eligibility. Units outside the next-semester draft may need later semesters.','').replace(/\n(?:[ \t]*\n){2,}/g,'\n\n').trim();
   return {body,notes};
 }
 export function validateToolNarrative(intro) {

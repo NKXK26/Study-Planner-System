@@ -1,4 +1,5 @@
 'use client';
+import styles from '@components/PlannerChat.module.css';
 
 import { useEffect, useRef, useState } from 'react';
 import DashboardChat from '@components/DashboardChat';
@@ -41,30 +42,27 @@ export default function AIAssistantPage() {
   const available=['ready','installed'].includes(health.status);
   const planningOnly=plannerMode||!available;
   const models=health.missingModels?.length?health.missingModels:health.models||[];
-  const activeModels=selectedModel?[selectedModel]:health.models||[];
-  const aiControls=<section aria-label="AI availability" className="w-full rounded-xl border border-red-200 bg-red-50/50 px-3 py-3 text-sm text-neutral-700">
-      <label htmlFor="chat-ai-model" className="mb-3 block font-semibold text-neutral-950">Model for new requests
+  const aiControls=<section aria-label="AI availability" className="space-y-3 text-sm text-neutral-700">
+      <div role="status" aria-live="polite" className="text-xs font-medium text-neutral-700">{labels[health.status]}</div>
+      <label htmlFor="chat-ai-model" className="block text-xs font-semibold text-neutral-950">Model
         <select id="chat-ai-model" value={selectedModel} disabled={checking||chatBusy} onChange={event=>{const next=event.target.value;setSelectedModel(next);setPlannerMode(false);setHealth(current=>({...current,status:'checking'}));check(true,next);}} className="mt-2 block w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-2 py-2 text-xs font-normal">
-          <option value="">Server default</option>
+          <option value="">{health.models?.length?'Default: '+health.models.join(' / '):'Server default'}</option>
           {(health.installedModels||[]).map(model=><option key={model} value={model}>{model}</option>)}
           {selectedModel&&!(health.installedModels||[]).includes(selectedModel)&&<option value={selectedModel}>{selectedModel} (unavailable)</option>}
         </select>
       </label>
-      <p className="mb-2 break-words text-xs"><strong>{planningOnly?'Selected':'Using'}:</strong> {activeModels.length?activeModels.join(' / '):'Checking server configuration…'}{planningOnly?' (AI paused)':''}</p>
-      {!selectedModel&&health.configuredModels&&health.configuredModels.router!==health.configuredModels.response&&<p className="mb-2 break-words text-xs">Request understanding: {health.configuredModels.router}. Reply introduction: {health.configuredModels.response}.</p>}
-      <p className="mb-3 text-xs text-neutral-600">Switching keeps your chat and DPA. Applies to this tab only; the host’s default stays unchanged.</p>
-      {checking&&<p role="status" className="mb-2 text-xs text-red-700">Loading/checking AI. A cold model may take up to 90 seconds to respond.</p>}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="status" aria-live="polite"><span className="font-semibold text-neutral-950">{labels[health.status]}</span><span className="ml-2 text-red-700">{planningOnly?'Planner mode':'AI assisted mode'}</span></div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className={button} disabled={checking||chatBusy} onClick={()=>check(true)}>{checking?'Checking…':'Check again'}</button>
-          <button type="button" className={button} aria-expanded={guide} aria-controls="ai-setup-guide" onClick={()=>setGuide(value=>!value)}>Setup guide</button>
-          {available&&<button type="button" className={button} onClick={()=>setPlannerMode(value=>!value)}>{plannerMode?'Use AI assistance':'Continue in planner mode'}</button>}
-          {!available&&<button type="button" className={button} onClick={()=>{setPlannerMode(true);setGuide(false);}}>Continue in planner mode</button>}
-        </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={button} disabled={checking||chatBusy} onClick={()=>check(true)}>{checking?'Checking...':'Check AI'}</button>
+        <button type="button" className={button} aria-expanded={guide} aria-controls="ai-setup-guide" onClick={()=>setGuide(value=>!value)}>{guide?'Hide setup':'Setup'}</button>
       </div>
-      <p className="mt-1 text-xs text-neutral-600">{planningOnly?'DPA summaries, planner comparisons and rule checks remain available. Use Choose a task for guided help; flexible prompts may need rephrasing.':'AI helps interpret your question. Planning results still come from your records and rule checks.'}</p>
-      {error&&<p role="alert" className="mt-2 text-red-700">{error}</p>}
+      {planningOnly&&<p className="text-xs text-neutral-600">Planner mode</p>}
+      <details className="text-xs text-neutral-600"><summary>More settings</summary>
+        <p className="mt-2">Switching applies to this tab. Your chat and DPA stay attached.</p>
+        {!selectedModel&&health.configuredModels&&health.configuredModels.router!==health.configuredModels.response&&<p className="mt-2">Intent model: {health.configuredModels.router}. Response model: {health.configuredModels.response}.</p>}
+        <p className="mt-2">AI interprets requests. Academic results use recorded data and planning rules.</p>
+        {available&&<button type="button" className={button+' mt-2'} disabled={chatBusy} onClick={()=>setPlannerMode(value=>!value)}>{plannerMode?'Enable AI':'Use planner mode'}</button>}
+      </details>
+      {error&&<p role="alert" className="text-xs text-red-700">{error}</p>}
       {guide&&<div id="ai-setup-guide" className="mt-3 max-h-[35vh] overflow-y-auto border-t border-neutral-200 pt-3">
         <p className="font-medium text-neutral-950">Setup belongs on the computer running this app’s server.</p>
         <p className="mt-1">If you opened someone else’s website, ask the host to set up AI. Installing Ollama on your own computer will not connect it to that website.</p>
@@ -75,14 +73,14 @@ export default function AIAssistantPage() {
             {!models.length&&<p className="mt-1">Check the AI service again to see the configured model names.</p>}
           </li>
           <li>If Ollama is not running, open it or run <code className="rounded bg-neutral-100 px-1">ollama serve</code>.</li>
-          <li>Choose <strong>Check again</strong>. This tests a small response from each configured model without sending your DPA or chat. The first check may take longer while models load.</li>
+          <li>Choose <strong>Check AI</strong>. This tests a small response from each configured model without sending your DPA or chat. The first check may take longer while models load.</li>
         </ol>}
         {health.models?.length>0&&<p className="mt-2 text-xs">Configured models: {health.models.join(', ')}.</p>}
         {health.status==='inference-failed'&&<p className="mt-2 text-red-700">Models are installed, but a response failed or took too long. Check Ollama, available memory and the model configuration, then retry.</p>}
         <p className="mt-2 text-xs">A successful check confirms the models responded at that time; it does not guarantee academic accuracy. No download starts automatically.</p>
       </div>}
     </section>;
-  return <section aria-label="Chatbot screen" className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-100 p-2 sm:p-4">
+  return <section aria-label="Chatbot screen" className={styles.page+" relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-neutral-100 p-2 sm:p-4"}>
     <div className="mx-auto min-h-0 w-full max-w-[1600px] flex-1"><DashboardChat embedded planningOnly={planningOnly} aiControls={aiControls} aiStatus={labels[health.status]} aiModel={selectedModel||undefined} onChatBusyChange={setChatBusy} /></div>
   </section>;
 }

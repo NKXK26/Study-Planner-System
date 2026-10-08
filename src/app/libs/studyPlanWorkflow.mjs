@@ -9,12 +9,12 @@ export function studyPlanRequest(question) {
   const wantsSubjects=/\b(?:take|need|remaining|left|units?|subjects?)\b/i.test(q);
   const singleTerm=/\b(?:next|coming|upcoming|this)\s+(?:sem(?:ester)?|term)\b|\b(?:sem(?:ester)?|term)\s*[12]\b/i.test(q);
   const otherGoal=/\b(?:double|dual|second)\s*major|\b(?:two|2)\s*majors?\b/i.test(q);
-  const full=/\b(?:plan|schedule|map)\b.*(?:until.*(?:finish|complete|graduate)|all.*(?:remaining|semester)|through.*completion)|\bfull.*(?:study plan|schedule)|remaining semesters/i.test(q) || (completionGoal&&wantsSubjects&&!singleTerm&&!otherGoal);
+  const full=(/\b(?:units?|subjects?)\s+per\s+(?:sem(?:ester)?|term)\b.*\b(?:until|till)\b.*\b(?:finish|complete|graduate)\b/i.test(q))||/\b(?:plan|schedule|map)\b.*(?:until.*(?:finish|complete|graduate)|all.*(?:remaining|semester)|through.*completion)|\bfull.*(?:study plan|schedule)|remaining semesters/i.test(q) || (completionGoal&&wantsSubjects&&!singleTerm&&!otherGoal);
   if(/\b(?:don't|do not|never)\s+(?:plan|schedule|generate)\b/i.test(q))return null;
   if(/\bwhy\b/i.test(q)&&/suggest|select|omit|project|fyp|[a-z]{2,5}\d{3,6}/i.test(q))return {name:'explain_next_semester',arguments:code?{code:(code[1]+code[2]).toUpperCase()}: {}};
   const units=q.match(/\b([1-4]|one|two|three|four)\s+(?:units?|subjects?)\b/i);
   const settings={};
-  if(units&&/only|just|take|use|limit|set|maximum|max/i.test(q))settings.maxUnits=String(Number(units[1])||['one','two','three','four'].indexOf(units[1].toLowerCase())+1);
+  if(units&&/only|just|take|use|limit|set|maximum|max|plan|schedule|per\s*(?:sem|semester|term)/i.test(q))settings.maxUnits=String(Number(units[1])||['one','two','three','four'].indexOf(units[1].toLowerCase())+1);
   const cp=q.match(/\b(\d+(?:\.\d+)?)\s*(?:CP|credit points)\b/i);
   if(cp&&/limit|set|max|cap/i.test(q))settings.maxCredits=cp[1];
   const term=q.match(/\b(?:semester|sem)\s*([12])\b/i),year=q.match(/\b(?:year|in|for)\s+(20\d{2})\b|\bsemester\s*[12]\s+(20\d{2})\b/i);
@@ -48,6 +48,7 @@ export function remainingStudyPlan({transcript,planner,relations,term,year,prefe
   }
   const finalPlan=semesterPlan({transcript:simulated,planner,relations,term:currentTerm,maxUnits:preferences.maxUnits,maxCredits:preferences.maxCredits,provisional:true,preferences,starting:false});
   audit=courseCompletionAudit({transcript:simulated,planner,plan:finalPlan});
+  while(semesters.length&&!semesters.at(-1).selected.length)semesters.pop();
   const outstanding=audit.categories.filter(c=>c.remainingCount===null||c.remainingCount>0);
   return {semesters,completeDraft:done(audit),remaining:audit,outstanding,original, warnings:['Future semesters assume every drafted unit is passed. Your uploaded DPA is unchanged.','This is a provisional pathway against stored category counts, not graduation approval.',...finalPlan.warnings,...audit.warnings]};
 }

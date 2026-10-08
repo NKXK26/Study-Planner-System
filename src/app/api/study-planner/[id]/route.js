@@ -1,3 +1,4 @@
+import {plannerUnitReadSelect} from '@app/libs/plannerReadCompatibility.mjs';
 import prisma from '@utils/db/db';
 import { NextResponse } from 'next/server';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -25,12 +26,13 @@ export async function GET(req, { params }) {
     const id = parseInt(idParam, 10);
     if (isNaN(id)) return NextResponse.json({ success: false, message: 'Invalid ID' }, { status: 400 });
 
+    const unitSelect=await plannerUnitReadSelect(prisma);
     const [planner, templates, unitTypes] = await Promise.all([
         prisma.studyPlanner.findUnique({
             where: { id },
             include: {
                 studyPlannerUnits: {
-                    include: { unit: true, unitType: true },
+                    select: unitSelect,
                     orderBy: { id: 'asc' },
                 },
             },
@@ -114,34 +116,22 @@ export async function PUT(req, { params }) {
         : undefined;
 
     try {
-        // Optionally update the planner's linked template
-        if (templateIdProvided) {
-            await prisma.studyPlanner.update({
-                where: { id },
-                data: { plannerTemplateId },
-            });
-        }
-
-        // Update each StudyPlannerUnit's unitTypeId
-        if (units.length > 0) {
-            await Promise.all(
-                units.map(({ joinId, unitTypeId }) =>
-                    prisma.studyPlannerUnit.update({
-                        where: { id: joinId },
-                        data: { unitTypeId: unitTypeId ? parseInt(unitTypeId) : null },
-                    })
-                )
-            );
-        }
-
-        // Return updated planner
-        const updated = await prisma.studyPlanner.findUnique({
-            where: { id },
-            include: {
-                studyPlannerUnits: {
-                    include: { unit: true, unitType: true },
-                },
-            },
+        const updated = await prisma.$transaction(async tx => {
+            const joinIds = units.map(unit => unit?.joinId);
+            if (joinIds.some(rowId => !Number.isInteger(rowId) || rowId <= 0) || new Set(joinIds).size !== joinIds.length) {
+                throw Object.assign(new Error('Choose valid, distinct planner unit rows.'), { status: 400 });
+            }
+            if (joinIds.length) {
+                const ownedRows = await tx.studyPlannerUnit.findMany({ where: { id: { in: joinIds }, studyPlannerId: id }, select: { id: true } });
+                if (ownedRows.length !== joinIds.length) throw Object.assign(new Error('A selected unit row does not belong to this planner.'), { status: 400 });
+            }
+            if (templateIdProvided) await tx.studyPlanner.update({ where: { id }, data: { plannerTemplateId } });
+            for (const { joinId, unitTypeId } of units) {
+                await tx.studyPlannerUnit.update({ where: { id: joinId, studyPlannerId: id }, data: { unitTypeId: unitTypeId ? parseInt(unitTypeId) : null } });
+            }
+            const planner = await tx.studyPlanner.findUnique({ where: { id }, include: { studyPlannerUnits: { include: { unit: true, unitType: true } } } });
+            if (!planner) throw Object.assign(new Error('Planner not found.'), { status: 404 });
+            return planner;
         });
 
         return NextResponse.json({

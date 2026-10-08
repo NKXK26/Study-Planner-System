@@ -1,3 +1,7 @@
+import {planUploadedDocument} from './uploadedPlannerPlan.server.mjs';
+import {readPlannerDocument} from './uploadedPlanner.server.mjs';
+import {normalizeRecordReference,resolvePlannerReference,formatPlannerUnits,plannerReferences,plannerListRequest} from './plannerRecordRequests.mjs';
+import {describePlannerFeature,plannerFeatureGuides} from './plannerFeatureGuides.mjs';
 import {doubleMajorPathway} from './doubleMajorPathway.mjs';
 import {remainingStudyPlan,validatedPreferences} from './studyPlanWorkflow.mjs';
 import {rankPlannerMatches} from './plannerMatching.mjs';
@@ -57,11 +61,11 @@ function resolve(planners,reference) {
   return matches.length===1?matches[0]:null;
 }
 const receipts=new Map(),locks=new Set();
-export async function runPlannerTool(req,input,{allowWrites=false,document=null,planningContext=null,suggestionContext=null,question=''}={}) {
+export async function runPlannerTool(req,input,{allowWrites=false,document=null,plannerDocument=null,planningContext=null,suggestionContext=null,question=''}={}) {
   const call=validateToolCall(input,allowWrites),a=call.arguments;
   const write=mutationTools.includes(call.name);
   const identity=await toolIdentity(req,write?(call.name.startsWith('update')?'update':'create'):'read');
-  const result=(answer,workflow,data=null)=>({answer,workflow,data,tool:call.name});
+  const result=(answer,workflow,data=null)=>({answer,workflow,data,tool:call.name,...(['inspect_planner','list_planners','list_templates','describe_workflow','compare_planners'].includes(call.name)?{chatOnly:true}:{})});
   if(call.name==='explain_dpa') {
     if(!document)return result('Upload your DPA PDF or XLSX beside the chat input to explain your results.','dpa');
     const checked=reviewedChatDocument(validateDocument(document),planningContext);
@@ -72,7 +76,7 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     return result(evidence.summary+(completed?'\n\nCompleted / exempted entries:\n'+completed:'')+(excluded?'\n\nEntries not counted as completed:\n'+excluded:''),'dpa',{documentName:document.name,tableVerified:!!transcript});
   }
   if(call.name==='inspect_unit') {
-    if(document&&/can i take|eligible|eligibility|what about/i.test(question))return runPlannerTool(req,{name:'explain_next_semester',arguments:a},{document,planningContext,suggestionContext,question});
+    if((document||plannerDocument)&&/can i take|eligible|eligibility|what about/i.test(question))return runPlannerTool(req,{name:'explain_next_semester',arguments:a},{document,plannerDocument,planningContext,suggestionContext,question});
     const records=await prisma.unit.findMany({include:unitPlanningInclude,orderBy:{UnitCode:'asc'}});
     const resolved=resolveUnitReference(records,{question,unitQuery:a.unitQuery,code:a.code,lastCode:suggestionContext?.unitCode});
     if(resolved.status!=='matched')return result(resolved.status==='ambiguous'?'Which recorded unit do you mean?':resolved.status==='version-review'?'Several versions use that code. Confirm the applicable unit version in your course planner.':'Which unit should I check? Tell me its code or a more specific name.','suggestions',{needsSelection:true,unitChoices:resolved.choices,unitChoiceTool:'inspect_unit'});
@@ -83,7 +87,7 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
   if(call.name==='explain_next_semester') {
     const args={};
     for(const key of ['targetMajor','planner','term'])if(typeof suggestionContext?.[key]==='string')args[key]=suggestionContext[key];
-    const draft=await runPlannerTool(req,{name:suggestionContext?.planMode==='full'?'plan_remaining_studies':'suggest_next_semester',arguments:args},{document,planningContext,suggestionContext,question});
+    const draft=await runPlannerTool(req,{name:suggestionContext?.planMode==='full'?'plan_remaining_studies':'suggest_next_semester',arguments:args},{document,plannerDocument,planningContext,suggestionContext,question});
     if(!draft.data?.plan)return {...draft,tool:call.name};
     const {plan,planner}=draft.data;
     const wantsUnit=!!(a.code||a.unitQuery)||/why.*(?:not|wasn|weren|omit|suggest)|not.*suggest/i.test(question)||/\b[a-z]{2,5}[ -]?\d{3,6}\b/i.test(question)||/what about|can i take|eligible|eligibility|prereq|requisite|\bit\b|\bthat\b|same unit/i.test(question);
@@ -102,24 +106,37 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     let absent='';
     if(wantsUnit&&!unit){
       const ref=draft.data.unitReferences.find(u=>u.code===resolved.code);
-      const review=reviewDpa(validateDocument(document),planningContext?.corrections||[]);
+      const review=document?reviewDpa(validateDocument(document),planningContext?.corrections||[]):{transcript:{completed:[]}};
       const earned=review.transcript.completed.find(u=>u.code===resolved.code)?.earned||0;
       absent=ref&&Number.isFinite(ref.credits)&&ref.credits>0&&earned>=ref.credits?resolved.code+' '+ref.name+' already has sufficient recorded earned credit ('+earned+' CP) in your DPA; it is not suggested again.':resolved.code+' '+(resolved.unit.name||resolved.unit.Name)+' is outside this planner unfinished pool. I have not added it to the draft.';
     }
-    return result('Rechecked against '+planner.name+' and your current DPA.\n\n'+(details.join('\n\n')||absent||'No eligible units were selected; inspect the blocked candidates in the workspace.')+'\n\n'+formatCompletionAudit(draft.data.completionAudit)+'\n\n'+plan.warnings.join('\n'),'suggestions',{...draft.data,focusCode:resolved?.code||null});
+    return result('Rechecked against '+planner.name+(document?' and your current DPA.':' with no DPA attached.')+'\n\n'+(details.join('\n\n')||absent||'No eligible units were selected; inspect the blocked candidates in the workspace.')+'\n\n'+formatCompletionAudit(draft.data.completionAudit)+'\n\n'+plan.warnings.join('\n'),'suggestions',{...draft.data,focusCode:resolved?.code||null});
   }
   if(call.name==='open_workflow')return result(`Ready: ${a.workflow}. Use the planning workspace to select records and run this task.`,a.workflow);
-  if(call.name==='list_templates')return result('Choose a template to inspect its category counts, or create a reviewed template in the workspace.','templates',await existing(readTemplates,req,'/api/planner-templates'));
+  if(call.name==='describe_workflow')return result(describePlannerFeature(a.workflow),null,{features:plannerFeatureGuides.filter(g=>!a.workflow||g.id===a.workflow)});
+  if(call.name==='list_templates'){
+    const templates=await existing(readTemplates,req,'/api/planner-templates');
+    const answer=templates.length?templates.map(t=>'**'+t.name+' (ID '+t.id+')**\n'+Object.entries(t.requirements||{}).map(([name,count])=>'- '+name+': '+count+' required units').join('\n')).join('\n\n'):'No planner templates are saved.';
+    return result(answer,'templates',templates);
+  }
+  if(plannerDocument&&['suggest_next_semester','plan_remaining_studies'].includes(call.name)&&!a.planner){
+    readPlannerDocument(plannerDocument);
+    const records=await prisma.unit.findMany({include:unitPlanningInclude});
+    return planUploadedDocument(plannerDocument,document,records,{...a,full:call.name==='plan_remaining_studies'},suggestionContext||{});
+  }
   const planners=await existing(readExisting,req,'/api/study-planner');
   if(call.name==='list_planners'){
-    const found=planners.filter(p=>!a.search||p.name.toLowerCase().includes(a.search.toLowerCase()));
-    return result(found.length?`${found.length} planner(s) found. Select one in the workspace to view its units and manage its category/template settings.`:'No planners match that search. Try a shorter name.','management',found);
+    const scope=plannerListRequest(question);
+    const search=scope?scope.arguments.search:a.search;
+    const found=planners.filter(p=>!search||normalizeRecordReference(p.name).includes(normalizeRecordReference(search)));
+    return result(found.length?found.length+' planner(s) found'+(search?' matching "'+search+'" (of '+planners.length+' saved)':' in the database')+':\n\n'+found.map(p=>'- '+p.name+' (ID '+p.id+'): '+p.units.length+' units').join('\n')+'\n\nAsk "Show all units in '+found[0].name+'" to inspect a planner.':'No planners match that search. Try a shorter name.','management',found);
   }
   if(call.name==='inspect_planner') {
-    const selected=resolve(planners,a.planner);
-    if(!selected)return result('That planner name is missing or ambiguous. Search and select its exact record in the workspace.','management');
+    const lookup=resolvePlannerReference(planners,a.planner);
+    if(lookup.status!=='matched')return result(lookup.choices.length?'Which planner do you mean? Reply with its name or ID:\n'+lookup.choices.map(p=>'- '+p.name+' (ID '+p.id+')').join('\n'):'No saved planner matches "'+a.planner+'". Check the intake and major, or ask me to list planners.','management',{needsSelection:true,choices:lookup.choices});
+    const selected=lookup.planner;
     const detail=await existing(inspectExisting,req,`/api/study-planner/${selected.id}`,'GET',null,{params:{id:String(selected.id)}});
-    return result(`${selected.name}: ${selected.units.length} units. Template: ${selected.plannerTemplate?.name||'not linked'}.`,'management',detail);
+    return result(formatPlannerUnits(detail,a),'management',detail);
   }
   if(call.name==='match_dpa_planners') {
     if(!document)return result('Upload your DPA to find the highest-matching planner.','suggestions',{targetMajor:null});
@@ -133,12 +150,13 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     return result(answer,'suggestions',{choices,ranking:ranking.map(r=>({id:r.planner.id,name:r.planner.name,matched:r.matched})),suggested:{id:top.planner.id,name:top.planner.name},targetMajor:null,documentName:document.name});
   }
   if(call.name==='adjust_study_plan') {
+    if(suggestionContext?.planMode==='double-major')return result('Workload changes for a double-major pathway are not supported yet. Would you like to adjust a single-major study plan instead?','double-major',{needsSelection:true});
     const previous=validatedPreferences(suggestionContext?.preferences);
     const preferences=a.action==='reset'?validatedPreferences():validatedPreferences({...previous,...(a.maxUnits?{maxUnits:a.maxUnits}:{}),...(a.maxCredits?{maxCredits:a.maxCredits}:{})});
     let term=a.action==='defer'?suggestionContext?.term:a.term||suggestionContext?.term;
     if(['exclude','defer'].includes(a.action)){
       if(a.action==='defer'&&!a.term)return result('Which semester should I move the unit to: Semester 1 or Semester 2?','suggestions',{needsSelection:true});
-      const baseline=await runPlannerTool(req,{name:'suggest_next_semester',arguments:{...(suggestionContext?.planner?{planner:suggestionContext.planner}:{}),...(term?{term}:{})}},{document,planningContext,suggestionContext,question});
+      const baseline=await runPlannerTool(req,{name:'suggest_next_semester',arguments:{...(suggestionContext?.planner?{planner:suggestionContext.planner}:{}),...(term?{term}:{})}},{document,plannerDocument,planningContext,suggestionContext,question});
       if(!baseline.data?.plan)return baseline;
       let resolved=resolveUnitReference(baseline.data.unitReferences,{question,code:a.code,lastCode:suggestionContext?.unitCode});
       if(resolved.status!=='matched'&&/this elective|that elective/i.test(question)){
@@ -153,12 +171,12 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
       else preferences.deferred[resolved.code]=a.term;
     }
     const name=suggestionContext?.planMode==='full'?'plan_remaining_studies':'suggest_next_semester';
-    const adjusted=await runPlannerTool(req,{name,arguments:{...(suggestionContext?.planner?{planner:suggestionContext.planner}:{}),...(term?{term}:{}),...(a.year?{year:a.year}:suggestionContext?.year?{year:String(suggestionContext.year)}:{})}},{document,planningContext,suggestionContext:{...suggestionContext,preferences},question});
+    const adjusted=await runPlannerTool(req,{name,arguments:{...(suggestionContext?.planner?{planner:suggestionContext.planner}:{}),...(term?{term}:{}),...(a.year?{year:a.year}:suggestionContext?.year?{year:String(suggestionContext.year)}:{})}},{document,plannerDocument,planningContext,suggestionContext:{...suggestionContext,preferences},question});
     if(adjusted.data?.plan)adjusted.data.plannerConfirmed=suggestionContext?.plannerConfirmed===true;
     return adjusted;
   }
   if(['suggest_next_semester','plan_remaining_studies'].includes(call.name)) {
-    if(!document)return result('Upload your DPA beside the chat input. I will match it to '+(a.targetMajor?majorLabel(a.targetMajor)+' planners':'a planner')+', check unfinished units and '+(call.name==='plan_remaining_studies'?'draft the remaining semesters through completion.':'suggest up to four for next semester.'),'suggestions',{targetMajor:a.targetMajor||null,planMode:call.name==='plan_remaining_studies'?'full':'semester'});
+    if(!document)return result('Attach your DPA to match a saved planner, or attach a study planner PDF to plan directly from that file. With a DPA I will match it to '+(a.targetMajor?majorLabel(a.targetMajor)+' planners':'a planner')+', check unfinished units and '+(call.name==='plan_remaining_studies'?'draft the remaining semesters through completion.':'suggest up to four for next semester.'),'suggestions',{targetMajor:a.targetMajor||null,planMode:call.name==='plan_remaining_studies'?'full':'semester'});
     if(planningContext?.corrections?.length && !planningContext.dpaConfirmed)throw new Error('Confirm your DPA corrections in the optional review first.');
     const review=reviewDpa(validateDocument(document),planningContext?.corrections||[]);
     const allRanking=rankPlannerMatches(planners,review.transcript.completed);
@@ -214,8 +232,12 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     lines.push('\nPrimary electives matching the second major: '+(pathway.electiveMajorMatches.map(u=>u.code+' '+u.name).join('; ')||'None recorded in the primary elective pool. Other earned exact-code matches are still checked.'));
     lines.push('\nFuture-semester double-major draft:');
     if(!pathway.semesters.length)lines.push('No additional major units need to be drafted against these recorded counts.');
-    for(const s of pathway.semesters)lines.push(s.term+' '+s.year+': '+(s.selected.map(u=>u.code+' '+u.name+' ('+u.credits+' CP)').join('; ')||'No eligible units; recorded blockers remain.')+' ? '+s.selected.length+'/4 units, '+s.credits+' CP.');
-    if(!pathway.completeDraft)lines.push('\nUnresolved category counts: '+pathway.coverage.majors.filter(m=>!m.configured).map(m=>m.name).join(', ')+'\nUnresolved units: '+pathway.outstanding.map(u=>u.code+': '+[...u.reasons,...u.unknown].join('; ')).join('\n'));
+    for(const s of pathway.semesters)lines.push(s.term+' '+s.year+': '+(s.selected.map(u=>u.code+' '+u.name+' ('+u.credits+' CP)').join('; ')||'No eligible units; recorded blockers remain.')+' - '+s.selected.length+'/4 units, '+s.credits+' CP.');
+    if(!pathway.completeDraft){
+      const unknownCounts=pathway.coverage.majors.filter(m=>!m.configured).map(m=>m.name);
+      if(unknownCounts.length)lines.push('\nUnresolved category counts: '+unknownCounts.join(', '));
+      if(pathway.outstanding.length)lines.push('\nUnresolved units: '+pathway.outstanding.map(u=>u.code+': '+[...u.reasons,...u.unknown].join('; ')).join('\n'));
+    }
     lines.push('\n'+pathway.warnings.join('\n'));
     return result(lines.join('\n'),'double-major',{primary:pathway.primary,secondary:pathway.secondary,coverage:pathway.coverage,pathway,choices:pathway.choices,term,year,documentName:document.name,planner:{id:pathway.primary.id,name:pathway.primary.name+' + '+pathway.secondary.name},planMode:'double-major'});
   }
@@ -223,15 +245,18 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     let left=resolve(planners,a.plannerA),right=resolve(planners,a.plannerB);
     // Exact, unique names/IDs in the prompt can prefill selectors; never guess fuzzy matches.
     if(!a.plannerA&&!a.plannerB&&question){
-      const matched=planners.filter(p=>question.toLowerCase().includes(p.name.toLowerCase())||new RegExp(`\\b(?:id\\s*|#)${p.id}\\b`,'i').test(question));
+      const refs=plannerReferences(question);
+      const matched=refs.length===2?refs.map(ref=>resolve(planners,ref)).filter(Boolean):planners.filter(p=>question.toLowerCase().includes(p.name.toLowerCase())||new RegExp(`\\b(?:id\\s*|#)${p.id}\\b`,'i').test(question));
       if(matched.length===2){[left,right]=matched;}
     }
     const workflow=call.name==='compare_planners'?'compare':'double-major';
-    if(!left||!right)return result('Select two planners using the searchable dropdowns in the workspace. You can also type their exact names or “ID 12 vs ID 18”.',workflow);
+    if(!left||!right)return result('Which two planners should I compare? Reply with their names or IDs, for example “23 Sep CSDS vs 24 Sep CSDS” or “ID 12 vs ID 18”.',workflow);
     if(left.id===right.id)throw new Error('Choose two different planners. Your selections are retained.');
     if(call.name==='compare_planners') {
       const data=await existing(compareExisting,req,`/api/compare-planners?a=${left.id}&b=${right.id}`);
-      return result(`${left.name} vs ${right.name}: ${data.summary.inBoth} shared units, ${data.summary.onlyInA} only in the first, ${data.summary.onlyInB} only in the second, ${data.summary.unitTypeChanged} category changes.`,workflow,data);
+      const lines=[`${left.name} vs ${right.name}: ${data.summary.inBoth} shared units, ${data.summary.onlyInA} only in the first, ${data.summary.onlyInB} only in the second, ${data.summary.unitTypeChanged} category changes.`];
+      for(const [label,units]of [['Only in '+left.name,data.diff.onlyInA],['Only in '+right.name,data.diff.onlyInB],['Shared units',data.diff.inBoth],['Category changes',data.diff.unitTypeChanged]])lines.push('\n'+label+':\n'+(units.map(u=>'- '+u.UnitCode+' '+u.Name+(label==='Category changes'?' ('+(u.unitType?.Name||'Unassigned')+' -> '+(u.unitTypeB?.Name||'Unassigned')+')':'')).join('\n')||'None.'));
+      return result(lines.join('\n'),workflow,data);
     }
 
   }
@@ -242,7 +267,7 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     const originals=pool.filter(u=>u.UnitCode===code);
     if(originals.length!==1)throw new Error(originals.length?'Multiple unit versions share that code. Confirm the applicable version on the Units page.':'Unit code not found. Check the code and retry.');
     const source=originals[0],suggestions=replacementCandidates({code,name:source.Name,creditPoints:source.CreditPoints},pool);
-    return result(`Replacement candidates for ${code}. These are based on title similarity and are not approved equivalents.`,'suggestions',{source,suggestions});
+    return result(`Replacement candidates for ${code}. These are based on title similarity and are not approved equivalents.`+'\n\n'+(suggestions.map(u=>'- '+u.code+' '+u.name+' ('+(u.credits??'Unknown')+' CP)').join('\n')||'No title-similarity candidates were found.'),'suggestions',{source,suggestions});
   }
   if(!write)throw new Error('Tool not available.');
   if(!allowWrites||a.confirmed!==true)throw new Error('Review the draft and use its Save button first.');

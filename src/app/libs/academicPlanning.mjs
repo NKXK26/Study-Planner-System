@@ -1,3 +1,4 @@
+import {checkUploadedRule} from './uploadedPlannerRules.mjs';
 import {electiveCompletion} from './electiveCompletion.mjs';
 import {projectPrerequisite,MAX_UNITS_PER_SEMESTER,MAX_CREDITS_PER_SEMESTER} from './semesterRules.mjs';
 import { normalizeCode, parseTranscript } from './doubleMajorChecker.mjs';
@@ -52,7 +53,10 @@ export function semesterPlan({ transcript, planner, relations, term, maxCredits,
     if (!counts.has(group)) unknown.push('Category requirement missing or inconsistent');
     else if (!counts.get(group)) reasons.push('Category requirement already covered');
     const rules = relations.filter(r=>r.UnitID===u.ID);
-    if (new Set(rules.filter(r=>r.UnitRelationship!=='anti').map(r=>r.UnitRelationship)).size>1) unknown.push('Combined requisite types require review of rule grouping');
+    const uploaded=u.uploadedRule?checkUploadedRule(u.uploadedRule,earned,totalEarned,units):null;
+    if(uploaded){reasons.push(...uploaded.reasons);unknown.push(...uploaded.unknown);}
+    // Uniform AND/OR records form a flat expression even when pre/co/min types differ.
+    // Mixed or unsupported operators below still hold the unit for review.
     if (!rules.length && !provisional) unknown.push('No requisite records; unrestricted enrolment is not verified');
     const projectA=projectPrerequisite(u,units);
     if(projectA){
@@ -75,11 +79,11 @@ export function semesterPlan({ transcript, planner, relations, term, maxCredits,
     const negative = evaluations.filter((_,i)=>rules[i].UnitRelationship==='anti');
     const positiveOK = !positive.length || (operators.has('or') ? positive.some(r=>r.ok) : positive.every(r=>r.ok));
     if (!positiveOK || negative.some(r=>!r.ok)) reasons.push('Recorded requisite conditions are not met (co-requisites must already be earned for this draft)');
-    return { code:normalizeCode(u.UnitCode), name:u.Name, credits:u.CreditPoints, category:group, reasons, unknown, rules:[...evaluations.map(e=>e.label),...(projectA?['Project sequence: '+projectA+' must already be completed']:[]),...(!rules.length&&provisional?['No prerequisites recorded; verify eligibility before enrolment']:[])], status:reasons.length?'blocked':unknown.length?'review':'candidate', sourceId:`unit-${u.ID}` };
+    return { code:normalizeCode(u.UnitCode), name:u.Name, credits:u.CreditPoints, category:group, reasons, unknown, rules:[...(uploaded?.rules||[]),...evaluations.map(e=>e.label),...(projectA?['Project sequence: '+projectA+' must already be completed']:[]),...(!rules.length&&!uploaded&&provisional?['No prerequisites recorded; verify eligibility before enrolment']:[])], status:reasons.length?'blocked':unknown.length?'review':'candidate', sourceId:`unit-${u.ID}`,planningPriority:u.PlanningPriority??0 };
   });
   const selected=[]; let credits=0;
   const slots = new Map(counts);
-  for (const u of candidates.sort((a,b)=>a.code.localeCompare(b.code))) {
+  for (const u of candidates.sort((a,b)=>a.planningPriority-b.planningPriority||a.code.localeCompare(b.code))) {
     if (u.status==='candidate' && selected.length<maxUnits && credits+u.credits<=maxCredits && slots.get(u.category)>0) {
       selected.push(u); credits+=u.credits; slots.set(u.category,slots.get(u.category)-1);
     }

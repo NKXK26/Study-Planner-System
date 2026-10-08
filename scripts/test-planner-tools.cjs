@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const http = require('node:http');
-const {spawn} = require('node:child_process');
+const {spawn,spawnSync} = require('node:child_process');
 
 (async () => {
   const {inferPlannerTool,validateToolCall} = await import('../src/app/libs/plannerToolDefinitions.mjs');
@@ -43,6 +43,15 @@ const {spawn} = require('node:child_process');
   const temp = fs.mkdtempSync(path.join(os.tmpdir(),'planner-tool-checks-'));
   const database = path.join(temp,'app.db');
   fs.copyFileSync('prisma/app.db',database);
+  // Align only this disposable copy with the current schema. Never migrate the source DB.
+  const copiedSchema=path.join(temp,'schema.prisma');
+  fs.writeFileSync(copiedSchema,fs.readFileSync('prisma/schema.prisma','utf8').replace(/provider\s*=\s*"prisma-client-js"/,'provider = "prisma-client-js"\n  output = "./client"'));
+  for(const args of [['db','push','--schema',copiedSchema,'--skip-generate'],['generate','--schema',copiedSchema]]){
+    const setup=spawnSync(process.execPath,[require.resolve('prisma/build/index.js'),...args],{windowsHide:true,env:{...process.env,DATABASE_URL:'file:'+database.replaceAll('\\','/')},encoding:'utf8'});
+    assert.equal(setup.status,0,setup.stderr||setup.stdout);
+  }
+  fs.cpSync(path.join(temp,'client'),'.next/standalone/node_modules/.prisma/client',{recursive:true});
+
   let modelRequests=0;const inferenceModels=[];
   const ai = http.createServer(async(req,res)=>{
     modelRequests++;let text='';for await(const chunk of req)text+=chunk;
@@ -84,6 +93,37 @@ const {spawn} = require('node:child_process');
     assert.equal((await request('/api/double-major-pathway',{document:null})).status,400);
     const catalog=await request('/api/planner-assistant/tools');assert.equal(catalog.status,200);assert(catalog.planners.length>=2);assert(catalog.units.length);
     const [a,b]=catalog.planners;
+    assert.equal((await request('/api/graduation-eligibility',{document:null},false)).status,401);
+    assert.equal((await request('/api/graduation-eligibility',{document:null})).status,400);
+    const unrelatedRows=[['Course','Course Title','Status','Grade','Earned'],...Array.from({length:24},(_,i)=>['ZZZ'+(99001+i),'Outside unit','Complete','HD',12.5])];
+    const unrelatedDocument={name:'24-wrong-units.xlsx',rows:unrelatedRows,text:unrelatedRows.map(r=>r.join('\t')).join('\n')};
+    const graduationWrong=await request('/api/graduation-eligibility',{document:unrelatedDocument});assert.equal(graduationWrong.status,200,graduationWrong.message);assert.equal(graduationWrong.data.transcript.completedCount,24);assert.equal(graduationWrong.data.eligible,false);assert.equal(graduationWrong.data.fulfillingPlanners.length,0);
+    assert.equal((await request('/api/graduation-eligibility',{document:unrelatedDocument,plannerId:'missing'})).status,400);
+    const {assessGraduationEligibility}=await import('../src/app/libs/graduationEligibility.mjs');const {documentEvidence}=await import('../src/app/libs/chatDpa.mjs');
+    let graduationDocument=null,graduationPlanner=null;
+    for(const planner of catalog.planners){const rows=[['Course','Course Title','Status','Grade','Earned'],...planner.units.map(u=>[u.UnitCode,u.Name,'Complete','EXM',u.CreditPoints||0])];const document={name:'complete-course.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')};const transcript=documentEvidence(document).transcript;if(transcript&&assessGraduationEligibility(transcript,planner).eligible){graduationDocument=document;graduationPlanner=planner;break;}}
+    assert(graduationDocument,'At least one configured planner must support a complete coverage check');
+    const graduationAuto=await request('/api/graduation-eligibility',{document:graduationDocument});assert.equal(graduationAuto.status,200);assert.equal(graduationAuto.data.eligible,false);assert.equal(graduationAuto.data.status,'choose-planner');
+    const graduationSelected=await request('/api/graduation-eligibility',{document:graduationDocument,plannerId:graduationPlanner.id});assert.equal(graduationSelected.status,200);assert.equal(graduationSelected.data.eligible,true);assert.equal(graduationSelected.data.selected.planner.id,graduationPlanner.id);assert(graduationSelected.data.selected.categories.every(c=>c.remainingCount===0));
+
+    const uploadedFixture=path.join(temp,'new-planner.pdf');
+    const fixtureCheck=spawnSync(process.execPath,['scripts/test-uploaded-planner.cjs'],{windowsHide:true,env:{...process.env,PLANNER_TEST_FIXTURE:uploadedFixture},encoding:'utf8'});
+    assert.equal(fixtureCheck.status,0,fixtureCheck.stderr||fixtureCheck.stdout);
+    const uploaded=await request('/api/planner-assistant/document',{kind:'planner',name:'new-planner.pdf',base64:fs.readFileSync(uploadedFixture).toString('base64')});
+    assert.equal(uploaded.status,200,uploaded.message);assert(uploaded.document.token);assert.equal(uploaded.summary.units,7);
+    const uploadedPlan=await request('/api/planner-assistant',{enableTools:true,planningOnly:true,question:'plan 3 unit per semester for me until finish',plannerDocument:uploaded.document});
+    assert.equal(uploadedPlan.status,200);assert.equal(uploadedPlan.toolResult.data.plannerSource,'upload');assert.equal(uploadedPlan.toolResult.data.pathway.completeDraft,true);assert.equal(uploadedPlan.toolResult.data.preferences.maxUnits,3);assert(!uploadedPlan.answer.includes('earned-unit matches'));
+    const uploadedWorkload=await request('/api/planner-assistant',{enableTools:true,planningOnly:true,question:'only four',plannerDocument:uploaded.document,suggestionContext:{plannerSource:'upload',planMode:'full',preferences:{maxUnits:3,maxCredits:50}}});
+    assert.equal(uploadedWorkload.toolResult.data.preferences.maxUnits,4);assert.equal(uploadedWorkload.toolResult.data.planMode,'full');
+    const uploadedWhy=await request('/api/planner-assistant',{enableTools:true,planningOnly:true,question:'why these units?',toolCall:{name:'explain_next_semester',arguments:{}},plannerDocument:uploaded.document,suggestionContext:{plannerSource:'upload',planMode:'full'}});assert.equal(uploadedWhy.answerability,'verified');assert(uploadedWhy.toolResult.data.plan);
+    const uploadedTamper=await request('/api/planner-assistant',{enableTools:true,planningOnly:true,question:'plan until finish',plannerDocument:{...uploaded.document,token:'tampered'}});assert.equal(uploadedTamper.status,400);
+    const uploadedDenied=await request('/api/planner-assistant/document',{kind:'planner',name:'new-planner.pdf',base64:fs.readFileSync(uploadedFixture).toString('base64')},false);assert.equal(uploadedDenied.status,401);
+
+    const allRecords=await request('/api/planner-assistant',{question:'show all planners',enableTools:true,planningOnly:true,toolCall:{name:'list_planners',arguments:{search:'CSAI'}},suggestionContext:{targetMajor:'AI'},conversationHistory:[{role:'user',content:'list AI planners'}]});
+    assert.equal(allRecords.toolResult.data.length,catalog.planners.length,'All-planner requests must discard stale search arguments');
+    assert.match(allRecords.answer,/in the database/);
+    const aiRecords=await request('/api/planner-assistant',{question:'list all AI planners',enableTools:true,planningOnly:true});assert(aiRecords.toolResult.data.length);assert(aiRecords.toolResult.data.every(p=>/CSAI/i.test(p.name)));assert.match(aiRecords.answer,/matching "CSAI"/);
+
     assert.equal((await request('/api/planner-assistant?verify=1',null,false)).status,401);
     const statusResponse=await fetch(base+'/api/planner-assistant',{headers:{Connection:'close'}});
     assert.equal((await statusResponse.json()).status,'installed');
@@ -118,6 +158,18 @@ const {spawn} = require('node:child_process');
     assert.equal((await call('compare_planners',{plannerA:String(a.id),plannerB:String(a.id)})).status,400);
     assert.equal((await call('compare_planners',{plannerA:'missing',plannerB:String(b.id)})).workflow,'compare');
     assert.equal((await call('inspect_planner',{planner:String(a.id)})).data.id,a.id);
+    const namedPlanner=catalog.planners.find(p=>/^23-Sep-CSDS$/i.test(p.name))||a;
+    const listed=await request('/api/planner-assistant',{question:'all the units in '+namedPlanner.name.replaceAll('-',' '),enableTools:true,planningOnly:true});
+    assert.equal(listed.toolResult.tool,'inspect_planner');assert.equal(listed.toolResult.data.id,namedPlanner.id);assert.equal(listed.toolResult.chatOnly,true);
+    for(const unit of namedPlanner.units)assert(listed.answer.includes(unit.UnitCode+' '+unit.Name),'Every stored unit must appear in the chat answer');
+    const majorOnly=await request('/api/planner-assistant',{question:'only major units',enableTools:true,planningOnly:true,suggestionContext:{inspectedPlanner:String(namedPlanner.id)}});assert.equal(majorOnly.toolResult.data.id,namedPlanner.id);assert.equal(majorOnly.toolResult.tool,'inspect_planner');
+    const absent=await request('/api/planner-assistant',{question:'show all units in planner ZZZmissing',enableTools:true,planningOnly:true});assert.equal(absent.toolResult.answerability,'clarification');assert.match(absent.answer,/No saved planner matches/);
+    for(const question of ['how does Study Planner Templates work','how do I upload a study planner','how does Unit Suggestions work','what is Study Planner Maker','how do I use Study Planner Management','how does Differentiate Study Planners work','how does Double Major Checker work']){
+      const guidance=await request('/api/planner-assistant',{question,enableTools:true,planningOnly:true});assert.equal(guidance.toolResult.tool,'describe_workflow');assert.equal(guidance.toolResult.chatOnly,true);assert.match(guidance.answer,/\/view\//);
+    }
+    const templateList=await call('list_templates');for(const tpl of templateList.data)assert(templateList.answer.includes(tpl.name));
+    const chatComparison=await request('/api/planner-assistant',{question:'compare '+a.name+' vs '+b.name,enableTools:true,planningOnly:true});assert(chatComparison.toolResult.data.diff);assert.match(chatComparison.answer,/Shared units:/);
+
     assert.equal((await call('list_templates')).workflow,'templates');
     assert.equal((await call('check_double_major')).workflow,'double-major');
     assert.equal((await call('suggest_next_semester')).workflow,'suggestions');
@@ -162,6 +214,10 @@ const {spawn} = require('node:child_process');
           assert(!simple.data.plan.selected.some(u=>u.code===passed.UnitCode));assert(simple.data.planner);
           const finishStudies=await request('/api/planner-assistant',{question:'what i need to take next to complete studies',enableTools:true,document:{name:'synthetic.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')}});
           assert.equal(finishStudies.status,200,finishStudies.message);assert.equal(finishStudies.toolResult.tool,'plan_remaining_studies');assert(finishStudies.toolResult.data.pathway);assert(finishStudies.toolResult.data.completionAudit.categories.length);assert.match(finishStudies.answer,/Remaining requirements against this planner/);
+          const multiQuestion='Explain my DPA and check double major then plan all remaining semesters until I finish';
+          const waitingTasks=await request('/api/planner-assistant',{question:multiQuestion,enableTools:true,planningOnly:true});assert.equal(waitingTasks.toolResult.suggestionContext.pendingQuestion,multiQuestion);assert.equal(waitingTasks.toolResult.toolResults.length,1);
+          const multiReply=await request('/api/planner-assistant',{question:multiQuestion,enableTools:true,planningOnly:true,document:{name:'synthetic.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')}});assert.equal(multiReply.status,200);assert.deepEqual(multiReply.toolResult.toolResults.map(r=>r.tool),['explain_dpa','check_double_major','plan_remaining_studies']);assert.equal(multiReply.toolResult.suggestionContext.pendingQuestion,null);assert.match(multiReply.answer,/Completed \/ exempted entries/);assert(multiReply.toolResult.data.pathway);
+          const ambiguousChange=await request('/api/planner-assistant',{question:'change this',enableTools:true,planningOnly:true});assert.match(ambiguousChange.answer,/planner, semester, workload/);assert(!ambiguousChange.toolResult);
           const matches=await request('/api/planner-assistant',{question:'highest match planner for this dpa',enableTools:true,suggestionContext:{targetMajor:'AI',planner:String(first.id),plannerConfirmed:true},document:{name:'synthetic.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')}});
           assert.equal(matches.status,200,matches.message);assert.equal(matches.toolResult.tool,'match_dpa_planners');assert.match(matches.answer,/Highest-matching planner/);assert.equal(matches.toolResult.data.targetMajor,null);
           const {rankPlannerMatches}=await import('../src/app/libs/plannerMatching.mjs');
@@ -219,6 +275,13 @@ const {spawn} = require('node:child_process');
     const generated=await request('/api/planner-assistant',{question:'Which planner templates are available?',enableTools:true});assert.equal(generated.source,'tool');assert.equal(generated.toolResult.tool,'list_templates');
     const forbidden=await request('/api/planner-assistant',{question:'Try an unauthorised action',enableTools:true});assert.match(forbidden.answer,/unable to answer/i);
     const natural=await request('/api/planner-assistant',{question:`differentiate planner ID ${a.id} vs ID ${b.id}`,enableTools:true});assert(natural.toolResult.data.diff);
-    console.log('Planner tool validation, real API reuse, selection, authentication, reviewed saves, retries, stale edits and model-call checks passed.');
+    // Check legacy reads only on this disposable copy, after all scheduling/write tests.
+    const LegacyClient=require(path.join(temp,'client')).PrismaClient;
+    const legacyDb=new LegacyClient({datasources:{db:{url:'file:'+database.replaceAll('\\','/')}}});
+    try {for(const column of ['plannedYear','plannedSemester','plannedDates','sortOrder'])await legacyDb.$executeRawUnsafe('ALTER TABLE "StudyPlannerUnit" DROP COLUMN "'+column+'"');}finally{await legacyDb.$disconnect();}
+    const legacyGraduation=await request('/api/graduation-eligibility',{document:graduationDocument,plannerId:graduationPlanner.id});assert.equal(legacyGraduation.status,200,legacyGraduation.message);assert.equal(legacyGraduation.data.eligible,true);
+    const legacyList=await request('/api/study-planner');assert.equal(legacyList.status,200);assert(legacyList.data.length);
+    const legacyChat=await request('/api/planner-assistant',{question:'show planner ID '+a.id,enableTools:true,planningOnly:true});assert.equal(legacyChat.toolResult.data.id,a.id);assert.match(legacyChat.answer,/recorded.*units/);
+    console.log('Planner tool validation, real API reuse, selection, authentication, reviewed saves, retries, stale edits, legacy database reads and model-call checks passed.');
   }catch(e){console.error('Standalone server exit:',server.exitCode,'signal:',server.signalCode,'output:',output.slice(-5000));throw e;}finally{server.kill();await new Promise(resolve=>ai.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

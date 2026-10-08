@@ -1,26 +1,41 @@
-const tool=(id,label,prompt,name,args={})=>({id,label,prompt,call:{name,arguments:args}});
-const workspace=(id,label,workflow,instruction)=>({id,label,action:'workspace',workflow,instruction});
-const help={id:'help',label:'How to use this chat',action:'help'};
-const explain=()=>tool('dpa','Explain my DPA','Explain my DPA','explain_dpa');
-const suggest=context=>tool('suggest','Suggest next semester','Suggest units for my next semester','suggest_next_semester',context.suggestionContext?.targetMajor?{targetMajor:context.suggestionContext.targetMajor}:{});
-const upload=workflow=>workspace('upload-dpa','Upload my DPA',workflow,'Upload your DPA PDF or XLSX in the planning workspace. I use its recorded results for personal advice; N is failed and earned EXM credit counts as exempted.');
-const choosePlanners=()=>workspace('choose-planners','Choose planners to compare','compare','Choose two planners in the planning workspace, then select Compare or type "compare these two".');
-export function chatFollowUps(context={}) {
-  const {document,workflow,planningContext,workspaceContext,toolResult}=context;
-  let steps;
-  if(planningContext?.corrections?.length&&!planningContext.dpaConfirmed)steps=[workspace('confirm-corrections','Confirm DPA corrections',['dpa','suggestions','double-major'].includes(workflow)?workflow:'dpa','Review and confirm your edited DPA entries in the workspace before I calculate personal results.'),choosePlanners(),help];
-  else if(workflow==='compare') {
-    const selected=workspaceContext?.workflow==='compare'&&workspaceContext.plannerA&&workspaceContext.plannerB&&workspaceContext.plannerA!==workspaceContext.plannerB;
-    steps=[selected?tool('compare','Compare selected planners','Compare these two selected planners','compare_planners',{plannerA:workspaceContext.plannerA,plannerB:workspaceContext.plannerB}):choosePlanners(),document?suggest(context):upload('suggestions'),document?explain():help];
-  }else if(!document)steps=[upload(['dpa','suggestions','double-major'].includes(workflow)?workflow:'suggestions'),choosePlanners(),help];
-  else if(workflow==='double-major') {
-    const primary=workspaceContext?.workflow==='double-major'?workspaceContext.primaryPlanner:null;
-    steps=[planningContext?.dpaConfirmed&&primary?tool('double-major','Check second-major options','Check my second-major options using my selected primary planner','check_double_major',{primaryPlanner:primary}):workspace('review-major','Review DPA / choose primary planner','double-major','Confirm the extracted DPA entries and select your actual primary planner in the workspace. Then I can calculate second-major unit coverage.'),explain(),suggest(context)];
-  }else if(toolResult?.data?.plan) {
-    const plan=toolResult.data.plan;
-    const unit=plan.candidates.find(u=>u.status!=='candidate')||plan.selected[0];
-    steps=[tool('why','Why these units?','Why did you choose these units for my next semester?','explain_next_semester'),unit?tool('unit','Check '+unit.code,'Can I take '+unit.code+' next semester? Explain its recorded checks.','explain_next_semester',{code:unit.code}):explain(),workspace('semester','Review semester / planner','suggestions','Use Change the assumed semester or matched planner in the workspace, then select Update suggestions to recalculate.')];
-  }else steps=[explain(),suggest(context),workspace('second-major','Check a double major','double-major','Review and confirm your DPA entries and select your actual primary planner in the workspace to check second-major options.')];
-  return steps.slice(0,3);
+import {attachmentKey} from './plannerIntent.mjs';
+import {validateToolCall} from './plannerToolDefinitions.mjs';
+import {plannerPdfSnapshot} from './plannerConversation.mjs';
+
+// Suggestions are grounded continuations of verified results, never generic starter chips.
+export function chatFollowUps({document,toolResult,question='',suggestionContext}={}) {
+ if(!toolResult||toolResult.answerability!=='verified'||!toolResult.data)return [];
+ const results=toolResult.toolResults||[toolResult],names=new Set(results.map(r=>r.tool));
+ const result=results.findLast(r=>r.answerability==='verified')||toolResult,data=result.data;
+ if(!data||data.needsSelection||data.unitChoices?.length)return [];
+ const key=attachmentKey(document),steps=[];
+ const add=(id,label,prompt,name,args={})=>{
+  if(prompt.toLowerCase()===question.trim().toLowerCase())return;
+  try{steps.push({id,label,prompt,call:validateToolCall({name,arguments:args}),documentKey:key});}catch{/* Omit invalid or incomplete actions. */}
+ };
+ const planningArgs={...(suggestionContext?.plannerConfirmed&&suggestionContext.planner?{planner:suggestionContext.planner}:{}),...(data.targetMajor?{targetMajor:data.targetMajor}:{}),...(data.term?{term:data.term}:{})};
+ if(result.tool==='explain_dpa'&&document&&data.tableVerified){
+  add('match','Find my matching planner','Which planner matches the completed units in this DPA best?','match_dpa_planners');
+  if(!names.has('suggest_next_semester')&&!names.has('plan_remaining_studies'))add('next','What should I take next?','Using this DPA, what should I take next semester?','suggest_next_semester');
+ }else if(result.tool==='match_dpa_planners'&&document&&data.suggested?.id&&data.ranking?.length){
+  add('next','Suggest next-semester units','Suggest next-semester units using the highest-matching planner for this DPA.','suggest_next_semester');
+  add('finish','Plan through completion','Plan all remaining semesters until I finish using this DPA.','plan_remaining_studies');
+  for(const step of steps)step.resetPlannerMatch=true;
+ }else if(data.plan&&(document||data.plannerSource==='upload')){
+  const selected=data.plan.selected||[],candidates=data.plan.candidates||[];
+  if(selected.length&&result.tool!=='explain_next_semester')add('why','Why these units?','Why did you choose these units for my current plan?','explain_next_semester');
+  const blocked=candidates.find(u=>u.code!==data.focusCode&&u.reasons?.length&&u.status!=='candidate');
+  if(blocked)add('blocked','Why not '+blocked.code+'?','Why was '+blocked.code+' not included in the suggested semester?','explain_next_semester',{code:blocked.code});
+  if(!data.pathway&&data.completionAudit?.countsVerified&&data.completionAudit.categories.some(c=>c.remainingCount>0)&&!names.has('plan_remaining_studies'))add('finish','Plan the remaining semesters','Plan all remaining semesters until I finish using my current DPA and planning preferences.','plan_remaining_studies',planningArgs);
+ }else if(result.tool==='inspect_unit'&&data.unit){
+  // Ask only for properties present in this exact result; do not promise eligibility.
+  const u=data.unit;
+  if(!/prereq|requisite/i.test(question))add('rules','Requisites for '+u.code,'Show the recorded requisite conditions for '+u.code+'.','inspect_unit',{code:u.code});
+  if(u.terms?.length&&!/offer|available|availability|term/i.test(question))add('terms','When is '+u.code+' offered?','What recurring semester offerings are recorded for '+u.code+'?','inspect_unit',{code:u.code});
+ }else if(result.tool==='check_double_major'&&data.pathway&&document){
+  // Download only an actual scheduled pathway; never invent an additional major recommendation.
+  const snapshot=plannerPdfSnapshot(result);
+  if(snapshot)steps.push({id:'pdf',label:'Download this pathway',prompt:'Download this double-major pathway as a PDF.',action:'pdf',snapshot,documentKey:key});
+ }
+ return steps.filter(s=>s.action==='pdf'||!names.has(s.call.name)||s.call.name==='inspect_unit'||s.call.name==='explain_next_semester').slice(0,3);
 }
-export const CHAT_HELP='I can help you with four tasks:\n\n1. Explain your DPA, including completed, failed and exempted units.\n2. Suggest up to four next-semester units using a matching planner and recorded checks.\n3. Compare two planners you select in the workspace.\n4. Check second-major unit coverage after you confirm your DPA and primary planner.\n\nFor personal advice, upload a DPA PDF or XLSX. You can tap the suggestions below or write your own question. Planner matching is provisional; I cannot approve enrolment or verify policies and offerings that are not recorded.';

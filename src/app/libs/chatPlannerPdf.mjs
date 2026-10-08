@@ -17,17 +17,22 @@ export function createChatPlannerPdf(snapshot) {
   line(snapshot.semesters?'Provisional pathway through remaining semesters':'Provisional next-semester draft',{bold:true});
   line('Planner: '+(snapshot.planner?.name||'Not recorded'));
   line('Semester: '+(snapshot.term||'Not recorded')+' '+(snapshot.year||''));
-  if(snapshot.documentName)line('Based on DPA: '+snapshot.documentName);
+  if(snapshot.uploadedPlannerName)line('Uploaded planner: '+snapshot.uploadedPlannerName);
+  if(snapshot.documentName)line('DPA: '+snapshot.documentName);
   y+=3;
   line('SUGGESTED UNITS',{bold:true,color:[185,28,28]});
   for(const semester of snapshot.semesters||[{term:snapshot.term,year:snapshot.year,selected:snapshot.units,credits:snapshot.credits}]){
-  line(semester.term+' '+semester.year+' | '+semester.selected.length+' units | '+semester.credits+' CP',{bold:true});
+  line(semester.term+' '+semester.year+' | '+semester.selected.length+(semester.selected.length===1?' unit | ':' units | ')+semester.credits+' CP',{bold:true});
   semester.selected.forEach((u,i)=>{
     line((i+1)+'. '+u.code+' - '+u.name,{bold:true});
     line((u.category||'Category not recorded')+' | '+u.credits+' CP');
   });
   }
-  line(snapshot.units.length+' units | '+snapshot.credits+' CP',{bold:true});
+  line('TOTAL SCHEDULED: '+snapshot.units.length+(snapshot.units.length===1?' unit | ':' units | ')+snapshot.credits+' CP',{bold:true});
+  if(snapshot.completeDraft===false){
+    line('PARTIAL PATHWAY: some requirements could not be scheduled.',{bold:true});
+    if(snapshot.outstanding?.length){line('UNSCHEDULED REQUIREMENTS',{bold:true,color:[185,28,28]});for(const u of snapshot.outstanding){if(u.code)line(u.code+' '+(u.name||'')+': '+[...(u.reasons||[]),...(u.unknown||[])].join('; '),{size:9});else {line(u.name+': '+(u.remainingCount??'unknown')+' remaining',{size:9});for(const option of u.options||[])line(option.code+': '+(option.reasons||[]).join('; '),{size:9});}}}
+  }
   if(snapshot.coverage){line('DOUBLE-MAJOR UNIT COVERAGE',{bold:true,color:[185,28,28]});for(const m of snapshot.coverage.majors)line(m.name+': '+m.matched+' earned / '+m.required+' required; '+m.remaining+' remaining.');}
   if(snapshot.completionAudit){
     y+=3;line(snapshot.semesters?'DPA CATEGORY PROGRESS BEFORE THIS PATHWAY':'REMAINING CATEGORY REQUIREMENTS',{bold:true,color:[185,28,28]});

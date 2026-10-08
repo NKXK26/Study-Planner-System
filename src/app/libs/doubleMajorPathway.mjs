@@ -72,7 +72,7 @@ export function doubleMajorPathway({transcript,planners,primaryId,secondaryId,te
       const majors=memberships(candidate.code).filter(i=>majorSlots[i]>0);
       const group=nonMajor.find(v=>normalizeCode(v.UnitCode)===candidate.code);
       if(!majors.length&&!(group&&categorySlots.get(category(group))>0))continue;
-      selected.push({...candidate,countsToward:[...majors.map(i=>state.majors[i].name),...(group&&categorySlots.get(category(group))>0?[category(group)]:[])]});credits+=candidate.credits;
+      selected.push({...candidate,category:'Major',countsToward:[...majors.map(i=>state.majors[i].name),...(group&&categorySlots.get(category(group))>0?[category(group)]:[])]});credits+=candidate.credits;
       for(const i of majors)majorSlots[i]--;
       if(group)categorySlots.set(category(group),Math.max(0,(categorySlots.get(category(group))||0)-1));
     }
@@ -83,6 +83,8 @@ export function doubleMajorPathway({transcript,planners,primaryId,secondaryId,te
     state=remaining();
     if(currentTerm==='Semester 1')currentTerm='Semester 2';else{currentTerm='Semester 1';currentYear++;}
   }
+  // Empty attempts at the end describe a stopped calculation, not planned study semesters.
+  while(semesters.length&&!semesters.at(-1).selected.length)semesters.pop();
   const outstanding=lastCandidates.filter(c=>state.majors.some(m=>m.remaining>0&&m.units.some(u=>u.code===c.code&&!passed(pool.find(v=>normalizeCode(v.UnitCode)===u.code),simulated.completed)))||state.categories.some(g=>g.remaining>0&&g.units.some(u=>normalizeCode(u.UnitCode)===c.code&&!passed(u,simulated.completed))));
   const choices=rankPlannerMatches(planners,transcript.completed).filter(r=>majorUnits(r.planner).length).map(r=>({id:r.planner.id,name:r.planner.name,majorMatched:majorUnits(r.planner).filter(u=>passed(u,original)).length,matched:r.matched}));
   return {choices,secondaryRanking:secondRanking.map(r=>({id:r.planner.id,name:r.planner.name,matched:r.secondaryMatched,electiveMatched:r.electiveMatched})),electiveMajorMatches:majorUnits(secondary).filter(u=>passed(u,original)&&primary.units.some(v=>/elective/i.test(category(v))&&normalizeCode(v.UnitCode)===normalizeCode(u.UnitCode))).map(u=>({code:normalizeCode(u.UnitCode),name:u.Name})),ranking:ranking.map(r=>({id:r.planner.id,name:r.planner.name,majorMatched:r.majorMatched,majorTotal:majorUnits(r.planner).length,matched:r.matched,credits:r.credits})),primary:{id:primary.id,name:primary.name},secondary:{id:secondary.id,name:secondary.name},coverage,transcript,semesters,remaining:{majors:state.majors,categories:state.categories.map(({units,...rest})=>rest)},outstanding,completeDraft:done(),warnings:[

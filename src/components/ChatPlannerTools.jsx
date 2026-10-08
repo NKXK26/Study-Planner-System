@@ -16,7 +16,7 @@ function SearchSelect({label,items,value,onChange,disabled}){
 function UnitList({units}){
   return <div className="max-h-64 overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th>Code</th><th>Name</th><th>CP</th><th>Category</th></tr></thead><tbody>{units.map((u,i)=><tr key={`${u.ID||u.code}-${i}`} className="border-t"><td className="py-2 pr-2 font-medium">{u.UnitCode||u.code}</td><td className="pr-2">{u.Name||u.name}</td><td className="pr-2">{u.CreditPoints??u.credits??'Unknown'}</td><td>{u.unitType?.Name||u.category||'Not assigned'}</td></tr>)}</tbody></table></div>;
 }
-export default function ChatPlannerTools({workflow,onWorkflow,toolResult,onResult,document,planningContext,suggestionContext,conversationHistory,onSelectionContext,busy,onBusy,planningOnly=false,aiModel}){
+export default function ChatPlannerTools({workflow,onWorkflow,toolResult,onResult,document,plannerDocument,planningContext,suggestionContext,conversationHistory,onSelectionContext,busy,onBusy,planningOnly=false,aiModel}){
   const [catalog,setCatalog]=useState(null),[loading,setLoading]=useState(false),[error,setError]=useState('');
   const [left,setLeft]=useChatSession('tool-left:'+workflow,''),[right,setRight]=useChatSession('tool-right:'+workflow,''),[name,setName]=useChatSession('tool-name:'+workflow,''),[templateId,setTemplate]=useChatSession('tool-templateId:'+workflow,'');
   const [draft,setDraft]=useChatSession('tool-draft:'+workflow,[]),[requirements,setRequirements]=useChatSession('tool-requirements:'+workflow,{}),[templateEdit,setTemplateEdit]=useChatSession('tool-templateEdit:'+workflow,null),[detail,setDetail]=useChatSession('tool-detail:'+workflow,null);
@@ -54,23 +54,23 @@ export default function ChatPlannerTools({workflow,onWorkflow,toolResult,onResul
     if(toolResult.data.plan||toolResult.tool==='match_dpa_planners')setSuggestionPlanner('');
     if(toolResult.data.plan||['inspect_unit','match_dpa_planners'].includes(toolResult.tool))autoSuggested.current=attachmentKey(document);
     if(toolResult.data.suggested?.id)setLeft(String(toolResult.data.suggested.id));
-    if(toolResult.data.plannerA?.id){setLeft(String(toolResult.data.plannerA.id));setRight(String(toolResult.data.plannerB.id));}
-    if(['inspect_planner','update_planner'].includes(toolResult.tool)){setDetail(toolResult.data);setLeft(String(toolResult.data.id));setTemplate(String(toolResult.data.plannerTemplateId||''));setDraft(toolResult.data.units.map(u=>({...u,unitId:u.ID,unitTypeId:u.unitTypeId||''})));}
+    if(toolResult.data.plannerA?.id&&toolResult.data.plannerB?.id){setLeft(String(toolResult.data.plannerA.id));setRight(String(toolResult.data.plannerB.id));}
+    if(['inspect_planner','update_planner'].includes(toolResult.tool)&&!toolResult.data.needsSelection&&!['refused','clarification'].includes(toolResult.answerability)&&toolResult.data.id!=null&&Array.isArray(toolResult.data.units)){setDetail(toolResult.data);setLeft(String(toolResult.data.id));setTemplate(String(toolResult.data.plannerTemplateId||''));setDraft(toolResult.data.units.map(u=>({...u,unitId:u.ID,unitTypeId:u.unitTypeId||''})));}
   },[toolResult]);
   useEffect(()=>{setResult(current=>current?.tool==='check_double_major'?null:current);},[document,planningContext,workflow]);
-  useEffect(()=>{if(workflow==='suggestions'&&document&&!busy&&!loading&&autoSuggested.current!==attachmentKey(document)){autoSuggested.current=attachmentKey(document);run(suggestionContext?.planMode==='full'?'plan_remaining_studies':'suggest_next_semester');}},[workflow,document,busy,loading,suggestionContext?.planMode]);
+  useEffect(()=>{if(workflow==='suggestions'&&document&&!plannerDocument&&!suggestionContext?.pendingQuestion&&!busy&&!loading&&autoSuggested.current!==attachmentKey(document)){autoSuggested.current=attachmentKey(document);run(suggestionContext?.planMode==='full'?'plan_remaining_studies':'suggest_next_semester');}},[workflow,document,plannerDocument,busy,loading,suggestionContext?.planMode]);
   function invalidate(){setResult(null);setError('');}
   async function run(name,args={},write=false){
-    if(['suggest_next_semester','plan_remaining_studies'].includes(name)&&!args.planner&&(suggestionPlanner||suggestionContext?.plannerConfirmed))args={...args,planner:suggestionPlanner||suggestionContext.planner};
+    if(['suggest_next_semester','plan_remaining_studies'].includes(name)&&!args.planner&&!plannerDocument&&(suggestionPlanner||suggestionContext?.plannerConfirmed))args={...args,planner:suggestionPlanner||suggestionContext.planner};
     const targetMajor=suggestionContext?.targetMajor||result?.data?.targetMajor;
-    if(['suggest_next_semester','plan_remaining_studies'].includes(name) && !args.targetMajor && !args.planner && targetMajor)args={...args,targetMajor};
+    if(['suggest_next_semester','plan_remaining_studies'].includes(name) && !args.targetMajor && !args.planner && !plannerDocument && targetMajor)args={...args,targetMajor};
     if(running.current||busy)return;running.current=true;setLoading(true);setError('');
     const fingerprint=JSON.stringify({name,args});
     try{
       if(write){
         args={...args,confirmed:true,requestId:saveRequestId(fingerprint)};
       }
-      const response=await Auth.authenticatedFetch('/api/planner-assistant/tools',{method:'POST',signal:AbortSignal.timeout(45000),body:JSON.stringify({planningOnly,aiModel,call:{name,arguments:args},document,planningContext,suggestionContext,conversationHistory,question:name==='plan_remaining_studies'?'Plan all remaining semesters until I finish.':name==='suggest_next_semester'?'Suggest my next semester.':name==='replacement_units'?'Find replacements for '+args.code:'Explain this planning result.'})});
+      const response=await Auth.authenticatedFetch('/api/planner-assistant/tools',{method:'POST',signal:AbortSignal.timeout(45000),body:JSON.stringify({planningOnly,aiModel,call:{name,arguments:args},document,plannerDocument,planningContext,suggestionContext,conversationHistory,question:name==='plan_remaining_studies'?'Plan all remaining semesters until I finish.':name==='suggest_next_semester'?'Suggest my next semester.':name==='replacement_units'?'Find replacements for '+args.code:'Explain this planning result.'})});
       const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'This task failed. Please retry.');
       if(!mounted.current)return;
       setResult(data);
@@ -130,11 +130,11 @@ export default function ChatPlannerTools({workflow,onWorkflow,toolResult,onResul
       applyImport(codes,file.name,text);
     }catch(e){setError(e.message);}finally{running.current=false;setLoading(false);}
   }
-  return <section aria-label="Planner tools" className="rounded-2xl border border-neutral-200 bg-white p-4 text-neutral-900 space-y-5 sm:p-6">
-    <div><h3 className="font-semibold">Planning workspace</h3><p className="mb-4 mt-1 text-sm text-neutral-600">Choose a task. Your selections and results stay here in the chat.</p><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{workspaceTasks.map(w=><button key={w.id} type="button" disabled={locked} aria-pressed={workflow===w.id} onClick={()=>{if(w.id!==workflow){onWorkflow(w.id);setError('');}}} className={`rounded-xl border px-4 py-3 text-left text-sm font-medium ${workflow===w.id?'border-red-700 bg-red-700 text-white':'border-neutral-200 bg-white hover:border-red-300 hover:bg-red-50'} disabled:opacity-40`}>{w.title}</button>)}</div></div>
-    {!workflow&&<p className="text-sm">Choose a task above, or type what you want to do. Planner names and IDs can be entered in chat.</p>}
+  return <section aria-label="Planner tools" className="space-y-4 text-neutral-900">
+    <div><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{workspaceTasks.map(w=><button key={w.id} type="button" disabled={locked} aria-pressed={workflow===w.id} onClick={()=>{if(w.id!==workflow){onWorkflow(w.id);setError('');}}} className={`rounded-xl border px-4 py-3 text-left text-sm font-medium ${workflow===w.id?'border-red-700 bg-red-700 text-white':'border-neutral-200 bg-white hover:border-red-300 hover:bg-red-50'} disabled:opacity-40`}>{w.title}</button>)}</div></div>
+
     {workflow&&<>
-      <div className="flex justify-between gap-2"><h3 className="font-semibold">{chatWorkflows.find(w=>w.id===workflow)?.title}</h3>{!['dpa','suggestions'].includes(workflow)&&<button type="button" disabled={locked} className="text-xs underline" onClick={reload}>Reload choices</button>}</div>
+      <div className="flex justify-between gap-2">{!['dpa','suggestions'].includes(workflow)&&<button type="button" disabled={locked} className="text-xs underline" onClick={reload}>Reload choices</button>}</div>
       {workflow!=='dpa'&&loading&&<p role="status" className="text-sm">Working… your selections are retained.</p>}
       {workflow!=='dpa'&&error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
       {!['dpa','suggestions'].includes(workflow)&&!catalog&&!loading&&<button type="button" onClick={reload} className="rounded border p-2">Load / retry choices</button>}
@@ -146,8 +146,8 @@ export default function ChatPlannerTools({workflow,onWorkflow,toolResult,onResul
           {left&&left===right&&<p className="text-sm text-red-700">Choose two different planners.</p>}
         </>}
         {workflow==='double-major'&&<>
-          <p className="text-sm">Attach your DPA beside the chat input. We find the closest primary planner and a different second major, using completed electives against its major units. Results and future semesters appear in the chat.</p>
-          <button type="button" disabled={!document} onClick={()=>run('check_double_major')} className="rounded bg-red-700 px-4 py-2 text-white disabled:opacity-40">Check my DPA for double major</button>
+          
+          <button type="button" disabled={!document} onClick={()=>run('check_double_major')} className="rounded bg-red-700 px-4 py-2 text-white disabled:opacity-40">Check double major</button>
           {result?.data?.choices&&<><SearchSelect label="Primary planner (optional override)" items={result.data.choices} value={left} onChange={setLeft}/><button type="button" disabled={!left} onClick={()=>run('check_double_major',{primaryPlanner:left})} className="rounded border px-3 py-2">Recalculate double-major pathway</button></>}
         </>}
         {workflow==='management'&&<>
@@ -179,14 +179,14 @@ export default function ChatPlannerTools({workflow,onWorkflow,toolResult,onResul
         </>}
       </fieldset>}
     </>}
-    {workflow!=='suggestions'&&result?.workflow===workflow&&result.data&&<div className="border-t pt-3 space-y-3 text-sm" aria-live="polite">
-      <p>Result appears in the conversation. Use the details below to explore it.</p>
+    {workflow!=='suggestions'&&result?.workflow===workflow&&result.data&&<details className="space-y-3 text-sm"><summary>Task details</summary>
+      
       {result.tool==='compare_planners'&&result.data.diff&&<>{[['onlyInA','Only in first planner'],['onlyInB','Only in second planner'],['inBoth','Shared units'],['unitTypeChanged','Category changes']].map(([key,label])=><details key={key} open={key!=='inBoth'}><summary className="font-medium">{label} ({result.data.diff[key].length})</summary><UnitList units={result.data.diff[key]}/>{key==='unitTypeChanged'&&result.data.diff[key].map(u=><p key={u.ID}>{u.UnitCode}: {u.unitType?.Name||'None'} → {u.unitTypeB?.Name||'None'}</p>)}</details>)}</>}
       {result.tool==='suggest_next_semester'&&result.data.plan&&<><h3 className="font-semibold">Next-semester suggestions ({result.data.plan.selected.length}/4)</h3><UnitList units={result.data.plan.selected}/><details><summary>Unfinished units and why they were not selected</summary>{result.data.plan.candidates.filter(u=>!result.data.plan.selected.some(s=>s.code===u.code)).map(u=><p key={u.code} className="mt-3"><strong>{u.code} {u.name}</strong> ? {[...u.reasons,...u.unknown].join('; ')||'Eligible, but outside the four-unit/50 CP limit or category places.'}</p>)}</details></>}
       {result.tool==='inspect_planner'&&result.data.units&&<UnitList units={result.data.units}/>}
       {result.tool==='replacement_units'&&result.data.suggestions&&<ul>{result.data.suggestions.map(s=><li key={s.code} className="py-1">{s.code} {s.name} — {s.credits??'Unknown'} CP; title similarity {s.nameScore}%; recorded terms {s.terms.join(', ')||'unknown'}</li>)}{!result.data.suggestions.length&&<li>No title-similarity candidates found.</li>}</ul>}
       {result.tool==='check_double_major'&&result.data.options&&<><p className="font-semibold">Primary DPA match: {result.data.primary.name}</p>{!result.data.options.length&&<p>No distinct second-major options found.</p>}<label className="block">Search second-major options<input className={inputClass} value={majorSearch} onChange={e=>{setMajorSearch(e.target.value);setMajorLimit(5);}} placeholder="Major name..."/></label><p>{result.data.options.filter(o=>o.additional.name.toLowerCase().includes(majorSearch.toLowerCase())).length} matching options</p>{result.data.options.filter(o=>o.additional.name.toLowerCase().includes(majorSearch.toLowerCase())).slice(0,majorLimit).map(option=><details key={option.additional.id}><summary>{option.additional.name}: {option.additional.matched}/{option.additional.required} matched, {option.additional.remaining} remaining</summary><p>Completed major units</p><UnitList units={option.additional.units.filter(u=>u.completed)}/><p>Uncompleted pool candidates</p><UnitList units={option.additional.units.filter(u=>!u.completed)}/><p>Unique earned major credits: {option.uniqueCompletedCredits} CP</p></details>)}{result.data.options.filter(o=>o.additional.name.toLowerCase().includes(majorSearch.toLowerCase())).length>majorLimit&&<button type="button" onClick={()=>setMajorLimit(n=>n+5)} className="rounded border px-3 py-2">Show more options</button>}</>}
       {result.tool==='check_double_major'&&result.data.majors&&<>{result.data.majors.map(m=><details key={m.id} open><summary>{m.name}: {m.remaining} remaining — {m.source}</summary><p className="mt-2 font-medium">Completed major units ({m.matched})</p><UnitList units={m.units.filter(u=>u.completed)}/><p className="mt-2 font-medium">Uncompleted pool candidates</p><UnitList units={m.units.filter(u=>!u.completed)}/></details>)}<p>Shared units: {result.data.shared.map(u=>u.code).join(', ')||'none'}. Unique earned major credits: {result.data.uniqueCompletedCredits} CP.</p></>}
-    </div>}
+    </details>}
   </section>;
 }

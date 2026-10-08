@@ -82,3 +82,25 @@
   .aiSidebarHeader { flex-shrink: 0; }
   .aiSidebarContent { display: block; flex: 1; min-height: 0; max-height: none; }
 }
+
+.chat details.planContext { flex-shrink: 0; margin: 0; max-height: 20dvh; overflow: auto; border: 0; border-bottom: 1px solid #e5e5e5; border-radius: 0; padding: 8px 20px; font-size: 12px; }
+
+/* Follow the global theme used by the header toggle, including injected AI controls. */
+.page { color-scheme: light; }
+:global(html.dark) .page { background: #101014; color-scheme: dark; }
+:global(html.dark) .chat { background: #18181b; color: #f4f4f5; border-color: #3f3f46; color-scheme: dark; }
+:global(html.dark) .chat :is(.workspace, .aiSidebar, .workspaceHeader, .aiSidebarHeader, details) { background: #18181b; border-color: #3f3f46; }
+:global(html.dark) .chat :global(.bg-white) { background-color: #18181b; }
+:global(html.dark) .chat :is(:global(.bg-neutral-50), :global(.bg-neutral-100)) { background-color: #232329; }
+:global(html.dark) .chat :is(:global(.text-neutral-900), :global(.text-neutral-950), :global(.text-gray-900)) { color: #f4f4f5; }
+:global(html.dark) .chat :is(:global(.text-neutral-500), :global(.text-neutral-600), :global(.text-neutral-700)) { color: #b9b9c3; }
+:global(html.dark) .chat :is(:global(.border-neutral-200), :global(.border-neutral-300), :global(.border-gray-300), :global(.border-t)) { border-color: #3f3f46; }
+:global(html.dark) .chat :is(input:not([type=file]):not([type=checkbox]), select, textarea) { background: #24242b; color: #f4f4f5; border-color: #52525b; }
+:global(html.dark) .chat input::placeholder { color: #a1a1aa; }
+:global(html.dark) .chat :is(:global(.text-red-700), :global(.text-red-800)) { color: #fda4af; }
+:global(html.dark) .chat :is(:global(.bg-red-50), :global(.hover\:bg-red-50):hover) { background-color: #3b1820; }
+:global(html.dark) .chat :is(:global(.border-red-100), :global(.border-red-200), :global(.border-red-300)) { border-color: #77303e; }
+:global(html.dark) .chat .workspaceToggle { background: #24181c; color: #fda4af; border-color: #77303e; }
+:global(html.dark) .chat th { background: #27272a; color: #d4d4d8; }
+:global(html.dark) .chat tbody tr:nth-child(even) { background: #202026; }
+:global(html.dark) .message pre { background: #27272a; color: #f4f4f5; }
