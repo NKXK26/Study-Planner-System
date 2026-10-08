@@ -273,8 +273,7 @@ const Dashboard = () => {
 			isNew: true,
 			links: [
 				{ name: 'Unit Suggestions', href: '/view/compare_study_planner', permission: 'planner:read' },
-				{ name: 'Double Major Checker', href: '/view/double-major-checker', permission: 'planner:read' },
-				{ name: 'Graduation Eligibility', href: '/view/graduation-eligibility', permission: 'planner:read' },
+				{ name: 'Graduation Eligibility & Double Major', href: '/view/graduation-eligibility', permission: 'planner:read' },
 			],
 				gradient: 'from-teal-500 to-cyan-600',
 				bgGradient: 'from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/10',
