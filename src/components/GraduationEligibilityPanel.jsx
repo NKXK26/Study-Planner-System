@@ -8,7 +8,33 @@ import {useRole} from '@app/context/RoleContext';
 import {useLightDarkMode} from '@app/context/LightDarkMode';
 import Auth from '@utils/auth/FrontendAuthHelper';
 import styles from '@app/view/graduation-eligibility/page.module.css';
-const labels={'eligible':'Eligible against selected planner','not-eligible':'Not eligible','needs-review':'Needs review','choose-planner':'Confirm actual planner'};
+const labels={'eligible':'Can graduate against this planner','not-eligible':'Not ready to graduate','needs-review':'Eligibility needs review','choose-planner':'Confirm programme planner'};
+function GraduationSummary({result,detail}){
+ const missing=(detail?.categories||[]).filter(c=>c.remainingCount>0);
+ const unknown=(detail?.categories||[]).filter(c=>c.remainingCount==null);
+ return <section className={styles.outcome} data-status={result.status} aria-labelledby="graduation-summary-title">
+  <h2 id="graduation-summary-title">{labels[result.status]||'Graduation result'}</h2>
+  <p>{result.reason}</p>
+  {detail&&<p><strong>{result.selected?'Selected planner':'Closest match'}: {detail.planner.name}</strong>{!result.selected&&<span className={styles.muted}> — confirm the student's actual programme and intake below.</span>}</p>}
+  <div className={styles.summaryStats}>
+   <div><strong>{result.transcript.completedCount}</strong><span>Completed / exempted entries</span></div>
+   <div><strong>{result.transcript.earnedCredits}</strong><span>Earned CP</span></div>
+   {detail&&<div><strong>{detail.countsVerified?detail.remainingSlots:'Needs review'}</strong><span>Missing requirement slots{!result.selected?' in closest match':''}</span></div>}
+  </div>
+  {detail&&<div className={styles.summaryRequirements}>
+   <h3>{result.selected?'What is missing':'What is missing in the closest match'}</h3>
+   {missing.length===0&&unknown.length===0&&<p>All configured category requirements are covered.{!result.selected?' Confirm the actual planner before relying on this result.':''}</p>}
+   {missing.map(c=><article key={c.name} className={styles.missingCategory}>
+    <strong>{c.name}: {c.remainingCount} more needed</strong>
+    <p className={styles.muted}>{c.completedCount} completed / {c.requiredCount} required. {c.options?.length===c.remainingCount?'These units are still required:':c.options?.length?'Choose '+c.remainingCount+' from the options below; you do not need every option.':'No remaining options are recorded; the planner needs review.'}</p>
+    {c.options?.length>0&&<ul>{c.options.map(u=><li key={u.code}><strong>{u.code}</strong>{u.name?' — '+u.name:''}</li>)}</ul>}
+   </article>)}
+   {unknown.map(c=><p key={c.name} className={styles.review}>{c.name}: required count is not configured or needs review.</p>)}
+   {detail.reviewIssues?.length>0&&<div className={styles.review}><h3>Checks requiring review</h3><ul>{detail.reviewIssues.map(issue=><li key={issue}>{issue}</li>)}</ul></div>}
+  </div>}
+  <p className={styles.muted}>Result covers recorded planner requirements; final graduation approval is confirmed by the university.</p>
+ </section>;
+}
 function UnitTable({units}){return <div className={styles.scroll}><table><thead><tr><th>Unit</th><th>Name</th><th>Earned CP</th></tr></thead><tbody>{units.map(u=><tr key={u.code}><th scope="row">{u.code}</th><td>{u.name||'Not provided'}</td><td>{u.earned??u.credits??'Unknown'}</td></tr>)}</tbody></table></div>;}
 export default function GraduationEligibilityPanel({initialDocument=null}){
  const {can,isSuperadmin}=useRole(),{theme}=useLightDarkMode();const hasAccess=isSuperadmin()||can('planner','read');
@@ -35,8 +61,7 @@ export default function GraduationEligibilityPanel({initialDocument=null}){
    {document&&!locked&&<button type="button" className={styles.primary} onClick={()=>check()}>Recheck eligibility</button>}
   </section>
   {result&&<div aria-live="polite" className={styles.results}>
-   <section className={styles.outcome} data-status={result.status}><h2>{labels[result.status]}</h2><p>{result.reason}</p><p className={styles.muted}>Eligibility here checks recorded unit requirements in the selected programme planner.</p></section>
-   <div className={styles.stats}><article><strong>{result.transcript.completedCount}</strong><span>Completed / exempted entries</span></article><article><strong>{result.transcript.earnedCredits}</strong><span>Earned CP, counted once</span></article><article><strong>{result.fulfillingPlanners.length}</strong><span>Planners with requirements covered</span></article></div>
+   <GraduationSummary result={result} detail={detail}/>
    <section className={styles.panel}><h2>Actual programme and intake</h2><p className={styles.muted}>A high unit match does not identify the student’s enrolled planner. Select their actual record for a confirmed comparison.</p>
     <div className={styles.selectors}><label>Search planners<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="For example 24 Sep CSDS" disabled={locked}/></label><label>Programme planner<select value={plannerId} onChange={e=>choose(e.target.value)} disabled={locked}><option value="">Compare all recorded planners</option>{choices.map(a=><option key={a.planner.id} value={a.planner.id}>{a.planner.name} · {a.matched} unit matches</option>)}</select></label></div>
     {!choices.length&&<p>No planners match that search.</p>}
