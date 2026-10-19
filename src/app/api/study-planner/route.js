@@ -46,7 +46,24 @@ export async function GET(req) {
             orderBy: { createdAt: 'desc' },
             include: {
                 studyPlannerUnits: {
-                    include: { unit: true, unitType: true },
+                    include: {
+                        unit: {
+                            include: {
+                                UnitTermOffered: { select: { TermType: true } },
+                                UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit: {
+                                    select: {
+                                        UnitRelationship: true,
+                                        LogicalOperators: true,
+                                        MinCP: true,
+                                        Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit: {
+                                            select: { ID: true, UnitCode: true, Name: true },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        unitType: true,
+                    },
                 },
                 plannerTemplate: {
                     include: {
@@ -80,6 +97,13 @@ export async function GET(req) {
             Availability: j.unit.Availability,
             unitTypeId: j.unitTypeId,
             unitType: j.unitType,
+            offeredTerms: j.unit.UnitTermOffered.map(term => term.TermType),
+            requisites: j.unit.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit.map(requisite => ({
+                relationship: requisite.UnitRelationship,
+                logicalOperator: requisite.LogicalOperators,
+                minCredits: requisite.MinCP,
+                unit: requisite.Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit,
+            })),
         })),
     }));
 
@@ -262,7 +286,24 @@ export async function POST(req) {
             },
             include: {
                 studyPlannerUnits: {
-                    include: { unit: true, unitType: true },
+                    include: {
+                        unit: {
+                            include: {
+                                UnitTermOffered: { select: { TermType: true } },
+                                UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit: {
+                                    select: {
+                                        UnitRelationship: true,
+                                        LogicalOperators: true,
+                                        MinCP: true,
+                                        Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit: {
+                                            select: { ID: true, UnitCode: true, Name: true },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        unitType: true,
+                    },
                 },
                 plannerTemplate: {                      // ✅ also include on create response
                     include: {
@@ -288,6 +329,13 @@ export async function POST(req) {
                 Availability: j.unit.Availability,
                 unitTypeId: j.unitTypeId,
                 unitType: j.unitType,
+                offeredTerms: j.unit.UnitTermOffered.map(term => term.TermType),
+                requisites: j.unit.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit.map(requisite => ({
+                    relationship: requisite.UnitRelationship,
+                    logicalOperator: requisite.LogicalOperators,
+                    minCredits: requisite.MinCP,
+                    unit: requisite.Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit,
+                })),
             })),
         };
 
