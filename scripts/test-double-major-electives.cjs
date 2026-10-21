@@ -1,0 +1,27 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {parseTranscript,majorUnits}=await import('../src/app/libs/doubleMajorChecker.mjs');
+ const {doubleMajorPathway}=await import('../src/app/libs/doubleMajorPathway.mjs');
+ let id=0;
+ const u=(code,category,term='Semester 1')=>({ID:++id,UnitCode:code,Name:code,CreditPoints:12.5,Availability:'published',unitType:{Name:category},UnitTermOffered:[{TermType:term}]});
+ const ai=[u('AAA10001','Artificial Intelligence Major'),u('AAA10002','Artificial Intelligence Major')],core=[u('COR10001','Core'),u('COR10002','Core')],electives=[u('DSA10001','Elective'),u('DSA10002','Elective')];
+ const primary={id:24,name:'24-Sep-CSAI',units:[...ai,...core,...electives],plannerTemplate:{requirements:[{unitType:{Name:'Artificial Intelligence Major'},requiredCount:2},{unitType:{Name:'Core'},requiredCount:2},{unitType:{Name:'Elective'},requiredCount:2}]}};
+ const ds={id:25,name:'24-Sep-CSDS',units:[u('DSA10001','Data Science Major'),u('DSA10002','Data Science Major'),u('DSA10003','Data Science Major','Semester 2')],plannerTemplate:{requirements:[{unitType:{Name:'Data Science Major'},requiredCount:3}]}};
+ const distractor={id:26,name:'24-Sep-CSIOT',units:[...core,u('IOT10001','Internet of Things Major')],plannerTemplate:{requirements:[{unitType:{Name:'Internet of Things Major'},requiredCount:1}]}};
+ const copy={...primary,id:23,name:'23-Sep-CSAI'};
+ const transcript=parseTranscript([['Course','Status','Earned','Grade'],...primary.units.map(v=>[v.UnitCode,'Complete',12.5,'EXM']),['DSA10003','Complete',12.5,'N'],['AE1','Complete',12.5,'EXM']]);
+ const original=JSON.stringify(transcript),planners=[primary,copy,distractor,ds];
+ assert.equal(majorUnits(primary).length,2);
+ const pathway=doubleMajorPathway({transcript,planners,term:'Semester 1',year:2027});
+ assert.equal(pathway.primary.id,24);assert.equal(pathway.secondary.id,25,'Shared core matches cannot beat completed electives matching a second major');
+ assert.equal(pathway.coverage.majors[0].remaining,0);assert.equal(pathway.coverage.majors[1].matched,2);assert.equal(pathway.coverage.majors[1].remaining,1);
+ assert.deepEqual(pathway.electiveMajorMatches.map(u=>u.code),['DSA10001','DSA10002']);
+ assert.deepEqual(pathway.semesters.flatMap(s=>s.selected).map(u=>u.code),['DSA10003']);assert.equal(pathway.semesters[1].term,'Semester 2');assert(pathway.completeDraft);assert.equal(JSON.stringify(transcript),original);
+ assert.equal(pathway.remaining.categories.length,0,'Double-major pathway does not require another core/elective degree pool');
+ const graduated={...transcript,completed:[...transcript.completed,{code:'DSA10003',earned:12.5}]};const complete=doubleMajorPathway({transcript:graduated,planners});assert(complete.coverage.covered);assert.equal(complete.semesters.length,0);
+ assert.throws(()=>doubleMajorPathway({transcript,planners,primaryId:24,secondaryId:23}),/same major/);
+ const unknown=doubleMajorPathway({transcript:graduated,planners:[{...primary,plannerTemplate:null},ds]});assert.equal(unknown.completeDraft,false,'Missing major counts must stay provisional');
+ const projectCore=u('COS40005','Core'),projectSecond={id:30,name:'DS',units:[u('COS40006','Data Science Major')],plannerTemplate:{requirements:[{unitType:{Name:'Data Science Major'},requiredCount:1}]}};
+ const projectPrimary={...primary,units:[...primary.units,projectCore]};const withProject={...transcript,completed:[...transcript.completed,{code:'COS40005',earned:12.5}]};const project=doubleMajorPathway({transcript:withProject,planners:[projectPrimary,projectSecond],term:'Semester 1',year:2027});assert(project.semesters.flatMap(s=>s.selected).some(u=>u.code==='COS40006'),'Completed core Project A can meet prerequisite without adding core to major requirements');
+ console.log('Named major categories, primary code overlap, elective-to-major secondary ranking, distinct major grouping, N/EXM, major-only scheduling and graduated DPA checks passed.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,3 +1,4 @@
+import { unitPlanningInclude } from '@app/libs/unitPlanningProperties.mjs';
 import UnitRequisite from "@app/class/UnitRequisite/UnitRequiste";
 import prisma from "@utils/db/db";
 import AuditLogger from "@app/class/Audit/AuditLogger";
@@ -145,32 +146,7 @@ export async function GET(req) {
 		const query = {
 			where,
 			...(orderBy && { orderBy }),
-			include: {
-				unitType: true,
-
-				UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit: {
-					include: {
-						Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit: {
-							select: {
-								ID: true,
-								UnitCode: true,
-								Name: true,
-							},
-						},
-					},
-					orderBy: {
-						ID: 'asc',
-					},
-				},
-
-				UnitTermOffered: {
-					select: {
-						ID: true,
-						UnitID: true,
-						TermType: true,
-					},
-				},
-			},
+			include: unitPlanningInclude,
 		};
 		// Fetch unit data from Prisma
 		const unit_listing = await prisma.Unit.findMany(query);

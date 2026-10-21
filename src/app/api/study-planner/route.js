@@ -1,3 +1,4 @@
+import {plannerUnitReadSelect} from '@app/libs/plannerReadCompatibility.mjs';
 ﻿import prisma from '@utils/db/db';
 import { NextResponse } from 'next/server';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -41,6 +42,7 @@ export async function GET(req) {
 
     let studyPlanners;
     try {
+        const unitSelect=await plannerUnitReadSelect(prisma);
         studyPlanners = await prisma.studyPlanner.findMany({
             where: id ? { id } : {},
             orderBy: { createdAt: 'desc' },
@@ -208,7 +210,14 @@ export async function POST(req) {
                     { status: 400 }
                 );
             }
-            unitLinkData = units.map(({ unitId, unitTypeId }) => ({ unitId, unitTypeId }));
+            unitLinkData = units.map(({ unitId, unitTypeId, plannedYear, plannedSemester, plannedDates, sortOrder }) => ({
+                unitId,
+                unitTypeId,
+                plannedYear: Number.isInteger(plannedYear) ? plannedYear : null,
+                plannedSemester: typeof plannedSemester === 'string' ? plannedSemester.trim() || null : null,
+                plannedDates: typeof plannedDates === 'string' ? plannedDates.trim() || null : null,
+                sortOrder: Number.isInteger(sortOrder) ? sortOrder : 0,
+            }));
         }
         // ─── New format: { unitCode, name?, creditPoints?, unitTypeName } ─────
         else if (isNewFormat) {
@@ -261,6 +270,10 @@ export async function POST(req) {
                 unitLinkData.push({
                     unitId: dbUnit.ID,
                     unitTypeId: unitTypeId || null,
+                    plannedYear: Number.isInteger(unit.plannedYear) ? unit.plannedYear : null,
+                    plannedSemester: typeof unit.plannedSemester === 'string' ? unit.plannedSemester.trim() || null : null,
+                    plannedDates: typeof unit.plannedDates === 'string' ? unit.plannedDates.trim() || null : null,
+                    sortOrder: Number.isInteger(unit.sortOrder) ? unit.sortOrder : 0,
                 });
             }
         }
@@ -278,9 +291,13 @@ export async function POST(req) {
                 name,
                 plannerTemplateId,
                 studyPlannerUnits: {
-                    create: unitLinkData.map(({ unitId, unitTypeId }) => ({
+                    create: unitLinkData.map(({ unitId, unitTypeId, plannedYear, plannedSemester, plannedDates, sortOrder }) => ({
                         unitId,
                         unitTypeId: unitTypeId || null,
+                        plannedYear,
+                        plannedSemester,
+                        plannedDates,
+                        sortOrder,
                     })),
                 },
             },

@@ -108,7 +108,7 @@ export const RoleProvider = ({ children }) => {
                     }
 
                     setSelectedRoleName(initialRoleName);
-                    await fetchPermissionsForRoleName(initialRoleName);
+                    await fetchPermissionsForRoleName(initialRoleName, data);
                 } else {
                     console.error('Failed to fetch roles:', resp.statusText);
                 }
@@ -135,7 +135,7 @@ export const RoleProvider = ({ children }) => {
     }, [selectedRoleName]);
 
     // helper to fetch permissions by role name
-    const fetchPermissionsForRoleName = async (roleName) => {
+    const fetchPermissionsForRoleName = async (roleName, knownRoles = null) => {
         try {
             if (!roleName) { setPermissions([]); localStorage.removeItem('devPermissions'); localStorage.removeItem('devSelectedRole'); return; }
 
@@ -146,12 +146,15 @@ export const RoleProvider = ({ children }) => {
             }
 
             // We need role id; fetch roles with names+IDs
-            const resp = await SecureFrontendAuthHelper.authenticatedFetch('/api/roles?return=ID,Name');
-            if (!resp.ok) {
-                setPermissions([]);
-                return;
+            let all = knownRoles;
+            if (!Array.isArray(all)) {
+                const resp = await SecureFrontendAuthHelper.authenticatedFetch('/api/roles?return=ID,Name');
+                if (!resp.ok) {
+                    setPermissions([]);
+                    return;
+                }
+                all = await resp.json();
             }
-            const all = await resp.json();
 
             const found = Array.isArray(all) ? all.find(r => (r.Name || r.name) === roleName) : null;
             if (!found) {

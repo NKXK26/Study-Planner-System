@@ -18,6 +18,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
+  const isChatPage = pathname === '/view/ai-assistant';
   // Role context
   const { roles: allRoles, selectedRoleName, setSelectedRoleByName, resetOverride, can, canSwitchRoles, userActualRoles } = useRole();
   // Light/Dark mode context
@@ -124,11 +125,11 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
   });
 
   return (
-    <div className="flex flex-col h-screen overflow-auto">
+    <div className={isChatPage ? 'flex h-[100dvh] min-h-0 min-w-0 flex-col overflow-hidden' : 'flex flex-col h-screen overflow-auto'}>
       {/* Top Header - Always visible */}
-      <header className="bg-black border-b py-3 px-4 flex items-center justify-between shadow-sm z-50 relative">
+      <header className={`bg-black border-b py-3 px-4 flex shrink-0 items-center justify-between shadow-sm z-50 relative ${isChatPage ? 'flex-wrap gap-2' : ''}`}>
         {/* Hamburger button and Logo */}
-        <div className="flex items-center gap-4">
+        <div className={`flex items-center gap-4 ${isChatPage ? 'min-w-0' : ''}`}>
           {/* Auth for burger icon to be hide if not signed in */}
           {(isAuthenticated || process.env.NEXT_PUBLIC_MODE == "DEV") && (
             <div ref={toggleButtonRef}>
@@ -176,11 +177,11 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
             </div>
           )}
           {/* Site Title */}
-          <h1 className="text-lg font-semibold text-[#ffffff]">Student Study Planner System</h1>
+          <h1 className={`text-lg font-semibold text-[#ffffff] ${isChatPage ? 'hidden truncate sm:block' : ''}`}>Student Study Planner System</h1>
         </div>
 
         {/* Account, Light/Dark Mode, and Role section */}
-        <div className="flex items-center gap-4">
+        <div className={`flex items-center gap-4 ${isChatPage ? 'min-w-0 flex-wrap gap-2' : ''}`}>
           {/* Light/Dark Mode Toggle - visible to all */}
           {themeMounted && (
             <button
@@ -227,7 +228,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
             (typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1') ||
             (process.env.NEXT_PUBLIC_MODE === 'DEV')
           ) && (
-              <div className="sm:flex hidden items-center gap-2">
+              <div className={isChatPage ? 'flex min-w-0 flex-wrap items-center gap-2' : 'sm:flex hidden items-center gap-2'}>
                 <label className="text-white text-sm hidden sm:block">
                   {typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1'
                     ? 'Viewing as:'
@@ -237,7 +238,8 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
                   }
                 </label>
                 <select
-                  className="text-sm rounded-md px-3 py-1 bg-white"
+                  className={`text-sm rounded-md px-3 py-1 bg-white ${isChatPage ? 'max-w-[160px]' : ''}`}
+                  aria-label="View as role"
                   value={selectedRoleName || ""}
                   onChange={(e) => setSelectedRoleByName(e.target.value)}
                 >
@@ -269,16 +271,16 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
         </div>
       </header>
 
-      <RoleBubble
+      {!isChatPage && <RoleBubble
         allRoles={allRoles}
         selectedRoleName={selectedRoleName}
         setSelectedRoleByName={setSelectedRoleByName}
         resetOverride={resetOverride}
         canUserSwitchRoles={canUserSwitchRoles}
         isAuthenticated={isAuthenticated}
-      />
+      />}
 
-      <div className="flex flex-1 overflow-hidden relative z-30">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden relative z-30">
         {/* Overlay when sidebar is open */}
         {sidebarOpen && (
           <div
@@ -290,7 +292,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
         {/* Sidebar - Absolute positioned */}
         <div
           ref={sidebarRef}
-          className={`absolute left-0 h-[calc(100vh-57px)] bg-[#242323] shadow-lg transition-transform duration-300 ease-in-out z-40`}
+          className={`absolute left-0 ${isChatPage ? 'inset-y-0' : 'h-[calc(100vh-57px)]'} bg-[#242323] shadow-lg transition-transform duration-300 ease-in-out z-40`}
           style={{
             width: `${sidebarWidth}px`,
             transform: sidebarOpen ? 'translateX(0)' : `translateX(-${sidebarWidth}px)`,
@@ -304,11 +306,11 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
         </div>
 
         {/* Main Content - Always full width */}
-        <div className="flex-1 overflow-auto">
-          <main className="p-4">
+        <div className={isChatPage ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden' : 'flex-1 overflow-auto'}>
+          <main className={isChatPage ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'p-4'}>
             {/* Show role override warning for superadmin */}
             {typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1' && (
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+              <div className={`bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4 ${isChatPage ? 'shrink-0' : ''}`}>
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">

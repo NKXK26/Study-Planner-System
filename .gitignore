@@ -55,3 +55,8 @@ DEVELOPER_OVERRIDE_README.md
 # supabase_dump.sql
 public/images/robots.txt
 src/app/secrets.js/page.js
+
+# Local generated reports, media, previews and temporary test files
+/artifacts/
+/output/
+/tmp/

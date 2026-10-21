@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {semesterPlan}=await import('../src/app/libs/academicPlanning.mjs');
+ const unit={ID:60,UnitCode:'COS40007',Name:'Artificial Intelligence for Engineering',CreditPoints:12.5,Availability:'Published',unitType:{Name:'Major'},UnitTermOffered:[{TermType:'Semester 1'},{TermType:'Semester 2'}]};
+ const prior={UnitCode:'COS10009',CreditPoints:12.5};
+ const relation=(ID,type,operator)=>({ID,UnitID:60,UnitRelationship:type,LogicalOperators:operator,MinCP:type==='min'?100:null,Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit:type==='pre'?prior:null});
+ const run=(completed,operators=['or','or'])=>semesterPlan({transcript:{completed},planner:{units:[unit]},relations:[relation(61,'pre',operators[0]),relation(62,'min',operators[1])],term:'Semester 1',maxUnits:4,maxCredits:50,provisional:true});
+ assert.equal(run([{code:'COS10009',earned:12.5}]).selected[0].code,'COS40007','Earned prerequisite satisfies recorded OR');
+ assert.equal(run([{code:'ICT20016',earned:100}]).selected[0].code,'COS40007','Credit alternative satisfies recorded OR');
+ assert.equal(run([]).selected.length,0,'Neither OR alternative earned');
+ assert.equal(run([{code:'COS10009',earned:12.5}],['and','and']).selected.length,0,'AND also requires the minimum credits');
+ assert.equal(run([{code:'COS10009',earned:12.5},{code:'ICT20016',earned:100}],['and','and']).selected[0].code,'COS40007');
+ const mixed=run([{code:'COS10009',earned:12.5},{code:'ICT20016',earned:100}],['and','or']);assert.equal(mixed.selected.length,0);assert.match(mixed.candidates[0].unknown.join(';'),/Mixed or unsupported/);
+ const {doubleMajorPathway}=await import('../src/app/libs/doubleMajorPathway.mjs');
+ const completedUnit={...unit,ID:1,UnitCode:'AAA100',UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit:[]};
+ const blocked={...unit,ID:2,UnitCode:'BBB100',UnitTermOffered:[]};
+ const make=(id,name,units)=>({id,name,units,plannerTemplate:{requirements:[{unitType:{Name:'Major'},requiredCount:units.length}]}});
+ const draft=doubleMajorPathway({transcript:{completed:[{code:'AAA100',earned:12.5}]},planners:[make(1,'AI',[completedUnit]),make(2,'DS',[blocked])]});
+ assert.equal(draft.semesters.length,0);assert.equal(draft.completeDraft,false);assert(draft.outstanding.length,'Unscheduled blockers remain visible');
+ console.log('Mixed requisite expressions passed: OR alternatives, AND conditions, unsupported grouping and no trailing empty pathway semesters.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

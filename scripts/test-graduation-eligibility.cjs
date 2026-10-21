@@ -1,0 +1,22 @@
+const assert=require('node:assert/strict');
+(async()=>{
+ const {assessGraduationEligibility,graduationEligibilityReport}=await import('../src/app/libs/graduationEligibility.mjs');
+ const {documentEvidence}=await import('../src/app/libs/chatDpa.mjs');
+ const unit=(code,category,id)=>({ID:id,UnitCode:code,Name:code+' title',CreditPoints:12.5,unitType:{Name:category}});
+ const units=Array.from({length:24},(_,i)=>unit('COS'+(10001+i),i<8?'Core':i<16?'Data Science Major':'Elective',i+1));
+ const planner={id:1,name:'24-Sep-CSDS',units,plannerTemplate:{requirements:[{unitType:{Name:'Core'},requiredCount:8},{unitType:{Name:'Data Science Major'},requiredCount:8},{unitType:{Name:'Elective'},requiredCount:8}]}};
+ const transcript=units=>documentEvidence({name:'student.xlsx',text:'DPA',rows:[['Course','Course Title','Status','Grade','Earned'],...units.map(u=>[u.UnitCode,u.Name,'Complete','HD',12.5])]}).transcript;
+ const complete=transcript(units);assert.equal(assessGraduationEligibility(complete,planner).eligible,true);
+ const wrong=transcript([...units.slice(1),unit('ZZZ99999','Other',999)]);assert.equal(wrong.completed.length,24);const bad=assessGraduationEligibility(wrong,planner);assert.equal(bad.status,'not-eligible');assert.equal(bad.remainingSlots,1);assert.equal(bad.categories.find(c=>c.name==='Core').remainingCount,1);assert.equal(bad.unmatched[0].code,'ZZZ99999');
+ const allReport=graduationEligibilityReport({transcript:wrong,planners:[planner]});assert.equal(allReport.eligible,false);assert.equal(allReport.status,'not-eligible');
+ const possible=graduationEligibilityReport({transcript:complete,planners:[planner]});assert.equal(possible.status,'choose-planner');assert.equal(possible.eligible,false,'An overlap cannot confirm the actual enrolled planner');
+ assert.equal(graduationEligibilityReport({transcript:complete,planners:[planner],plannerId:'1'}).eligible,true);
+ const failing=documentEvidence({name:'grades.xlsx',text:'DPA',rows:[['Course','Course Title','Status','Grade','Earned'],...units.map((u,i)=>[u.UnitCode,u.Name,'Complete',i===0?'N':i===1?'EXM':'HD',12.5])]}).transcript;assert.equal(assessGraduationEligibility(failing,planner).eligible,false);assert.ok(failing.completed.some(u=>u.code===units[1].UnitCode));assert.ok(!failing.completed.some(u=>u.code===units[0].UnitCode));
+ const invalid=structuredClone(planner);invalid.plannerTemplate=null;assert.equal(assessGraduationEligibility(complete,invalid).status,'needs-review');assert.equal(graduationEligibilityReport({transcript:complete,planners:[invalid]}).eligible,false);
+ const duplicates=structuredClone(planner);duplicates.units.push({...units[0],ID:999,unitType:{Name:'Elective'}});assert.equal(assessGraduationEligibility(complete,duplicates).status,'needs-review');
+ const empty={id:2,name:'empty',units:[]};assert.equal(assessGraduationEligibility(complete,empty).status,'needs-review');
+ const electivePlanner=structuredClone(planner);electivePlanner.units.push(unit('COS99998','Elective',100));assert.equal(assessGraduationEligibility(complete,electivePlanner).eligible,true,'Elective pools contain alternatives, not additional required units');
+ const allowances=structuredClone(planner);const source=transcript(units.slice(0,16));source.completed.push({code:'ICT20016',name:'Placement',earned:25},{code:'AE1',earned:12.5},{code:'AE2',earned:12.5},{code:'AE3',earned:12.5},...units.slice(16,19).map(u=>({code:u.UnitCode,earned:12.5})));const allowance=assessGraduationEligibility(source,allowances);assert.equal(allowance.eligible,true);assert.equal(allowance.categories.find(c=>c.name==='Elective').completedCount,8);assert.equal(graduationEligibilityReport({transcript:source,planners:[allowances],plannerId:1}).transcript.earnedCredits,300);
+ assert.throws(()=>graduationEligibilityReport({transcript:complete,planners:[planner],plannerId:'999'}),/no longer exists/);
+ console.log('Graduation checks passed: 24 wrong units rejected, correct category coverage, planner confirmation, N/EXM, optional elective pools, WIL/AE credits counted once, missing counts and conflicting versions.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

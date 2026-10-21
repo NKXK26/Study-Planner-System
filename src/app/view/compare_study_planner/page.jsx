@@ -13,8 +13,8 @@ import {
 	BugAntIcon, PlusIcon, PencilIcon,
 } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
+import { parseTranscript } from '@app/libs/doubleMajorChecker.mjs';
 import ReplacementWorkspace from '@/app/view/unit_suggestion/ReplacementWorkspace';
-import Link from 'next/link';
 import UnitPoolToolbox from '@/app/view/unit_suggestion/UnitPoolToolbox';
 import { generateStudyPlannerPdf } from '@/app/view/unit_suggestion/Exportstudyplannerpdf';
 import { buildBcsPlan, parseTranscriptRows, rankTopPlannerMatches, deriveTranscriptAcademicPeriod, getBcsWilDisplayName, getPlannerCompletionResult, detectCompletedBcsDoubleMajors, unitCode } from '@/app/libs/bcsPlannerRules.mjs';
@@ -1437,7 +1437,6 @@ export default function CompareStudyPlannerPage() {
 							</div>
 
 							<ReplacementWorkspace />
-							<Link href="/view/ai-assistant" className="inline-block mb-6 rounded-lg bg-indigo-700 text-white px-4 py-3">Ask the Study Planner Assistant</Link>
 							<h2 className="text-2xl font-bold heading-text mb-2">Plan from your transcript</h2>
 							<p className="text-muted mb-5">Upload your results to identify remaining units and build a study plan.</p>
 							{/* Upload area */}

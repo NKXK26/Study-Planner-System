@@ -182,6 +182,10 @@ export async function PUT(req) {
         }
 
         const result = await prisma.$transaction(async (tx) => {
+            if (body.expectedVersion) {
+                const current = await tx.plannerTemplate.findUnique({where:{id}});
+                if (!current || current.updatedAt.toISOString()!==body.expectedVersion) throw Object.assign(new Error('This template changed. Reload it before saving.'),{status:409});
+            }
             const template = await tx.plannerTemplate.update({
                 where: { id },
                 data: { name, updatedAt: new Date() },
@@ -211,7 +215,7 @@ export async function PUT(req) {
         console.error('PUT /api/planner-templates error:', error);
         return NextResponse.json(
             { success: false, message: error.message },
-            { status: 500 }
+            { status: error.status || 500 }
         );
     }
 }

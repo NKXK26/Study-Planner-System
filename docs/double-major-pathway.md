@@ -1,0 +1,13 @@
+# DPA double-major page
+
+`/view/double-major-checker` accepts a DPA PDF or XLSX and automatically calculates the two closest distinct major pools. Exact completed units with sufficient earned credit determine the match. N and failed statuses are excluded; positive earned EXM entries count. Duplicate earned attempts count once. An unreadable PDF table requires a usable XLSX export; unit mentions in prose do not establish completion.
+
+Ranking uses completed major units first, then all completed planner units and matched credit. Intake planners with identical major code sets are grouped for the automatic pair. The student may override either planner and intake in the optional controls; choosing identical major pools is rejected. The suggested primary planner does not confirm the student's actual programme.
+
+The authenticated `/api/double-major-pathway` endpoint loads current planners, category counts and the same unit requisite/semester properties used by the Units API. It does not save the DPA or use an LLM. The future draft combines primary-planner requirements with the additional major pool. Configured category counts allow choices instead of scheduling every optional unit. Missing/inconsistent counts fall back to the recorded pool and remain flagged as assumptions.
+
+Semesters alternate from the selected term/year, with at most four units and 50 CP. The shared semester rules check publication, recurring offerings, prerequisite credit, AND/OR relationships, anti-requisites and the Project A/B sequence. Co-requisites are conservatively treated as already earned. Proposed passes only affect later simulated semesters; they never change the uploaded DPA. Shared units are drafted once and may cover both recorded pools, subject to university overlap rules.
+
+The draft stops when recorded counts are covered, after two consecutive semesters with no selectable units, or after 16 semesters. Unknown credit, offerings, duplicate unit versions and unsupported requisite logic are held for review. External prerequisites are not automatically added. Outstanding counts and blocking reasons remain visible. Course compatibility, year-specific availability, timetable clashes, exemptions, overlap limits and graduation approval are not established by this calculation.
+
+Validation: `node scripts/test-double-major-pathway.cjs` covers distinct-major ranking, N/EXM, shared counts, optional major pools, alternating offerings, FYP order, missing/blocked rules, invalid choices and unchanged DPA evidence. After `npm.cmd run build`, `node scripts/test-planner-tools.cjs` exercises the actual pathway endpoint, authentication and current database records using a disposable database copy.
