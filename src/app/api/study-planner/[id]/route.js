@@ -32,8 +32,20 @@ export async function GET(req, { params }) {
             where: { id },
             include: {
                 studyPlannerUnits: {
-                    select: unitSelect,
-                    orderBy: { id: 'asc' },
+                    include: {
+                        unit: {
+                            include: {
+                                UnitTermOffered: { select: { TermType: true } },
+                                UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit: {
+                                    select: {
+                                        UnitRelationship: true, LogicalOperators: true, MinCP: true,
+                                        Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit: { select: { ID: true, UnitCode: true, Name: true } },
+                                    },
+                                },
+                            },
+                        },
+                        unitType: true,
+                    },
                 },
             },
         }),
@@ -70,12 +82,10 @@ export async function GET(req, { params }) {
                 Name: j.unit.Name,
                 CreditPoints: j.unit.CreditPoints,
                 Availability: j.unit.Availability,
-                unitTypeId: j.unitTypeId,
+            unitTypeId: j.unitTypeId,
                 unitType: j.unitType,
-                plannedYear: j.plannedYear,
-                plannedSemester: j.plannedSemester,
-                plannedDates: j.plannedDates,
-                sortOrder: j.sortOrder,
+                offeredTerms: j.unit.UnitTermOffered.map(term => term.TermType),
+                requisites: j.unit.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit.map(requisite => ({ relationship: requisite.UnitRelationship, logicalOperator: requisite.LogicalOperators, minCredits: requisite.MinCP, unit: requisite.Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit })),
             })),
             // All templates available for the selector
             templates: templates.map(t => ({

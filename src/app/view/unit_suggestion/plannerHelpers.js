@@ -1,5 +1,5 @@
-import {MAX_UNITS_PER_SEMESTER,MAX_CREDITS_PER_SEMESTER} from '@app/libs/semesterRules.mjs';
-export {MAX_UNITS_PER_SEMESTER,MAX_CREDITS_PER_SEMESTER};
+import { isPassingTranscriptAttempt, isWilUnit } from '../../libs/bcsPlannerRules.mjs';
+
 // ========================= CONSTANTS =========================
 export const REQUIRED_CORE = 8;
 export const REQUIRED_MAJOR = 8;
@@ -7,8 +7,9 @@ export const REQUIRED_ELECTIVE = 8;
 export const TOTAL_REQUIRED_UNITS = 24;
 export const TOTAL_REQUIRED_CREDITS = 300;
 export const DEFAULT_CREDIT_POINTS = 12.5;
-
-
+export const MAX_UNITS_PER_SEMESTER = 4;
+export const MAX_CREDITS_PER_SEMESTER = 50;
+export const WIL_CREDIT_POINTS = 25;
 
 // ========================= CANONICAL UNIT MAPPING =========================
 export const CANONICAL_UNIT = {
@@ -98,11 +99,105 @@ export const parsePrerequisites = (s) => {
 };
 
 export const isAvailableInSemester = (unit, _year, semester) => {
+    const offeredTerms = unit.offeredTerms || unit.OfferedTerms || [];
+    if (Array.isArray(offeredTerms) && offeredTerms.length) {
+        const normalizedTerms = offeredTerms.map(term => String(term).toLowerCase());
+        const semesterTerms = semester === 1
+            ? ['semester 1', 'sem 1', 's1']
+            : semester === 2
+                ? ['semester 2', 'sem 2', 's2']
+                : [];
+        const hasRecognisedSemester = normalizedTerms.some(term => /(?:semester|sem)\s*[12]|\bs[12]\b/.test(term));
+        if (hasRecognisedSemester) return normalizedTerms.some(term => semesterTerms.some(label => term.includes(label)));
+    }
     const o = (unit.OfferedIn || unit.offeredIn || '').toLowerCase();
-    if (!o) return true;
+    if (!o) return !unit.requireKnownAvailability;
     if (o.includes('semester 1 only')) return semester === 1;
     if (o.includes('semester 2 only')) return semester === 2;
     return true;
+};
+
+export const isWilPlacementUnit = (unit, options = {}) => isWilUnit(unit, options);
+
+const unitTypeText = unit => String(unit?.unitType?.Name ?? unit?.unitTypeName ?? unit?.categoryLabel ?? unit?.categoryKey ?? '').toLowerCase();
+const unitCreditPoints = unit => Number(unit?.CreditPoints ?? unit?.creditPoints ?? 0);
+const hasTranscriptOutcome = unit => ['Grade', 'grade', 'Status', 'status'].some(key => Object.prototype.hasOwnProperty.call(unit || {}, key));
+
+// WIL eligibility is intentionally narrower than general "completed" status. It
+// reflects only credit-bearing Core, Major, and Elective (including prescribed
+// elective) study that the selected planner or an explicit mapping recognises.
+export const isWilQualifyingAcademicUnit = (unit, { mappedCategory, bcsPlanner = false } = {}) => {
+    const type = String(mappedCategory ?? unitTypeText(unit)).toLowerCase();
+    const text = `${unit?.UnitCode ?? unit?.code ?? ''} ${unit?.Name ?? unit?.name ?? ''} ${type}`.toLowerCase();
+    if (isWilPlacementUnit(unit, { bcsPlanner }) || unitCreditPoints(unit) <= 0) return false;
+    if (/\bmpu\b|academic[ -]?integrity|placeholder|exempt(?:ion|ed)?|approved[ -]?elective/.test(text)) return false;
+    return /core|major|elective/.test(type);
+};
+
+export const getWilQualifyingCompletedUnitCodes = ({ plannerUnits = [], completedUnits = [], mappedExternalUnits = {}, bcsPlanner = false } = {}) => {
+    const plannerByCode = new Map();
+    plannerUnits.forEach(unit => {
+        const code = getNormalizedUnitCode(extractUnitCode(unit?.UnitCode ?? unit?.code));
+        if (code) plannerByCode.set(code, unit);
+    });
+
+    const qualifyingCodes = new Set();
+    completedUnits.forEach(completed => {
+        if (hasTranscriptOutcome(completed) && !isPassingTranscriptAttempt(completed)) return;
+        const code = getNormalizedUnitCode(extractUnitCode(completed?.code ?? completed?.UnitCode));
+        const plannerUnit = plannerByCode.get(code);
+        if (plannerUnit && isWilQualifyingAcademicUnit(plannerUnit, { bcsPlanner })) qualifyingCodes.add(code);
+    });
+
+    Object.entries(mappedExternalUnits || {}).forEach(([category, mappings]) => {
+        if (String(category).toLowerCase() === '__other__') return;
+        (Array.isArray(mappings) ? mappings : []).forEach(mapping => {
+            const code = getNormalizedUnitCode(extractUnitCode(mapping?.code ?? mapping?.UnitCode));
+            const mappedCategory = mapping?.categoryLabel ?? mapping?.categoryKey ?? category;
+            if (code && !mapping?.isOtherMapping && isWilQualifyingAcademicUnit(mapping, { mappedCategory, bcsPlanner })) qualifyingCodes.add(code);
+        });
+    });
+    return qualifyingCodes;
+};
+
+export const isAvailableInBreakTerm = (unit, breakTerm) => {
+    const terms = unit?.offeredTerms || unit?.OfferedTerms || [];
+    const normalized = Array.isArray(terms) ? terms.map(term => String(term).toLowerCase()) : [];
+    const requested = String(breakTerm).toLowerCase();
+    const hasBreakMetadata = normalized.some(term => /winter|summer/.test(term));
+    if (hasBreakMetadata) return normalized.some(term => term.includes(requested));
+    // No break-term metadata is a provisional fallback, not a confirmed offering.
+    return normalized.length === 0;
+};
+
+export const scheduleWilBreakPlacement = ({ wilUnits = [], completedAcademicUnits = 0, currentYear, currentSemester }) => {
+    if (!wilUnits.length) return { placement: null, warning: null };
+    if (completedAcademicUnits < 12) {
+        return { placement: null, warning: 'WIL remains outstanding: at least 12 distinct passed academic units are required before WIL can be scheduled.' };
+    }
+    const startYear = Math.max(1, Number(currentYear) || 1);
+    const candidates = Number(currentSemester) === 1
+        ? [{ year: startYear, term: 'Winter' }, { year: startYear, term: 'Summer' }, { year: startYear + 1, term: 'Winter' }]
+        : [{ year: startYear, term: 'Summer' }, { year: startYear + 1, term: 'Winter' }, { year: startYear + 1, term: 'Summer' }];
+    for (const candidate of candidates) {
+        const available = wilUnits.find(unit => isAvailableInBreakTerm(unit, candidate.term));
+        if (!available) continue;
+        const offeredTerms = available.offeredTerms || available.OfferedTerms || [];
+        const hasBreakAvailabilityMetadata = Array.isArray(offeredTerms) && offeredTerms.some(term => /winter|summer/i.test(String(term)));
+        return {
+            placement: {
+                year: candidate.year,
+                term: candidate.term,
+                semester: null,
+                isBreakTerm: true,
+                units: [{ ...available, CreditPoints: WIL_CREDIT_POINTS, creditPoints: WIL_CREDIT_POINTS, isWilBreakPlacement: true }],
+                unitCount: 1,
+                totalCredits: WIL_CREDIT_POINTS,
+            },
+            warning: hasBreakAvailabilityMetadata ? null : `WIL was placed in the first eligible ${candidate.term} break using provisional availability because the selected planner has no Winter/Summer offering data.`,
+        };
+    }
+    return { placement: null, warning: 'WIL remains outstanding: the selected planner does not record an available Winter or Summer placement after the student becomes eligible.' };
 };
 
 // ========================= FYP CONFLICT DETECTION =========================
@@ -164,8 +259,16 @@ export const scheduleRemainingUnits = (
     let semesterCounter = 0;
     const MAX_SEMESTERS = 12;
 
+    const getCategoryKey = (unit) => {
+        if (unit.scheduleCategoryKey && Object.prototype.hasOwnProperty.call(categoryNeeds, unit.scheduleCategoryKey)) return unit.scheduleCategoryKey;
+        const typeId = unit.unitTypeId ?? unit.unitType?.ID;
+        const stableKey = typeId == null ? null : String(typeId);
+        return stableKey && Object.prototype.hasOwnProperty.call(categoryNeeds, stableKey)
+            ? stableKey
+            : getUnitCategory(unit);
+    };
     const getPriorityBonus = (unit) => {
-        const cat = getUnitCategory(unit);
+        const cat = getCategoryKey(unit);
         const remaining = categoryNeeds[cat] - scheduledCounts[cat];
         if (remaining > 0) return 30;   // still need this category
         return 0;
@@ -179,7 +282,8 @@ export const scheduleRemainingUnits = (
         const currentOrder = getSemesterOrderValue(current.year, current.semester);
         const available = [];
         for (const unit of remaining) {
-            const cat = getUnitCategory(unit);
+			if (isWilPlacementUnit(unit)) continue;
+            const cat = getCategoryKey(unit);
             const code = (unit.UnitCode || unit.code || '').toUpperCase();
             const normalizedCode = getNormalizedUnitCode(code);
 
@@ -221,17 +325,6 @@ export const scheduleRemainingUnits = (
             }
             if (!prereqsMet) continue;
 
-            // ICT20016 eligibility (double‑count WIL unit)
-            if (
-                code === 'ICT20016' &&
-                !(
-                    current.year >= 2 &&
-                    (current.year > 2 || current.semester >= 2) &&
-                    totalUnitsCompleted >= 12
-                )
-            )
-                continue;
-
             if (!isAvailableInSemester(unit, current.year, current.semester)) continue;
             available.push(unit);
         }
@@ -249,7 +342,7 @@ export const scheduleRemainingUnits = (
             semesterCredits = 0;
         for (const unit of available) {
             const code = (unit.UnitCode || unit.code || '').toUpperCase();
-            const cat = getUnitCategory(unit);
+            const cat = getCategoryKey(unit);
             // Skip if category already satisfied
             if (categoryNeeds[cat] !== undefined && scheduledCounts[cat] >= categoryNeeds[cat]) continue;
 

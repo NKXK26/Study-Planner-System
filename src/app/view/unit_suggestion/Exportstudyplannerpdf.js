@@ -209,7 +209,8 @@ function drawUnitRow(doc, unit, x, y, rowW) {
   doc.setFontSize(6);
   setTxt(doc, COLORS.gray500);
   if (unit.Name) {
-    doc.text(truncate(unit.Name, Math.floor(maxNameW / 1.5)), nameX, y + 5.5);
+    const status = ['Scheduled', 'Current'].includes(String(unit.status || '')) ? ` (${unit.status})` : '';
+    doc.text(truncate(`${unit.Name}${status}`, Math.floor(maxNameW / 1.5)), nameX, y + 5.5);
   }
 
   doc.setFont('helvetica', 'bold');
@@ -246,7 +247,7 @@ function drawSemesterCard(doc, sem, x, y, cardW) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   setTxt(doc, COLORS.gray800);
-  doc.text(`Year ${sem.year} · Semester ${sem.semester}`, x + 3, y + 5.5);
+  doc.text(sem.isBreakTerm ? `Year ${sem.year} · ${sem.term} Break — WIL Placement` : `Year ${sem.year} · Semester ${sem.semester}`, x + 3, y + 5.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6);
@@ -272,12 +273,30 @@ export async function generateStudyPlannerPdf({
   editableSchedule = [],
   recommendations  = null,
   studentInfo      = null,
+  graduationAssessment = null,
   filename         = 'study-planner.pdf',
 }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
   let y = drawHeader(doc, recommendations, studentInfo);
   y = drawProgressSection(doc, recommendations, y);
+  if (graduationAssessment?.status === 'double') {
+    y += 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    setTxt(doc, COLORS.emerald);
+    const lines = doc.splitTextToSize(`Graduation assessment: ${graduationAssessment.primaryMajor} + ${graduationAssessment.candidates[0].secondMajor} double major requirements completed`, CONTENT_W);
+    doc.text(lines, MARGIN, y);
+    y += lines.length * 3;
+  } else if (graduationAssessment?.status === 'review') {
+    y += 2;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    setTxt(doc, COLORS.gray700);
+    const lines = doc.splitTextToSize(`Possible additional majors require review: ${graduationAssessment.candidates.map(candidate => candidate.secondMajor).join(', ')}`, CONTENT_W);
+    doc.text(lines, MARGIN, y);
+    y += lines.length * 3;
+  }
   y += 2;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
@@ -287,7 +306,7 @@ export async function generateStudyPlannerPdf({
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6);
   setTxt(doc, COLORS.gray500);
-  doc.text(`${editableSchedule.length} semester${editableSchedule.length !== 1 ? 's' : ''} remaining · Drag-and-drop units are saved in the order shown below`,
+  doc.text(`${editableSchedule.length} schedule entr${editableSchedule.length !== 1 ? 'ies' : 'y'} remaining · Drag-and-drop units are saved in the order shown below`,
     MARGIN, y);
   y += 5;
 
