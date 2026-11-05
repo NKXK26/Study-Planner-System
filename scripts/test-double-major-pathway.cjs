@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
   const {parseTranscript}=await import('../src/app/libs/doubleMajorChecker.mjs');
   let id=0;
   const unit=(code,name=code,type='Major',terms=['Semester 1','Semester 2'])=>({ID:++id,UnitCode:code,Name:name,CreditPoints:12.5,Availability:'Published',unitType:{Name:type},UnitTermOffered:terms.map(TermType=>({TermType})),UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit:[]});
-  const planner=(id,name,units,count=units.filter(u=>u.unitType.Name==='Major').length)=>({id,name,units,plannerTemplate:{requirements:[{unitType:{Name:'Major'},requiredCount:count},...['Core','Elective'].filter(n=>units.some(u=>u.unitType.Name===n)).map(n=>({unitType:{Name:n},requiredCount:units.filter(u=>u.unitType.Name===n).length}))]}});
+  const planner=(id,name,units,count=units.filter(u=>u.unitType.Name==='Major').length)=>({id,name:'24-Sep-'+name,units,plannerTemplate:{requirements:[{unitType:{Name:'Major'},requiredCount:count},...['Core','Elective'].filter(n=>units.some(u=>u.unitType.Name===n)).map(n=>({unitType:{Name:n},requiredCount:units.filter(u=>u.unitType.Name===n).length}))]}});
   const a=unit('AAA100'),b=unit('BBB100'),shared=unit('SHR200'),projectA=unit('COS40005','Computing Project A'),projectB=unit('COS40006','Computing Project B'),core=unit('CORE100','Core unit','Core');
   const plans=[planner(1,'AI',[a,shared,projectA,projectB,core]),planner(2,'AI new intake',[a,shared,projectA,projectB,core]),planner(3,'Data Science',[b,shared])];
   const transcript=parseTranscript([['Course','Status','Earned','Grade'],['AAA100','Complete',12.5,'EXM'],['BBB100','Complete',12.5,'N'],['CORE100','Complete',12.5,'HD']]);

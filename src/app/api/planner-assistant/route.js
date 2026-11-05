@@ -8,7 +8,7 @@ import SecureSessionManager from '@utils/auth/SimpleSessionManager';
 import { NextResponse } from 'next/server';
 import { retrievePlannerKnowledge, normalizePlannerPrompt } from '@app/libs/plannerKnowledge.mjs';
 import { documentEvidence, validateDocument } from '@app/libs/chatDpa.mjs';
-import { assessDpaDoubleMajor, checkDoubleMajor, normalizeCode } from '@app/libs/doubleMajorChecker.mjs';
+import { assessDpaDoubleMajor, checkDoubleMajor, normalizeCode, samePlannerIntake } from '@app/libs/doubleMajorChecker.mjs';
 import { reviewedChatDocument, explainSemesterDraft } from '@app/libs/reviewedChat.mjs';
 import { POST as generateReviewedPlan } from './planning/route';
 import { composeToolReply } from '@app/libs/plannerResponse.mjs';
@@ -103,10 +103,12 @@ export async function POST(req) {
           if (context?.programmeConfirmed) {
             const primary = planners.find(p=>p.id===context.plannerId);
             if (!primary) return personalReply('Your confirmed planner is no longer available. Select it again in the planning card.');
-            const options=planners.filter(p=>p.id!==primary.id).flatMap(p=>{try{return [checkDoubleMajor(evidence.transcript,[primary,p])];}catch{return [];}}).sort((a,b)=>a.majors[1].remaining-b.majors[1].remaining);
+            const options=planners.filter(p=>p.id!==primary.id&&samePlannerIntake(primary,p)).flatMap(p=>{try{return [checkDoubleMajor(evidence.transcript,[primary,p])];}catch{return [];}}).sort((a,b)=>a.majors[1].remaining-b.majors[1].remaining);
+            if(!options.length)return personalReply('No different-major planner with matching year and intake is available for '+primary.name+'. Choose a matching-intake planner or ask for the catalogue to be updated.');
             return personalReply(evidence.summary+'\n\nUsing your confirmed planner: '+primary.name+'\n\n'+options.slice(0,5).map(o=>o.majors.map(m=>m.name+': '+m.matched+'/'+m.required+' major units matched, '+m.remaining+' remaining ('+m.source+')').join(' + ')).join('\n')+'\n\nThese compare unit coverage only; programme compatibility and graduation rules still need confirmation.');
           }
           const assessment = assessDpaDoubleMajor(evidence.transcript, planners, primaryPlannerId);
+          if(!assessment.options.length)return personalReply('No different-major planner with matching year and intake is available for '+assessment.primary.planner.name+'. Choose a matching-intake planner or ask for the catalogue to be updated.');
           if (assessment.ties.length > 1 && primaryPlannerId == null) {
             plannerChoices = assessment.ties.map(r => ({ id: r.planner.id, name: r.planner.name }));
             comparison = 'Several planners match equally. Select your primary planner below for the comparison.';

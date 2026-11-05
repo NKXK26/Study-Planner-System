@@ -30,11 +30,11 @@ const fs = require('node:fs');
   // Run the actual route with controlled database, authentication and AI failures.
   const source = fs.readFileSync('src/app/api/planner-assistant/route.js', 'utf8').trimStart().replace(/^import .*;\r?\n/gm, '').replace(/export async function/g, 'async function');
   const unit = code => ({ UnitCode: code, Name: code, CreditPoints: 12.5, unitType: { Name: 'Major' } });
-  const planner = (id, name, code) => ({ id, name, studyPlannerUnits: [unit('COS10001'), unit(code)].map(u => ({ unit: u, unitType: u.unitType })) });
+  const planner = (id, name, code) => ({ id, name:'24-Sep-'+name, studyPlannerUnits: [unit('COS10001'), unit(code)].map(u => ({ unit: u, unitType: u.unitType })) });
   const prisma = { unit: { findMany: async () => [] }, studyPlanner: { findMany: async () => [planner(1, 'A', 'COS10002'), planner(2, 'B', 'COS10003')] } };
   const NextResponse = { json: (data, options) => ({ data, status: options?.status || 200 }) };
-  const route = new Function('questionBoundary','generalEvidenceReply','refusal','prisma', 'SecureSessionManager', 'NextResponse', 'retrievePlannerKnowledge', 'normalizePlannerPrompt', 'documentEvidence', 'validateDocument', 'assessDpaDoubleMajor', 'normalizeCode', 'replacementCandidates', 'reviewedChatDocument', 'explainSemesterDraft', 'generateReviewedPlan', 'checkDoubleMajor', 'fetch', source + '\nreturn POST;')(
-    answerability.questionBoundary,answerability.generalEvidenceReply,answerability.refusal,prisma, { authenticateUser: async req => req.authorized !== false }, NextResponse, knowledge.retrievePlannerKnowledge, knowledge.normalizePlannerPrompt, dpa.documentEvidence, dpa.validateDocument, checker.assessDpaDoubleMajor, checker.normalizeCode, replacementCandidates, reviewedChatDocument, explainSemesterDraft, generateReviewedPlan, checker.checkDoubleMajor, async () => { throw new Error('Model offline'); }
+  const route = new Function('samePlannerIntake','readPlannerDocument','resolvePlannerModel','questionBoundary','generalEvidenceReply','refusal','prisma', 'SecureSessionManager', 'NextResponse', 'retrievePlannerKnowledge', 'normalizePlannerPrompt', 'documentEvidence', 'validateDocument', 'assessDpaDoubleMajor', 'normalizeCode', 'replacementCandidates', 'reviewedChatDocument', 'explainSemesterDraft', 'generateReviewedPlan', 'checkDoubleMajor', 'fetch', source + '\nreturn POST;')(
+    checker.samePlannerIntake, () => null, async () => undefined, answerability.questionBoundary,answerability.generalEvidenceReply,answerability.refusal,prisma, { authenticateUser: async req => req.authorized !== false }, NextResponse, knowledge.retrievePlannerKnowledge, knowledge.normalizePlannerPrompt, dpa.documentEvidence, dpa.validateDocument, checker.assessDpaDoubleMajor, checker.normalizeCode, replacementCandidates, reviewedChatDocument, explainSemesterDraft, generateReviewedPlan, checker.checkDoubleMajor, async () => { throw new Error('Model offline'); }
   );
   const request = body => ({ headers: new Headers(), json: async () => body });
   let result = await route(request({ question: 'explain this', document }));
@@ -56,7 +56,7 @@ const fs = require('node:fs');
   result=await route(request({question:'Why these units next semester?',document,planningContext:context}));
   assert.match(result.data.answer,/Confirmed planner/);assert.equal(planningCalls,1);assert.doesNotMatch(result.data.answer,/Use the .*card/);
   result=await route(request({question:'Can I do a double major?',document,planningContext:context}));
-  assert.match(result.data.answer,/Using your confirmed planner: B/);
+  assert.match(result.data.answer,/Using your confirmed planner: 24-Sep-B/);
   result=await route(request({question:'How many completed?',document,planningContext:{...context,dpaConfirmed:false}}));assert.equal(result.status,400);
   prisma.studyPlanner.findMany = async () => { throw new Error('Database offline'); };
   result = await route(request({ question: 'explain', document }));

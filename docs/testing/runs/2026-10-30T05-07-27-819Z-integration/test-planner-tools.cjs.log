@@ -1,0 +1,21 @@
+Standalone server exit: null signal: null output:    ▲ Next.js 15.5.6
+   - Local:        http://127.0.0.1:3118
+   - Network:      http://127.0.0.1:3118
+
+ ✓ Starting...
+ ✓ Ready in 6.8s
+
+TypeError: fetch failed
+    at node:internal/deps/undici/undici:13510:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async request (B:\electronapp\sp\scripts\test-planner-tools.cjs:87:20)
+    at async B:\electronapp\sp\scripts\test-planner-tools.cjs:93:19 {
+  [cause]: Error: connect EACCES 127.0.0.1:3118
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1636:16) {
+    errno: -4092,
+    code: 'EACCES',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 3118
+  }
+}

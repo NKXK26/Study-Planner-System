@@ -14,7 +14,7 @@ const assert=require('node:assert/strict');
  const {doubleMajorPathway}=await import('../src/app/libs/doubleMajorPathway.mjs');
  const completedUnit={...unit,ID:1,UnitCode:'AAA100',UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit:[]};
  const blocked={...unit,ID:2,UnitCode:'BBB100',UnitTermOffered:[]};
- const make=(id,name,units)=>({id,name,units,plannerTemplate:{requirements:[{unitType:{Name:'Major'},requiredCount:units.length}]}});
+ const make=(id,name,units)=>({id,name:'24-Sep-'+name,units,plannerTemplate:{requirements:[{unitType:{Name:'Major'},requiredCount:units.length}]}});
  const draft=doubleMajorPathway({transcript:{completed:[{code:'AAA100',earned:12.5}]},planners:[make(1,'AI',[completedUnit]),make(2,'DS',[blocked])]});
  assert.equal(draft.semesters.length,0);assert.equal(draft.completeDraft,false);assert(draft.outstanding.length,'Unscheduled blockers remain visible');
  console.log('Mixed requisite expressions passed: OR alternatives, AND conditions, unsupported grouping and no trailing empty pathway semesters.');

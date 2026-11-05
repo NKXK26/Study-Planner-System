@@ -1,0 +1,2 @@
+Suite,Status,Assertions,Seconds,Exit code
+test-planner-tools.cjs,FAIL,27,12.63,1

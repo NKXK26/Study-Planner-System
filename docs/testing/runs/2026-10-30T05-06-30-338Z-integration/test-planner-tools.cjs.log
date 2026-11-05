@@ -1,0 +1,17 @@
+AssertionError [ERR_ASSERTION]: Error: 
+EPERM: operation not permitted, rename 'C:\Users\Nicolas\AppData\Local\Packages\sandbox.{f2f5aa90-d0cd-424b-b7b6-57143b75ec27}\AC\Temp\planner-tool-checks-5Ogycw\client\query_engine-windows.dll.node.tmp23832' -> 'C:\Users\Nicolas\AppData\Local\Packages\sandbox.{f2f5aa90-d0cd-424b-b7b6-57143b75ec27}\AC\Temp\planner-tool-checks-5Ogycw\client\query_engine-windows.dll.node'
+
+
+
+
+1 !== 0
+
+    at call (B:\electronapp\sp\scripts\testing\count-assertions.cjs:17:24)
+    at Proxy.<anonymous> (B:\electronapp\sp\scripts\testing\count-assertions.cjs:29:56)
+    at B:\electronapp\sp\scripts\test-planner-tools.cjs:51:12 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 1,
+  expected: 0,
+  operator: 'strictEqual'
+}

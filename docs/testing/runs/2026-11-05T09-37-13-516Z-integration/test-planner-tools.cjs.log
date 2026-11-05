@@ -1,0 +1,25 @@
+Standalone server exit: null signal: null output:    ▲ Next.js 15.5.6
+   - Local:        http://127.0.0.1:3118
+   - Network:      http://127.0.0.1:3118
+
+ ✓ Starting...
+ ✓ Ready in 875ms
+No session email found
+No session email found
+
+AssertionError [ERR_ASSERTION]: Reopened Maker must preserve plannedYear
++ actual - expected
+
++ undefined
+- 2027
+
+    at call (B:\electronapp\sp\scripts\testing\count-assertions.cjs:17:24)
+    at Proxy.<anonymous> (B:\electronapp\sp\scripts\testing\count-assertions.cjs:29:56)
+    at B:\electronapp\sp\scripts\test-planner-tools.cjs:191:92
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: undefined,
+  expected: 2027,
+  operator: 'strictEqual'
+}

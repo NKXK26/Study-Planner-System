@@ -1,0 +1,38 @@
+{
+  "executedAt": "2026-10-30T05:07:53.265Z",
+  "commit": "e0ce54846babdc5bf2580001fb096af650f9876e",
+  "workingTree": "M docs/graduation-module-test-plan.md\n M package.json\n M scripts/test-chat-assistant.cjs\n M scripts/test-planner-tools.cjs\n?? docs/testing/\n?? scripts/test-new-modules.cjs\n?? scripts/testing/",
+  "node": "v22.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "mode": "Built HTTP APIs, disposable database, mock LLM",
+  "passed": 0,
+  "failed": 1,
+  "results": [
+    {
+      "suite": "test-planner-tools.cjs",
+      "status": "FAIL",
+      "assertions": {
+        "executed": 27,
+        "passed": 27,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "deepEqual": 4,
+          "equal": 16,
+          "throws": 5,
+          "rejects": 2
+        }
+      },
+      "seconds": 25.44,
+      "exitCode": 1,
+      "signal": null
+    }
+  ],
+  "assertions": {
+    "executed": 27,
+    "passed": 27,
+    "failed": 0,
+    "pending": 0
+  }
+}

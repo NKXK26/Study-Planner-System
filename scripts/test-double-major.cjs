@@ -12,7 +12,7 @@ const { PrismaClient } = require('@prisma/client');
   assert.equal(transcript.excluded.length, 2);
   assert.throws(() => parseTranscript([['Unknown']]));
   const unit = code => ({UnitCode:code, Name:code, CreditPoints:12.5,unitType:{Name:'Major'}});
-  const planners = [{id:1,name:'A',units:[unit('AAA100'),unit('BBB100'),unit('AAA100')]},{id:2,name:'B',units:[unit('AAA100'),unit('CCC100')]}];
+  const planners = [{id:1,name:'24-Sep-CSAI',units:[unit('AAA100'),unit('BBB100'),unit('AAA100')]},{id:2,name:'24-Sep-CSDS',units:[unit('AAA100'),unit('CCC100')]}];
   const result = checkDoubleMajor(transcript, planners);
   assert.equal(result.shared.length, 1);
   assert.equal(result.uniqueCompletedCredits, 25);

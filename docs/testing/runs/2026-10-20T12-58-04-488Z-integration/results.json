@@ -1,0 +1,20 @@
+{
+  "executedAt": "2026-10-20T12:58:46.621Z",
+  "commit": "e0ce54846babdc5bf2580001fb096af650f9876e",
+  "workingTree": "M package.json\n M scripts/test-chat-assistant.cjs\n M scripts/test-planner-tools.cjs\n?? docs/testing/\n?? scripts/test-new-modules.cjs",
+  "node": "v22.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "mode": "Built HTTP APIs, disposable database, mock LLM",
+  "passed": 0,
+  "failed": 1,
+  "results": [
+    {
+      "suite": "test-planner-tools.cjs",
+      "status": "FAIL",
+      "seconds": 42.13,
+      "exitCode": 1,
+      "signal": null
+    }
+  ]
+}

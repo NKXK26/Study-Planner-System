@@ -1,0 +1,195 @@
+{
+  "executedAt": "2026-10-20T12:57:01.639Z",
+  "commit": "e0ce54846babdc5bf2580001fb096af650f9876e",
+  "workingTree": "?? docs/testing/\n?? scripts/test-new-modules.cjs",
+  "node": "v22.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "mode": "Offline unit and regression suites; external HTTP checks disabled",
+  "passed": 25,
+  "failed": 1,
+  "results": [
+    {
+      "suite": "test-academic-planning.cjs",
+      "status": "PASS",
+      "seconds": 0.22,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-ai-status.cjs",
+      "status": "PASS",
+      "seconds": 0.25,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-answerability.cjs",
+      "status": "PASS",
+      "seconds": 0.16,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-auto-suggestions.cjs",
+      "status": "PASS",
+      "seconds": 0.17,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-assistant.cjs",
+      "status": "FAIL",
+      "seconds": 0.24,
+      "exitCode": 1,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-follow-ups.cjs",
+      "status": "PASS",
+      "seconds": 0.15,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-planner-hydration.cjs",
+      "status": "PASS",
+      "seconds": 0.13,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-planner-pdf.cjs",
+      "status": "PASS",
+      "seconds": 2.76,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-session.cjs",
+      "status": "PASS",
+      "seconds": 0.18,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-conversational-planner.cjs",
+      "status": "PASS",
+      "seconds": 0.18,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-course-completion.cjs",
+      "status": "PASS",
+      "seconds": 0.19,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-double-major-electives.cjs",
+      "status": "PASS",
+      "seconds": 0.15,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-double-major-pathway.cjs",
+      "status": "PASS",
+      "seconds": 0.16,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-double-major.cjs",
+      "status": "PASS",
+      "seconds": 1.37,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-elective-completion.cjs",
+      "status": "PASS",
+      "seconds": 0.18,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-graduation-eligibility.cjs",
+      "status": "PASS",
+      "seconds": 0.29,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-mixed-requisite-expressions.cjs",
+      "status": "PASS",
+      "seconds": 0.14,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-natural-planner-requests.cjs",
+      "status": "PASS",
+      "seconds": 0.19,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-context-continuity.cjs",
+      "status": "PASS",
+      "seconds": 0.14,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-intent.cjs",
+      "status": "PASS",
+      "seconds": 0.18,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-knowledge.cjs",
+      "status": "PASS",
+      "seconds": 0.14,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-matching.cjs",
+      "status": "PASS",
+      "seconds": 0.17,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-record-questions.cjs",
+      "status": "PASS",
+      "seconds": 0.15,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-study-plan-workflow.cjs",
+      "status": "PASS",
+      "seconds": 0.16,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-unit-replacement.cjs",
+      "status": "PASS",
+      "seconds": 0.1,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-uploaded-planner.cjs",
+      "status": "PASS",
+      "seconds": 2.96,
+      "exitCode": 0,
+      "signal": null
+    }
+  ]
+}

@@ -46,6 +46,23 @@ async function runDbSetup() {
   } else {
     console.log(`Database up to date (v${SCHEMA_VERSION}), skipping copy.`)
   }
+
+  // Existing v6 databases predate Maker's optional study-period columns.
+  // Upgrade in place instead of bumping the version and replacing user data.
+  const clientRoot = isProd ? path.join(process.resourcesPath, 'app') : path.join(__dirname, '..')
+  const { PrismaClient } = require(path.join(clientRoot, 'node_modules', '@prisma', 'client'))
+  const { upgradePlannerSchema } = require('./planner-schema')
+  const db = new PrismaClient({ datasources: { db: { url: `file:${dbPath.replace(/\\/g, '/')}` } } })
+  try {
+    const upgraded = await upgradePlannerSchema(db, async () => {
+      const backupPath = path.join(userData, `planner.before-study-periods.${Date.now()}.db`)
+      fs.copyFileSync(dbPath, backupPath)
+      console.log('Planner database backed up to:', backupPath)
+    })
+    if (upgraded) console.log('Planner study-period columns added; existing records retained.')
+  } finally {
+    await db.$disconnect()
+  }
 }
 
 module.exports = { runDbSetup }

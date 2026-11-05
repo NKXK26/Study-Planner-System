@@ -1,0 +1,11 @@
+{
+  "executed": 34,
+  "passed": 34,
+  "failed": 0,
+  "pending": 0,
+  "byMethod": {
+    "equal": 23,
+    "deepEqual": 6,
+    "throws": 5
+  }
+}

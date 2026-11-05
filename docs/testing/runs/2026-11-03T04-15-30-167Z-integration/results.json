@@ -1,0 +1,41 @@
+{
+  "executedAt": "2026-11-03T04:16:15.266Z",
+  "commit": "e0ce54846babdc5bf2580001fb096af650f9876e",
+  "workingTree": "M docs/double-major-pathway.md\n M docs/graduation-module-test-plan.md\n M package.json\n M scripts/test-chat-assistant.cjs\n M scripts/test-double-major-electives.cjs\n M scripts/test-double-major-pathway.cjs\n M scripts/test-double-major.cjs\n M scripts/test-mixed-requisite-expressions.cjs\n M scripts/test-planner-tools.cjs\n M src/app/api/planner-assistant/route.js\n M src/app/libs/doubleMajorChecker.mjs\n M src/app/libs/doubleMajorPathway.mjs\n M src/app/libs/plannerKnowledge.mjs\n M src/app/libs/plannerToolDefinitions.mjs\n M src/app/libs/plannerTools.server.js\n M src/components/DoubleMajorPanel.jsx\n?? docs/testing/\n?? scripts/test-double-major-intakes.cjs\n?? scripts/test-new-modules.cjs\n?? scripts/testing/\n?? src/app/libs/plannerIntake.mjs",
+  "node": "v22.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "mode": "Built HTTP APIs, disposable database, mock LLM",
+  "passed": 1,
+  "failed": 0,
+  "results": [
+    {
+      "suite": "test-planner-tools.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 379,
+        "passed": 379,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "deepEqual": 14,
+          "equal": 223,
+          "throws": 5,
+          "rejects": 2,
+          "assert": 96,
+          "match": 38,
+          "notEqual": 1
+        }
+      },
+      "seconds": 45.08,
+      "exitCode": 0,
+      "signal": null
+    }
+  ],
+  "assertions": {
+    "executed": 379,
+    "passed": 379,
+    "failed": 0,
+    "pending": 0
+  }
+}

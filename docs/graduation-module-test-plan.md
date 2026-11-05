@@ -1,4 +1,6 @@
 # Student Study Planner System
+
+Automated execution supplement (20 October 2026): see [test results](testing/automated-test-report.md), [FYP testing guide](testing/fyp-testing-guide.md), and [manual execution sheet](testing/manual-test-execution.csv). Automated results do not mark lecturer acceptance cases as executed.
 # Graduation Module and AI Assistant — Lecturer Acceptance Test Plan
 
 | Document control | Value |

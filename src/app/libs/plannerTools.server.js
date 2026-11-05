@@ -224,7 +224,7 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     const now=new Date(),month=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kuala_Lumpur',month:'numeric'}).format(now)),currentYear=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kuala_Lumpur',year:'numeric'}).format(now));
     const term=suggestionContext?.term||(month<7?'Semester 2':'Semester 1'),year=Number(suggestionContext?.year||(month<7?currentYear:currentYear+1));
     const pathway=doubleMajorPathway({transcript:dpa.transcript,planners:pool,primaryId:primary?.id,secondaryId:secondary?.id,term,year});
-    const lines=['Suggested double-major pair: '+pathway.primary.name+' + '+pathway.secondary.name+'.','Primary planner is the highest completed-unit match. The second major is selected from completed elective/other earned units matching a different major. Core pools are not compared.'];
+    const lines=['Suggested double-major pair: '+pathway.primary.name+' + '+pathway.secondary.name+'.','Both planners use intake '+pathway.intake.label+'. The second major is selected from completed elective/other earned units matching a different major in the same intake. Core pools are not compared.'];
     for(const m of pathway.coverage.majors){
       lines.push('\n'+m.name+': '+m.matched+' / '+m.required+' major units earned; '+m.remaining+' remaining. '+m.source+'.');
       if(m.remaining)lines.push('Remaining major choices (need '+m.remaining+'): '+m.units.filter(u=>!u.completed).map(u=>u.code+' '+u.name).join('; '));

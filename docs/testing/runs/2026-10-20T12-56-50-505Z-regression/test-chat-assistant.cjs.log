@@ -1,0 +1,11 @@
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+400 !== 200
+
+    at B:\electronapp\sp\scripts\test-chat-assistant.cjs:41:10 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 400,
+  expected: 200,
+  operator: 'strictEqual'
+}

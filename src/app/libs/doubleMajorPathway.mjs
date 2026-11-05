@@ -1,6 +1,7 @@
 import {rankPlannerMatches} from './plannerMatching.mjs';
 import {majorUnits,checkDoubleMajor,normalizeCode,isMajorCategory} from './doubleMajorChecker.mjs';
 import {semesterPlan} from './academicPlanning.mjs';
+import {plannerIntake,samePlannerIntake} from './plannerIntake.mjs';
 
 const signature=p=>majorUnits(p).map(u=>normalizeCode(u.UnitCode)).sort().join(',');
 const category=u=>u.unitType?.Name?.trim()||'Uncategorised';
@@ -21,7 +22,7 @@ export function rankedSecondMajors(transcript,planners,primary){
   const electiveCodes=new Set(primary.units.filter(u=>/elective/i.test(category(u))).map(u=>normalizeCode(u.UnitCode)));
   const primaryRequired=new Set(primary.units.filter(u=>isMajorCategory(category(u))||/core/i.test(category(u))).map(u=>normalizeCode(u.UnitCode)));
   const seen=new Set();
-  return planners.filter(p=>majorUnits(p).length&&majorIdentity(p)!==majorIdentity(primary)&&signature(p)!==signature(primary)).map(planner=>{
+  return planners.filter(p=>samePlannerIntake(primary,p)&&majorUnits(p).length&&majorIdentity(p)!==majorIdentity(primary)&&signature(p)!==signature(primary)).map(planner=>{
     const completed=majorUnits(planner).filter(u=>passed(u,transcript.completed));
     return {planner,secondaryMatched:completed.filter(u=>!primaryRequired.has(normalizeCode(u.UnitCode))).length,electiveMatched:completed.filter(u=>electiveCodes.has(normalizeCode(u.UnitCode))).length};
   }).sort((a,b)=>b.secondaryMatched-a.secondaryMatched||b.electiveMatched-a.electiveMatched).filter(r=>{const key=majorIdentity(r.planner);if(seen.has(key))return false;seen.add(key);return true;});
@@ -36,10 +37,17 @@ export function doubleMajorPathway({transcript,planners,primaryId,secondaryId,te
   if(!ranking.some(r=>r.matched>0))throw new Error('No completed DPA units match the saved major planners. Check the DPA and available records.');
   const primary=primaryId==null?ranking[0].planner:planners.find(p=>String(p.id)===String(primaryId));
   if(!primary)throw new Error('The selected primary planner is no longer available.');
+  if(!majorUnits(primary).length)throw new Error('The selected primary planner has no recorded major requirements.');
+  const intake=plannerIntake(primary);
+  if(!intake)throw new Error('The intake of '+primary.name+' cannot be identified. Choose a planner with a recorded year and intake, such as 24-Sep-CSDS.');
   const secondRanking=rankedSecondMajors(transcript,planners,primary);
   const secondary=secondaryId==null?secondRanking[0]?.planner:planners.find(p=>String(p.id)===String(secondaryId));
-  if(!primary||!secondary)throw new Error('A selected planner is no longer available. Choose it again.');
+  if(!secondary){
+    if(secondaryId!=null)throw new Error('A selected planner is no longer available. Choose it again.');
+    throw new Error('No different-major planner with different major requirements is available for intake '+intake.label+'. Add a matching-intake planner or choose another primary planner.');
+  }
   if(majorIdentity(primary)===majorIdentity(secondary)||signature(primary)===signature(secondary))throw new Error('These planners represent the same major or identical major requirements. Choose a different major.');
+  if(!samePlannerIntake(primary,secondary))throw new Error('Both major planners must use the same intake. '+primary.name+' uses '+intake.label+'; choose a different major from that intake.');
   const pair=[primary,secondary].map(p=>({...p,plannerTemplate:p.plannerTemplate?{...p.plannerTemplate,requirements:(p.plannerTemplate.requirements||[]).filter(r=>!isMajorCategory(r.unitType?.Name)||(Number.isInteger(r.requiredCount)&&r.requiredCount>0&&r.requiredCount<=majorUnits(p).length))}:null}));
   const coverage=checkDoubleMajor(transcript,pair);
   // Primary course requirements + both major pools; secondary core/elective categories are not additional degrees.
@@ -86,9 +94,9 @@ export function doubleMajorPathway({transcript,planners,primaryId,secondaryId,te
   // Empty attempts at the end describe a stopped calculation, not planned study semesters.
   while(semesters.length&&!semesters.at(-1).selected.length)semesters.pop();
   const outstanding=lastCandidates.filter(c=>state.majors.some(m=>m.remaining>0&&m.units.some(u=>u.code===c.code&&!passed(pool.find(v=>normalizeCode(v.UnitCode)===u.code),simulated.completed)))||state.categories.some(g=>g.remaining>0&&g.units.some(u=>normalizeCode(u.UnitCode)===c.code&&!passed(u,simulated.completed))));
-  const choices=rankPlannerMatches(planners,transcript.completed).filter(r=>majorUnits(r.planner).length).map(r=>({id:r.planner.id,name:r.planner.name,majorMatched:majorUnits(r.planner).filter(u=>passed(u,original)).length,matched:r.matched}));
-  return {choices,secondaryRanking:secondRanking.map(r=>({id:r.planner.id,name:r.planner.name,matched:r.secondaryMatched,electiveMatched:r.electiveMatched})),electiveMajorMatches:majorUnits(secondary).filter(u=>passed(u,original)&&primary.units.some(v=>/elective/i.test(category(v))&&normalizeCode(v.UnitCode)===normalizeCode(u.UnitCode))).map(u=>({code:normalizeCode(u.UnitCode),name:u.Name})),ranking:ranking.map(r=>({id:r.planner.id,name:r.planner.name,majorMatched:r.majorMatched,majorTotal:majorUnits(r.planner).length,matched:r.matched,credits:r.credits})),primary:{id:primary.id,name:primary.name},secondary:{id:secondary.id,name:secondary.name},coverage,transcript,semesters,remaining:{majors:state.majors,categories:state.categories.map(({units,...rest})=>rest)},outstanding,completeDraft:done(),warnings:[
-    'Primary planner uses the same completed-code overlap as Unit Suggestions. The second major ranks completed secondary-major units outside the primary core/major pool, including electives in the primary planner. Intake copies of the same major are grouped; ties preserve catalogue order.',
+  const choices=rankPlannerMatches(planners,transcript.completed).filter(r=>majorUnits(r.planner).length&&plannerIntake(r.planner)).map(r=>({id:r.planner.id,name:r.planner.name,intake:plannerIntake(r.planner),majorIdentity:majorIdentity(r.planner),majorSignature:signature(r.planner),majorMatched:majorUnits(r.planner).filter(u=>passed(u,original)).length,matched:r.matched}));
+  return {intake,choices,secondaryRanking:secondRanking.map(r=>({id:r.planner.id,name:r.planner.name,matched:r.secondaryMatched,electiveMatched:r.electiveMatched})),electiveMajorMatches:majorUnits(secondary).filter(u=>passed(u,original)&&primary.units.some(v=>/elective/i.test(category(v))&&normalizeCode(v.UnitCode)===normalizeCode(u.UnitCode))).map(u=>({code:normalizeCode(u.UnitCode),name:u.Name})),ranking:ranking.map(r=>({id:r.planner.id,name:r.planner.name,majorMatched:r.majorMatched,majorTotal:majorUnits(r.planner).length,matched:r.matched,credits:r.credits})),primary:{id:primary.id,name:primary.name},secondary:{id:secondary.id,name:secondary.name},coverage,transcript,semesters,remaining:{majors:state.majors,categories:state.categories.map(({units,...rest})=>rest)},outstanding,completeDraft:done(),warnings:[
+    'Primary planner uses the same completed-code overlap as Unit Suggestions. Both majors use the same year and intake ('+intake.label+'). The second major ranks completed secondary-major units outside the primary core/major pool, including electives in the primary planner. Different intake copies of the same major are grouped; ties preserve catalogue order.',
     'Future semesters assume every drafted unit is passed with its recorded credit. Your actual DPA is unchanged. Up to four units and 50 CP are scheduled per semester; fewer are shown when checks prevent a full load.',
     'Only recurring semester offerings are recorded; availability for a particular year and timetable clashes are not verified. Project A must be passed in an earlier semester than Project B. Co-requisites are conservatively required to be earned first.',
     'This draft schedules only the two major requirements. It does not compare or certify core, WIL or overall degree completion. It does not establish university double-major compatibility, overlap limits, exemption applicability or graduation approval.',

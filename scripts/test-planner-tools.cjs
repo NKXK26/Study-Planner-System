@@ -7,6 +7,7 @@ const {spawn,spawnSync} = require('node:child_process');
 
 (async () => {
   const {inferPlannerTool,validateToolCall} = await import('../src/app/libs/plannerToolDefinitions.mjs');
+  const {samePlannerIntake} = await import('../src/app/libs/plannerIntake.mjs');
   const {extractPlannerCodes,extractPlannerCategories} = await import('../src/app/libs/plannerImport.mjs');
   assert.deepEqual(extractPlannerCategories('COS10001\tCore\nCOS20001\tMajor\nCOS30001\tCore Elective',[{ID:1,Name:'Core'},{ID:2,Name:'Major'},{ID:3,Name:'Elective'}]),{COS10001:1,COS20001:2});
   const {parsePlanningPrompt}=await import('../src/app/libs/planningPrompt.mjs');
@@ -40,7 +41,9 @@ const {spawn,spawnSync} = require('node:child_process');
   await assert.rejects(identity(new Request('http://localhost',{headers:{authorization:'Bearer forged','x-session-email':'test@example.test'}})),e=>e.status===401);
 
   // Only a disposable database copy is mutated. The source database is never opened for writes.
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(),'planner-tool-checks-'));
+  const tempRoot = process.env.FYP_TEST_TEMP_ROOT || os.tmpdir();
+  fs.mkdirSync(tempRoot,{recursive:true});
+  const temp = fs.mkdtempSync(path.join(tempRoot,'planner-tool-checks-'));
   const database = path.join(temp,'app.db');
   fs.copyFileSync('prisma/app.db',database);
   // Align only this disposable copy with the current schema. Never migrate the source DB.
@@ -177,6 +180,20 @@ const {spawn,spawnSync} = require('node:child_process');
     assert.equal((await call('save_planner',{name:'unreviewed',units:[]})).status,400);
 
     const savedArgs={name:'Tool regression planner',units:[{unitId:catalog.units[0].ID,unitTypeId:catalog.types[0].ID}],plannerTemplateId:null,confirmed:true,requestId:'planner-test-save-1'};
+    // Exercise the same persistence endpoint used by the visual Planner Maker.
+    const placement={unitId:catalog.units[0].ID,unitTypeId:catalog.types[0].ID,plannedYear:2027,plannedSemester:'Semester 2',plannedDates:'September 2027',sortOrder:3};
+    const made=await request('/api/study-planner',{name:'Maker persistence regression',units:[placement],plannerTemplateId:null});
+    assert.equal(made.status,201,made.message);
+    const reopened=await request('/api/study-planner?id='+made.data.id);
+    assert.equal(reopened.status,200,reopened.message);
+    const madePlanner=Array.isArray(reopened.data)?reopened.data.find(p=>p.id===made.data.id):reopened.data;
+    const savedPlacement=madePlanner.units.find(u=>u.ID===placement.unitId);
+    for(const field of ['plannedYear','plannedSemester','plannedDates','sortOrder'])assert.equal(savedPlacement[field],placement[field],'Reopened Maker must preserve '+field);
+    const managed=await request('/api/study-planner/'+made.data.id);
+    assert.equal(managed.status,200);
+    for(const field of ['plannedYear','plannedSemester','plannedDates','sortOrder'])assert.equal(managed.data.units[0][field],placement[field],'Management must preserve '+field);
+    assert.equal((await request('/api/study-planner',{name:'Maker empty regression',units:[]})).status,400);
+    assert.equal((await request('/api/study-planner',{name:'Maker persistence regression',units:[placement]})).status,400);
     const saved=await call('save_planner',savedArgs);assert.equal(saved.status,200,saved.message);
     assert.deepEqual((await call('save_planner',savedArgs)).data,saved.data,'Retried saves must return the same record');
     assert.equal((await call('save_planner',{...savedArgs,name:'changed payload'})).status,400);
@@ -265,6 +282,15 @@ const {spawn,spawnSync} = require('node:child_process');
           let majorResult=await call('check_double_major',{},{document:{name:'synthetic.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')}});
           assert.equal(majorResult.status,200,majorResult.message);assert(majorResult.data.coverage);assert(majorResult.data.secondary);assert(!/Confirm your actual primary/.test(majorResult.answer));assert(majorResult.data.options||majorResult.data.choices);
           const matchingPage=await request('/api/double-major-pathway',{document:{name:'synthetic.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')},term:majorResult.data.term,year:majorResult.data.year});assert.equal(matchingPage.status,200,matchingPage.message);assert.deepEqual(majorResult.data.primary,matchingPage.data.primary);assert.deepEqual(majorResult.data.secondary,matchingPage.data.secondary);assert.deepEqual(majorResult.data.coverage,matchingPage.data.coverage);assert.deepEqual(majorResult.data.pathway.semesters,matchingPage.data.semesters,'Chat and checker must share the same pathway');
+          assert(samePlannerIntake(majorResult.data.primary,majorResult.data.secondary),'Chat must pair the same intake');
+          assert(samePlannerIntake(matchingPage.data.primary,matchingPage.data.secondary),'Page must pair the same intake');
+          const wrongIntake=matchingPage.data.choices.find(p=>!samePlannerIntake(p,matchingPage.data.primary)&&p.majorIdentity!==matchingPage.data.choices.find(c=>c.id===matchingPage.data.primary.id).majorIdentity);
+          if(wrongIntake){
+            const mismatched=await request('/api/double-major-pathway',{document:{name:'synthetic.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')},primaryId:matchingPage.data.primary.id,secondaryId:wrongIntake.id,term:'Semester 1',year:2027});
+            assert.equal(mismatched.status,400);assert.match(mismatched.message,/same intake/);
+            const mismatchedChat=await call('check_double_major',{primaryPlanner:String(matchingPage.data.primary.id),secondaryPlanner:String(wrongIntake.id)},{document:{name:'synthetic.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')}});
+            assert.equal(mismatchedChat.status,400);assert.match(mismatchedChat.message,/same intake/);
+          }
           if(majorResult.data.choices){majorResult=await call('check_double_major',{primaryPlanner:String(majorResult.data.choices[0].id)},{document:{name:'synthetic.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')},planningContext:{dpaConfirmed:true,corrections:[]}});assert.equal(majorResult.status,200,majorResult.message);assert(majorResult.data.coverage);assert(majorResult.data.pathway);}
           const corrected=await call('check_double_major',{primaryPlanner:String(second.id)},{document:{name:'synthetic.xlsx',rows,text:rows.map(r=>r.join('\t')).join('\n')},planningContext:{dpaConfirmed:true,corrections:[]}});
           assert.equal(corrected.status,200,corrected.message);assert.equal(corrected.data.primary.id,second.id,'A student can confirm a programme beyond the highest overlap matches');
@@ -282,6 +308,21 @@ const {spawn,spawnSync} = require('node:child_process');
     const legacyGraduation=await request('/api/graduation-eligibility',{document:graduationDocument,plannerId:graduationPlanner.id});assert.equal(legacyGraduation.status,200,legacyGraduation.message);assert.equal(legacyGraduation.data.eligible,true);
     const legacyList=await request('/api/study-planner');assert.equal(legacyList.status,200);assert(legacyList.data.length);
     const legacyChat=await request('/api/planner-assistant',{question:'show planner ID '+a.id,enableTools:true,planningOnly:true});assert.equal(legacyChat.toolResult.data.id,a.id);assert.match(legacyChat.answer,/recorded.*units/);
+    const {upgradePlannerSchema}=require('../electron/planner-schema');
+    const upgradeDb=new LegacyClient({datasources:{db:{url:'file:'+database.replaceAll('\\','/')}}});
+    try {
+      const before=await upgradeDb.$queryRawUnsafe('SELECT id, studyPlannerId, unitId, unitTypeId FROM "StudyPlannerUnit" ORDER BY id');
+      let backups=0;
+      assert.equal(await upgradePlannerSchema(upgradeDb,async()=>{backups++;}),true);
+      assert.equal(backups,1,'Back up before altering an older database');
+      const after=await upgradeDb.$queryRawUnsafe('SELECT id, studyPlannerId, unitId, unitTypeId FROM "StudyPlannerUnit" ORDER BY id');
+      assert.deepEqual(after,before,'Desktop schema upgrade retains all existing planner rows');
+      assert.equal(await upgradePlannerSchema(upgradeDb,async()=>{backups++;}),false);
+      assert.equal(backups,1,'Repeated startup does not repeat the upgrade');
+      const upgraded=await upgradeDb.studyPlannerUnit.findFirst();
+      assert.equal(upgraded.plannedYear,null);
+      assert.equal(upgraded.sortOrder,0);
+    } finally {await upgradeDb.$disconnect();}
     console.log('Planner tool validation, real API reuse, selection, authentication, reviewed saves, retries, stale edits, legacy database reads and model-call checks passed.');
   }catch(e){console.error('Standalone server exit:',server.exitCode,'signal:',server.signalCode,'output:',output.slice(-5000));throw e;}finally{server.kill();await new Promise(resolve=>ai.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -21,7 +21,7 @@ const assert=require('node:assert/strict');
  const graduated={...transcript,completed:[...transcript.completed,{code:'DSA10003',earned:12.5}]};const complete=doubleMajorPathway({transcript:graduated,planners});assert(complete.coverage.covered);assert.equal(complete.semesters.length,0);
  assert.throws(()=>doubleMajorPathway({transcript,planners,primaryId:24,secondaryId:23}),/same major/);
  const unknown=doubleMajorPathway({transcript:graduated,planners:[{...primary,plannerTemplate:null},ds]});assert.equal(unknown.completeDraft,false,'Missing major counts must stay provisional');
- const projectCore=u('COS40005','Core'),projectSecond={id:30,name:'DS',units:[u('COS40006','Data Science Major')],plannerTemplate:{requirements:[{unitType:{Name:'Data Science Major'},requiredCount:1}]}};
+ const projectCore=u('COS40005','Core'),projectSecond={id:30,name:'24-Sep-CSDS',units:[u('COS40006','Data Science Major')],plannerTemplate:{requirements:[{unitType:{Name:'Data Science Major'},requiredCount:1}]}};
  const projectPrimary={...primary,units:[...primary.units,projectCore]};const withProject={...transcript,completed:[...transcript.completed,{code:'COS40005',earned:12.5}]};const project=doubleMajorPathway({transcript:withProject,planners:[projectPrimary,projectSecond],term:'Semester 1',year:2027});assert(project.semesters.flatMap(s=>s.selected).some(u=>u.code==='COS40006'),'Completed core Project A can meet prerequisite without adding core to major requirements');
  console.log('Named major categories, primary code overlap, elective-to-major secondary ranking, distinct major grouping, N/EXM, major-only scheduling and graduated DPA checks passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

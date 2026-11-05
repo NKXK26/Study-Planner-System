@@ -48,7 +48,8 @@ export async function GET(req) {
             orderBy: { createdAt: 'desc' },
             include: {
                 studyPlannerUnits: {
-                    include: {
+                    select: {
+                        ...unitSelect,
                         unit: {
                             include: {
                                 UnitTermOffered: { select: { TermType: true } },
@@ -99,7 +100,11 @@ export async function GET(req) {
             Availability: j.unit.Availability,
             unitTypeId: j.unitTypeId,
             unitType: j.unitType,
-            offeredTerms: j.unit.UnitTermOffered.map(term => term.TermType),
+            plannedYear: j.plannedYear,
+                plannedSemester: j.plannedSemester,
+                plannedDates: j.plannedDates,
+                sortOrder: j.sortOrder,
+                offeredTerms: j.unit.UnitTermOffered.map(term => term.TermType),
             requisites: j.unit.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit.map(requisite => ({
                 relationship: requisite.UnitRelationship,
                 logicalOperator: requisite.LogicalOperators,
@@ -346,6 +351,10 @@ export async function POST(req) {
                 Availability: j.unit.Availability,
                 unitTypeId: j.unitTypeId,
                 unitType: j.unitType,
+                plannedYear: j.plannedYear,
+                plannedSemester: j.plannedSemester,
+                plannedDates: j.plannedDates,
+                sortOrder: j.sortOrder,
                 offeredTerms: j.unit.UnitTermOffered.map(term => term.TermType),
                 requisites: j.unit.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit.map(requisite => ({
                     relationship: requisite.UnitRelationship,

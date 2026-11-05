@@ -1,0 +1,525 @@
+{
+  "executedAt": "2026-11-05T09:33:51.951Z",
+  "commit": "3ee974329802cdd3c5593194c6ce145319651bcd",
+  "workingTree": "M docs/double-major-pathway.md\n M docs/graduation-module-test-plan.md\n M package-lock.json\n M package.json\n M scripts/test-chat-assistant.cjs\n M scripts/test-double-major-electives.cjs\n M scripts/test-double-major-pathway.cjs\n M scripts/test-double-major.cjs\n M scripts/test-mixed-requisite-expressions.cjs\n M scripts/test-planner-tools.cjs\n M src/app/api/planner-assistant/route.js\n M src/app/libs/doubleMajorChecker.mjs\n M src/app/libs/doubleMajorPathway.mjs\n M src/app/libs/plannerKnowledge.mjs\n M src/app/libs/plannerToolDefinitions.mjs\n M src/app/libs/plannerTools.server.js\n M src/components/DoubleMajorPanel.jsx\n?? docs/testing/\n?? scripts/test-double-major-intakes.cjs\n?? scripts/test-new-modules.cjs\n?? scripts/testing/\n?? src/app/libs/plannerIntake.mjs",
+  "node": "v22.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "mode": "Offline unit and regression suites; external HTTP checks disabled",
+  "passed": 27,
+  "failed": 0,
+  "results": [
+    {
+      "suite": "test-academic-planning.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 25,
+        "passed": 25,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 20,
+          "throws": 2,
+          "match": 1,
+          "deepEqual": 2
+        }
+      },
+      "seconds": 0.3,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-ai-status.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 32,
+        "passed": 32,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 23,
+          "deepEqual": 4,
+          "ok": 1,
+          "rejects": 2,
+          "throws": 2
+        }
+      },
+      "seconds": 0.27,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-answerability.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 35,
+        "passed": 35,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 31,
+          "assert": 2,
+          "match": 2
+        }
+      },
+      "seconds": 0.19,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-auto-suggestions.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 26,
+        "passed": 26,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 18,
+          "assert": 5,
+          "notEqual": 1,
+          "match": 2
+        }
+      },
+      "seconds": 0.19,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-assistant.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 36,
+        "passed": 36,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 17,
+          "assert": 1,
+          "throws": 2,
+          "deepEqual": 1,
+          "match": 13,
+          "doesNotMatch": 2
+        }
+      },
+      "seconds": 1.89,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-follow-ups.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 41,
+        "passed": 41,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "deepEqual": 9,
+          "equal": 3,
+          "assert": 21,
+          "notEqual": 8
+        }
+      },
+      "seconds": 0.2,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-planner-hydration.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 20,
+        "passed": 20,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "assert": 17,
+          "equal": 1,
+          "deepEqual": 2
+        }
+      },
+      "seconds": 0.11,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-planner-pdf.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 22,
+        "passed": 22,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 7,
+          "deepEqual": 1,
+          "assert": 14
+        }
+      },
+      "seconds": 0.88,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-chat-session.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 9,
+        "passed": 9,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "deepEqual": 1,
+          "equal": 5,
+          "throws": 2,
+          "match": 1
+        }
+      },
+      "seconds": 0.13,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-conversational-planner.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 48,
+        "passed": 48,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 31,
+          "throws": 1,
+          "deepEqual": 4,
+          "assert": 12
+        }
+      },
+      "seconds": 0.19,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-course-completion.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 23,
+        "passed": 23,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "deepEqual": 2,
+          "equal": 10,
+          "assert": 10,
+          "match": 1
+        }
+      },
+      "seconds": 0.22,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-double-major-electives.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 17,
+        "passed": 17,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 11,
+          "deepEqual": 2,
+          "assert": 3,
+          "throws": 1
+        }
+      },
+      "seconds": 0.17,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-double-major-intakes.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 34,
+        "passed": 34,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 23,
+          "deepEqual": 6,
+          "throws": 5
+        }
+      },
+      "seconds": 0.2,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-double-major-pathway.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 26,
+        "passed": 26,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "deepEqual": 1,
+          "equal": 16,
+          "assert": 4,
+          "match": 1,
+          "throws": 4
+        }
+      },
+      "seconds": 0.19,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-double-major.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 25,
+        "passed": 25,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 19,
+          "throws": 5,
+          "deepEqual": 1
+        }
+      },
+      "seconds": 0.41,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-elective-completion.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 12,
+        "passed": 12,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 8,
+          "assert": 2,
+          "deepEqual": 1,
+          "match": 1
+        }
+      },
+      "seconds": 0.18,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-graduation-eligibility.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 23,
+        "passed": 23,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 20,
+          "ok": 2,
+          "throws": 1
+        }
+      },
+      "seconds": 0.14,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-mixed-requisite-expressions.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 10,
+        "passed": 10,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 8,
+          "match": 1,
+          "assert": 1
+        }
+      },
+      "seconds": 0.13,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-natural-planner-requests.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 49,
+        "passed": 49,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "notEqual": 12,
+          "equal": 26,
+          "deepEqual": 3,
+          "throws": 5,
+          "assert": 3
+        }
+      },
+      "seconds": 0.16,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-context-continuity.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 21,
+        "passed": 21,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 14,
+          "deepEqual": 6,
+          "assert": 1
+        }
+      },
+      "seconds": 0.14,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-intent.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 69,
+        "passed": 69,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "assert": 24,
+          "equal": 32,
+          "deepEqual": 9,
+          "throws": 4
+        }
+      },
+      "seconds": 0.2,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-knowledge.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 5,
+        "passed": 5,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 4,
+          "assert": 1
+        }
+      },
+      "seconds": 0.12,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-matching.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 11,
+        "passed": 11,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "deepEqual": 4,
+          "equal": 7
+        }
+      },
+      "seconds": 0.17,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-planner-record-questions.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 97,
+        "passed": 97,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 66,
+          "match": 4,
+          "assert": 10,
+          "throws": 3,
+          "deepEqual": 14
+        }
+      },
+      "seconds": 0.18,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-study-plan-workflow.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 45,
+        "passed": 45,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "assert": 6,
+          "equal": 35,
+          "throws": 3,
+          "deepEqual": 1
+        }
+      },
+      "seconds": 0.34,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-unit-replacement.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 9,
+        "passed": 9,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 8,
+          "deepEqual": 1
+        }
+      },
+      "seconds": 0.25,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "suite": "test-uploaded-planner.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 35,
+        "passed": 35,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "equal": 23,
+          "rejects": 1,
+          "deepEqual": 1,
+          "throws": 1,
+          "ok": 9
+        }
+      },
+      "seconds": 2.98,
+      "exitCode": 0,
+      "signal": null
+    }
+  ],
+  "assertions": {
+    "executed": 805,
+    "passed": 805,
+    "failed": 0,
+    "pending": 0
+  }
+}

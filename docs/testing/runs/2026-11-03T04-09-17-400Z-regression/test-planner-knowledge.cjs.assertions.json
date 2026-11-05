@@ -1,0 +1,10 @@
+{
+  "executed": 5,
+  "passed": 5,
+  "failed": 0,
+  "pending": 0,
+  "byMethod": {
+    "equal": 4,
+    "assert": 1
+  }
+}

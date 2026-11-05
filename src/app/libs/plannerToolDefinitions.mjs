@@ -31,7 +31,7 @@ export const plannerReadTools = [
   schema('explain_next_semester','Explain previous semester suggestions or check a specific unit against the current DPA and planner. Rechecks actual rules rather than repeating the draft.',{code:{type:'string',description:'Optional unit code explicitly mentioned by the student.'},unitQuery:{type:'string',description:'Unit name or partial name quoted from the student; omit for general explanations.'}}),
   schema('list_templates','Read configured template category requirements.'),
   schema('replacement_units','Find title-based replacement candidates, not approved equivalents.',{code:{type:'string'}},['code']),
-  schema('check_double_major','Automatically find the two closest different majors from a DPA, count primary electives against secondary-major units and draft future semesters. Primary and secondary planner overrides are optional.',{primaryPlanner:planner,secondaryPlanner:planner}),
+  schema('check_double_major','Find two different majors from a DPA within the same intake year and period, count primary electives against secondary-major units and draft future semesters. Primary and secondary planner overrides are optional and must share the intake.',{primaryPlanner:planner,secondaryPlanner:planner}),
 ];
 export const mutationTools = ['save_planner','save_template','update_template','update_planner'];
 export function inferPlannerTool(question,workflow=null) {

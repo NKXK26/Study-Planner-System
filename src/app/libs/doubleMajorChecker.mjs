@@ -1,5 +1,8 @@
 export const normalizeCode = value => String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '');
 
+import {plannerIntake,samePlannerIntake} from './plannerIntake.mjs';
+export {samePlannerIntake} from './plannerIntake.mjs';
+
 // Workbook cells are data only. Never evaluate formulas or infer completion from filenames.
 export function parseTranscript(rows) {
   const headerIndex = rows.findIndex(row => ['course', 'status', 'earned'].every(key => row.some(cell => String(cell).trim().toLowerCase() === key)));
@@ -53,8 +56,9 @@ export function assessDpaDoubleMajor(transcript, planners, primaryId) {
   const ties = ranking.filter(r => r.matched === top.matched && r.credits === top.credits);
   const primary = primaryId == null ? top : ties.find(r => String(r.planner.id) === String(primaryId));
   if (!primary) throw new Error('Choose one of the highest-matching planners.');
+  if (!plannerIntake(primary.planner)) throw new Error('The primary planner intake cannot be identified. Choose a planner with a recorded year and intake.');
   const signature = p => majorUnits(p).map(u => normalizeCode(u.UnitCode)).sort().join(',');
-  const options = ranking.filter(r => r.planner.id !== primary.planner.id && signature(r.planner) !== signature(primary.planner)).map(r => {
+  const options = ranking.filter(r => samePlannerIntake(primary.planner,r.planner) && r.planner.id !== primary.planner.id && signature(r.planner) !== signature(primary.planner)).map(r => {
     const result = checkDoubleMajor(transcript, [primary.planner, r.planner]);
     return { ...result, additional: result.majors[1], missing: [...new Map(result.majors.flatMap(m => m.remaining ? m.units.filter(u => !u.completed) : []).map(u => [u.code, u])).values()] };
   }).sort((a, b) => Number(b.covered) - Number(a.covered) || a.additional.remaining - b.additional.remaining || b.additional.matched - a.additional.matched || a.additional.name.localeCompare(b.additional.name));

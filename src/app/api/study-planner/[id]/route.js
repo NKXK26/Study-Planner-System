@@ -32,7 +32,8 @@ export async function GET(req, { params }) {
             where: { id },
             include: {
                 studyPlannerUnits: {
-                    include: {
+                    select: {
+                        ...unitSelect,
                         unit: {
                             include: {
                                 UnitTermOffered: { select: { TermType: true } },
@@ -84,6 +85,10 @@ export async function GET(req, { params }) {
                 Availability: j.unit.Availability,
             unitTypeId: j.unitTypeId,
                 unitType: j.unitType,
+                plannedYear: j.plannedYear,
+                plannedSemester: j.plannedSemester,
+                plannedDates: j.plannedDates,
+                sortOrder: j.sortOrder,
                 offeredTerms: j.unit.UnitTermOffered.map(term => term.TermType),
                 requisites: j.unit.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit.map(requisite => ({ relationship: requisite.UnitRelationship, logicalOperator: requisite.LogicalOperators, minCredits: requisite.MinCP, unit: requisite.Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit })),
             })),
