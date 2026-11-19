@@ -1,3 +1,4 @@
+import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import {planUploadedDocument} from './uploadedPlannerPlan.server.mjs';
 import {readPlannerDocument} from './uploadedPlanner.server.mjs';
 import {normalizeRecordReference,resolvePlannerReference,formatPlannerUnits,plannerReferences,plannerListRequest} from './plannerRecordRequests.mjs';
@@ -25,6 +26,10 @@ import { checkDoubleMajor, assessDpaDoubleMajor, rankDpaPlanners, majorUnits } f
 import { replacementCandidates } from './unitReplacement.mjs';
 
 export async function toolIdentity(req, action='read') {
+  if (req.headers.get('x-temporary-student') === 'true') {
+    if (action !== 'read') throw Object.assign(new Error('Student access is read only.'),{status:403});
+    if (process.env.NEXT_PUBLIC_MODE === 'DEV') return {key:'student',canWrite:false,canUpdate:false};
+  }
   const dev=req.headers.get('x-dev-override')==='true'&&process.env.NEXT_PUBLIC_MODE==='DEV';
   if(dev)return {key:'dev',canWrite:true,canUpdate:true};
   const token=req.headers.get('authorization')?.replace(/^Bearer\s+/i,'');
@@ -33,7 +38,7 @@ export async function toolIdentity(req, action='read') {
   const user=await SecureSessionManager.authenticateUser(req);
   if(!user)throw Object.assign(new Error('Please sign in again.'),{status:401});
   const profile=await prisma.userProfile.findUnique({where:{ID:user.profileId},include:{UserRoles:{include:{Role:{include:{RolePermissions:{include:{Permission:true}}}}}}}});
-  const permits = wanted => profile?.IsActive && profile.UserRoles.some(ur=>ur.Role?.IsActive && (!ur.ExpiresAt || new Date(ur.ExpiresAt)>new Date()) && (ur.Role.Name.toLowerCase()==='superadmin'||ur.Role.RolePermissions.some(rp=>rp.Granted&&rp.Permission.IsActive&&['planner','course','courses','study_plans','*'].includes(rp.Permission.Resource)&&[wanted,'manage','*'].includes(rp.Permission.Action))));
+  const permits = wanted => profile?.IsActive && (user.adminLoginSession || profile.UserRoles.some(ur=>ur.Role?.IsActive && (!ur.ExpiresAt || new Date(ur.ExpiresAt)>new Date()) && (ur.Role.Name.toLowerCase()==='superadmin'||ur.Role.RolePermissions.some(rp=>rp.Granted&&rp.Permission.IsActive&&['planner','course','courses','study_plans','*'].includes(rp.Permission.Resource)&&[wanted,'manage','*'].includes(rp.Permission.Action)))));
   if(!permits(action))throw Object.assign(new Error(`Your account does not have permission to ${action} planners.`),{status:403});
   return {key:String(user.id),canWrite:permits('create'),canUpdate:permits('update')};
 }
@@ -48,6 +53,10 @@ async function existing(handler,req,path,method='GET',body,params) {
 }
 export async function plannerCatalog(req) {
   const identity=await toolIdentity(req);
+  if (process.env.PLANNER_CATALOGUE_URL) {
+    const planners=await publishedPlanningPool(), units=planners.flatMap(p=>p.units);
+    return {planners,units,templates:planners.map(p=>p.plannerTemplate),types:units.map(u=>u.unitType),permissions:{create:false,update:false}};
+  }
   const [planners,templates,units,types]=await Promise.all([
     existing(readExisting,req,'/api/study-planner'),existing(readTemplates,req,'/api/planner-templates'),
     prisma.unit.findMany({select:{ID:true,UnitCode:true,Name:true,CreditPoints:true,Availability:true},orderBy:{UnitCode:'asc'}}),
@@ -64,7 +73,10 @@ const receipts=new Map(),locks=new Set();
 export async function runPlannerTool(req,input,{allowWrites=false,document=null,plannerDocument=null,planningContext=null,suggestionContext=null,question=''}={}) {
   const call=validateToolCall(input,allowWrites),a=call.arguments;
   const write=mutationTools.includes(call.name);
+  if (write && process.env.PLANNER_CATALOGUE_URL) throw Object.assign(new Error('Use the central publishing console to manage official planners.'),{status:403});
   const identity=await toolIdentity(req,write?(call.name.startsWith('update')?'update':'create'):'read');
+  const official=process.env.PLANNER_CATALOGUE_URL ? await publishedPlanningPool() : null;
+  const publishedUnits=official?.flatMap(p=>p.units);
   const result=(answer,workflow,data=null)=>({answer,workflow,data,tool:call.name,...(['inspect_planner','list_planners','list_templates','describe_workflow','compare_planners'].includes(call.name)?{chatOnly:true}:{})});
   if(call.name==='explain_dpa') {
     if(!document)return result('Upload your DPA PDF or XLSX beside the chat input to explain your results.','dpa');
@@ -77,7 +89,7 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
   }
   if(call.name==='inspect_unit') {
     if((document||plannerDocument)&&/can i take|eligible|eligibility|what about/i.test(question))return runPlannerTool(req,{name:'explain_next_semester',arguments:a},{document,plannerDocument,planningContext,suggestionContext,question});
-    const records=await prisma.unit.findMany({include:unitPlanningInclude,orderBy:{UnitCode:'asc'}});
+    const records=publishedUnits ?? await prisma.unit.findMany({include:unitPlanningInclude,orderBy:{UnitCode:'asc'}});
     const resolved=resolveUnitReference(records,{question,unitQuery:a.unitQuery,code:a.code,lastCode:suggestionContext?.unitCode});
     if(resolved.status!=='matched')return result(resolved.status==='ambiguous'?'Which recorded unit do you mean?':resolved.status==='version-review'?'Several versions use that code. Confirm the applicable unit version in your course planner.':'Which unit should I check? Tell me its code or a more specific name.','suggestions',{needsSelection:true,unitChoices:resolved.choices,unitChoiceTool:'inspect_unit'});
     const unit=resolved.unit;const rules=unit.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit||[];
@@ -95,7 +107,7 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     if(wantsUnit){
       resolved=resolveUnitReference(draft.data.unitReferences,{question,unitQuery:a.unitQuery,code:a.code,lastCode:suggestionContext?.unitCode});
       if(resolved.status==='missing'){
-        const pool=await prisma.unit.findMany({select:{UnitCode:true,Name:true,CreditPoints:true},orderBy:{UnitCode:'asc'}});
+        const pool=publishedUnits ?? await prisma.unit.findMany({select:{UnitCode:true,Name:true,CreditPoints:true},orderBy:{UnitCode:'asc'}});
         resolved=resolveUnitReference(pool,{question,unitQuery:a.unitQuery,code:a.code,lastCode:suggestionContext?.unitCode});
       }
       if(resolved.status!=='matched')return result(resolved.status==='ambiguous'?'Which of these units did you mean?':resolved.status==='version-review'?'Several unit versions share that code; confirm the version in your course planner.':'Which unit should I check against your DPA? Give its code or a more specific name.','suggestions',{...draft.data,needsSelection:true,unitChoices:resolved.choices,unitChoiceTool:'explain_next_semester'});
@@ -115,16 +127,16 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
   if(call.name==='open_workflow')return result(`Ready: ${a.workflow}. Use the planning workspace to select records and run this task.`,a.workflow);
   if(call.name==='describe_workflow')return result(describePlannerFeature(a.workflow),null,{features:plannerFeatureGuides.filter(g=>!a.workflow||g.id===a.workflow)});
   if(call.name==='list_templates'){
-    const templates=await existing(readTemplates,req,'/api/planner-templates');
+    const templates=official ? official.map(p=>({...p.plannerTemplate,requirements:Object.fromEntries(p.plannerTemplate.requirements.map(r=>[r.unitType.Name,r.requiredCount]))})) : await existing(readTemplates,req,'/api/planner-templates');
     const answer=templates.length?templates.map(t=>'**'+t.name+' (ID '+t.id+')**\n'+Object.entries(t.requirements||{}).map(([name,count])=>'- '+name+': '+count+' required units').join('\n')).join('\n\n'):'No planner templates are saved.';
     return result(answer,'templates',templates);
   }
   if(plannerDocument&&['suggest_next_semester','plan_remaining_studies'].includes(call.name)&&!a.planner){
     readPlannerDocument(plannerDocument);
-    const records=await prisma.unit.findMany({include:unitPlanningInclude});
+    const records=publishedUnits ?? await prisma.unit.findMany({include:unitPlanningInclude});
     return planUploadedDocument(plannerDocument,document,records,{...a,full:call.name==='plan_remaining_studies'},suggestionContext||{});
   }
-  const planners=await existing(readExisting,req,'/api/study-planner');
+  const planners=official ?? await existing(readExisting,req,'/api/study-planner');
   if(call.name==='list_planners'){
     const scope=plannerListRequest(question);
     const search=scope?scope.arguments.search:a.search;
@@ -135,7 +147,7 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     const lookup=resolvePlannerReference(planners,a.planner);
     if(lookup.status!=='matched')return result(lookup.choices.length?'Which planner do you mean? Reply with its name or ID:\n'+lookup.choices.map(p=>'- '+p.name+' (ID '+p.id+')').join('\n'):'No saved planner matches "'+a.planner+'". Check the intake and major, or ask me to list planners.','management',{needsSelection:true,choices:lookup.choices});
     const selected=lookup.planner;
-    const detail=await existing(inspectExisting,req,`/api/study-planner/${selected.id}`,'GET',null,{params:{id:String(selected.id)}});
+    const detail=official ? selected : await existing(inspectExisting,req,`/api/study-planner/${selected.id}`,'GET',null,{params:{id:String(selected.id)}});
     return result(formatPlannerUnits(detail,a),'management',detail);
   }
   if(call.name==='match_dpa_planners') {
@@ -186,9 +198,9 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
     const chosen=a.planner?resolve(planners,a.planner):ranking[0].planner;
     if(!chosen)throw new Error('Planner not found. Select an exact planner record.');
     if(a.targetMajor&&!majorMatches(chosen.name,a.targetMajor))throw new Error('That planner does not match the requested destination major.');
-    const record=await prisma.studyPlanner.findUnique({where:{id:chosen.id},include:{studyPlannerUnits:{include:{unit:{include:unitPlanningInclude},unitType:true}},plannerTemplate:{include:{requirements:{include:{unitType:true}}}}}});
+    const record=official ? chosen : await prisma.studyPlanner.findUnique({where:{id:chosen.id},include:{studyPlannerUnits:{include:{unit:{include:unitPlanningInclude},unitType:true}},plannerTemplate:{include:{requirements:{include:{unitType:true}}}}}});
     if(!record)throw new Error('Planner was removed. Retry with another planner.');
-    const units=record.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}));
+    const units=record.units ?? record.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}));
     const now=new Date(),month=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kuala_Lumpur',month:'numeric'}).format(now)),currentYear=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kuala_Lumpur',year:'numeric'}).format(now));
     const term=a.term||suggestionContext?.term||(month<7?'Semester 2':'Semester 1'),year=Number(a.year||suggestionContext?.year||(month<7?currentYear:currentYear+1));
     if(!Number.isInteger(year)||year<2000||year>2100)throw new Error('Choose a year between 2000 and 2100.');
@@ -211,14 +223,14 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
       const completed=review.transcript.completed.filter(u=>old.has(u.code)).map(u=>u.code);
       answer+='\n\nChanges from saved draft: now earned in DPA: '+(completed.join(', ')||'none')+'; newly scheduled: '+([...fresh].filter(c=>!old.has(c)).join(', ')||'none')+'; no longer scheduled: '+([...old].filter(c=>!fresh.has(c)).join(', ')||'none')+'.';
     }
-    return result(answer,'suggestions',{plan,pathway,preferences,planMode:pathway?'full':'semester',completionAudit,plannerConfirmed:!!a.planner,planner:{id:chosen.id,name:chosen.name},choices:ranking.map(r=>({id:r.planner.id,name:r.planner.name+' ('+r.matched+' matches)'})),term,year,documentName:document.name,targetMajor:a.targetMajor||null,unitReferences:units.map(u=>({code:u.UnitCode,name:u.Name,credits:u.CreditPoints}))});
+    return result(answer,'suggestions',{plan,pathway,preferences,planMode:pathway?'full':'semester',completionAudit,plannerConfirmed:!!a.planner,planner:{id:chosen.id,name:chosen.name,version:chosen.version},choices:ranking.map(r=>({id:r.planner.id,name:r.planner.name+' ('+r.matched+' matches)'})),term,year,documentName:document.name,targetMajor:a.targetMajor||null,unitReferences:units.map(u=>({code:u.UnitCode,name:u.Name,credits:u.CreditPoints}))});
   }
   if(call.name==='check_double_major') {
     if(!document)return result('Upload your DPA to find the two closest different majors and their remaining major units.','double-major');
     const dpa=documentEvidence(reviewedChatDocument(validateDocument(document),planningContext));
     if(!dpa.transcript)throw new Error('The DPA table is unclear. Attach its XLSX export.');
-    const records=await prisma.studyPlanner.findMany({orderBy:{createdAt:'desc'},include:{studyPlannerUnits:{include:{unit:{include:unitPlanningInclude},unitType:true}},plannerTemplate:{include:{requirements:{include:{unitType:true}}}}}});
-    const pool=records.map(p=>({...p,units:p.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}))}));
+    const records=official ?? await prisma.studyPlanner.findMany({orderBy:{createdAt:'desc'},include:{studyPlannerUnits:{include:{unit:{include:unitPlanningInclude},unitType:true}},plannerTemplate:{include:{requirements:{include:{unitType:true}}}}}});
+    const pool=official ?? records.map(p=>({...p,units:p.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}))}));
     const primary=a.primaryPlanner?resolve(pool,a.primaryPlanner):null,secondary=a.secondaryPlanner?resolve(pool,a.secondaryPlanner):null;
     if(a.primaryPlanner&&!primary||a.secondaryPlanner&&!secondary)throw new Error('A selected major planner is missing or ambiguous.');
     const now=new Date(),month=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kuala_Lumpur',month:'numeric'}).format(now)),currentYear=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kuala_Lumpur',year:'numeric'}).format(now));
@@ -263,7 +275,7 @@ export async function runPlannerTool(req,input,{allowWrites=false,document=null,
   if(call.name==='replacement_units'){
     const code=String(a.code).trim().toUpperCase().replace(/[ -]/g,'');
     if(!/^[A-Z]{2,5}\d{3,6}$/.test(code))throw new Error('Enter a unit code such as COS20031.');
-    const pool=await prisma.unit.findMany({include:{UnitTermOffered:true},orderBy:{ID:'asc'}});
+    const pool=publishedUnits ?? await prisma.unit.findMany({include:{UnitTermOffered:true},orderBy:{ID:'asc'}});
     const originals=pool.filter(u=>u.UnitCode===code);
     if(originals.length!==1)throw new Error(originals.length?'Multiple unit versions share that code. Confirm the applicable version on the Units page.':'Unit code not found. Check the code and retry.');
     const source=originals[0],suggestions=replacementCandidates({code,name:source.Name,creditPoints:source.CreditPoints},pool);

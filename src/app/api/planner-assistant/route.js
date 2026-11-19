@@ -1,3 +1,4 @@
+import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import {readPlannerDocument} from '@app/libs/uploadedPlanner.server.mjs';
 import {executePlannerTasks} from '@app/libs/plannerTaskRunner.mjs';
 import {questionBoundary,generalEvidenceReply,refusal} from '@app/libs/plannerAnswerability.mjs';
@@ -87,18 +88,20 @@ export async function POST(req) {
     const codes = [...new Set(query.toUpperCase().match(/\b[A-Z]{2,5}\d{3,6}\b/g) || [])].slice(0, 8);
     let units = [], databaseWarning = '', comparison = '', unitAdvice = '', plannerChoices = [];
     try {
-      if (codes.length) units = await prisma.unit.findMany({ where: { UnitCode: { in: codes } }, select: { ID: true, UnitCode: true, Name: true, CreditPoints: true, Availability: true, UnitTermOffered: { select: { TermType: true } } }, take: 25 });
+      const official = process.env.PLANNER_CATALOGUE_URL ? await publishedPlanningPool() : null;
+      const publishedUnits = official?.flatMap(p=>p.units);
+      if (codes.length) units = publishedUnits ? publishedUnits.filter(u=>codes.includes(u.UnitCode)).slice(0,25) : await prisma.unit.findMany({ where: { UnitCode: { in: codes } }, select: { ID: true, UnitCode: true, Name: true, CreditPoints: true, Availability: true, UnitTermOffered: { select: { TermType: true } } }, take: 25 });
       if (units.length && /prerequisite|requisite|before|eligible/.test(query)) {
-        const relations = await prisma.unitRequisiteRelationship.findMany({ where: { UnitID: { in: units.map(u => u.ID) } }, include: { Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit: { select: { UnitCode: true, Name: true } } } });
+        const relations = publishedUnits ? units.flatMap(u=>u.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit) : await prisma.unitRequisiteRelationship.findMany({ where: { UnitID: { in: units.map(u => u.ID) } }, include: { Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit: { select: { UnitCode: true, Name: true } } } });
         unitAdvice += relations.length ? 'Recorded requisite conditions (preserve AND/OR and relationship types):\n' + relations.map(r => [units.find(u => u.ID === r.UnitID)?.UnitCode, r.UnitRelationship, r.LogicalOperators, r.Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit?.UnitCode, r.MinCP != null ? r.MinCP + ' minimum CP' : ''].filter(Boolean).join(' | ')).join('\n') : 'No requisite relationships are recorded for these units; this does not prove unrestricted enrolment.';
       }
       if (units.length && /replacement|replace|alternative|expired|retired/.test(query)) {
-        const pool = await prisma.unit.findMany({ select: { UnitCode: true, Name: true, CreditPoints: true, Availability: true, UnitTermOffered: { select: { TermType: true } } }, orderBy: { ID: 'asc' } });
+        const pool = publishedUnits ?? await prisma.unit.findMany({ select: { UnitCode: true, Name: true, CreditPoints: true, Availability: true, UnitTermOffered: { select: { TermType: true } } }, orderBy: { ID: 'asc' } });
         unitAdvice += '\nReplacement candidates based on title similarity, not approved equivalence:\n' + units.map(u => u.UnitCode + ': ' + (replacementCandidates({ code: u.UnitCode, name: u.Name, creditPoints: u.CreditPoints }, pool).map(c => c.code + ' ' + c.name + ' (' + c.credits + ' CP)').join('; ') || 'No title-similarity candidates found.')).join('\n') + '\nConfirm syllabus compatibility and HOD approval before substituting.';
       }
       if (evidence?.transcript && !intent && /double major|dual major|second major|compare/i.test(question)) {
-        const records = await prisma.studyPlanner.findMany({ include: { studyPlannerUnits: { include: { unit: true, unitType: true } }, plannerTemplate: { include: { requirements: { include: { unitType: true } } } } } });
-        const planners = records.map(p => ({ ...p, units: p.studyPlannerUnits.map(j => ({ ...j.unit, unitType: j.unitType })) }));
+        const records = official || await prisma.studyPlanner.findMany({ include: { studyPlannerUnits: { include: { unit: true, unitType: true } }, plannerTemplate: { include: { requirements: { include: { unitType: true } } } } } });
+        const planners = official || records.map(p => ({ ...p, units: p.studyPlannerUnits.map(j => ({ ...j.unit, unitType: j.unitType })) }));
         try {
           if (context?.programmeConfirmed) {
             const primary = planners.find(p=>p.id===context.plannerId);

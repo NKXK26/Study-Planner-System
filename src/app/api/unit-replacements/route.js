@@ -1,3 +1,4 @@
+import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import { NextResponse } from 'next/server';
 import prisma from '@utils/db/db';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -10,7 +11,7 @@ export async function POST(req) {
     const input = await req.json();
     if (typeof input.code !== 'string' || !input.code.trim() || input.code.length > 40 || (input.name != null && (typeof input.name !== 'string' || input.name.length > 200))) return NextResponse.json({success:false,message:'Enter a unit code and a name of up to 200 characters.'},{status:400});
     const code = input.code.trim().toUpperCase();
-    const units = await prisma.unit.findMany({select:{UnitCode:true,Name:true,CreditPoints:true,Availability:true,UnitTermOffered:{select:{TermType:true}}},orderBy:{ID:'asc'}});
+    const units = process.env.PLANNER_CATALOGUE_URL ? (await publishedPlanningPool()).flatMap(p=>p.units) : await prisma.unit.findMany({select:{UnitCode:true,Name:true,CreditPoints:true,Availability:true,UnitTermOffered:{select:{TermType:true}}},orderBy:{ID:'asc'}});
     const originals = units.filter(u=>u.UnitCode.trim().toUpperCase()===code);
     const original = originals[0];
     const source = {code, name:original?.Name || input.name?.trim() || '', creditPoints:original?.CreditPoints ?? null, availability:original?.Availability ?? 'Not found', records:originals.length};

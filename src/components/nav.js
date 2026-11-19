@@ -6,6 +6,7 @@ import {
   HomeIcon,
   BookOpenIcon,
   AcademicCapIcon,
+  ChartBarIcon,
   UserIcon,
   CalendarIcon,
   ChevronDownIcon,
@@ -15,7 +16,11 @@ import { useRole } from '@app/context/RoleContext';
 
 const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
   // Get isSuperadmin to check if user is Superadmin
-  const { isSuperadmin } = useRole();
+  const { isSuperadmin, isAdminLoginSession } = useRole();
+  let temporaryStudent = false;
+  if (typeof window !== 'undefined') {
+    try { temporaryStudent = JSON.parse(localStorage.getItem('userProfile') || 'null')?.temporaryUnrestrictedStudent === true; } catch {}
+  }
   // State to track open/close status of each dropdown
   const [openDropdowns, setOpenDropdowns] = useState({});
 
@@ -66,6 +71,26 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
       icon: CalendarIcon
     },
     {
+      name: "Study Planner",
+      link: "#",
+      icon: ChartBarIcon,
+      sub_links: [
+        { name: 'Study Planner Templates', link: '/view/planner-templates' },
+        { name: 'Upload Study Planner', link: '/view/upload_planner' },
+        { name: 'Study Planner Maker', link: '/view/study-planner-maker' },
+        { name: 'Study Planner Management', link: '/view/study-planner' },
+        { name: 'Differentiate Study Planners', link: '/view/compare-planners' },
+      ],
+    },
+    { name: 'AI Assistant', link: '/view/ai-assistant', icon: BookOpenIcon },
+    {
+      name: 'Graduation', link: '#', icon: AcademicCapIcon,
+      sub_links: [
+        { name: 'Unit Suggestions', link: '/view/compare_study_planner' },
+        { name: 'Graduation Eligibility & Double Major', link: '/view/graduation-eligibility' },
+      ],
+    },
+    {
       name: "Administration",
       link: "#",
       icon: CogIcon,
@@ -96,6 +121,14 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
       '/view/search_student_study_planner': 'search_students:read',
       '/view/student_information': 'student_info:read',
       '/view/terms/': 'term:read',
+      '/view/planner-templates': 'planner:read',
+      '/view/upload_planner': 'planner:read',
+      '/view/study-planner-maker': 'planner:read',
+      '/view/study-planner': 'planner:read',
+      '/view/compare-planners': 'planner:read',
+      '/view/ai-assistant': 'planner:read',
+      '/view/compare_study_planner': 'planner:read',
+      '/view/graduation-eligibility': 'planner:read',
       '/view/roles': 'role:read',
       '/view/users': 'user:read',
       '/view/user_management': 'user:read', // Requires user:read to access the page
@@ -123,7 +156,7 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
         const accessibleSubLinks = link.sub_links.filter(subLink => {
           // Special case: Audit Logs only for Superadmin
           if (subLink.link === '/view/audit_logs') {
-            return isSuperadmin();
+            return isSuperadmin() || isAdminLoginSession();
           }
           const subPermission = getPermissionForLink(subLink.link);
           return !subPermission || can(subPermission.split(':')[0], subPermission.split(':')[1]);
@@ -140,7 +173,7 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
         const accessibleSubLinks = link.sub_links.filter(subLink => {
           // Special case: Audit Logs only for Superadmin
           if (subLink.link === '/view/audit_logs') {
-            return isSuperadmin();
+            return isSuperadmin() || isAdminLoginSession();
           }
           const subPermission = getPermissionForLink(subLink.link);
           return !subPermission || can(subPermission.split(':')[0], subPermission.split(':')[1]);
@@ -156,7 +189,17 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
   };
 
   // Get filtered links
-  const filteredLinks = filterLinksByPermissions(LINKS);
+  const studentLinks = [
+    { name: 'Dashboard', link: '/view/dashboard', icon: HomeIcon },
+    { name: 'Graduation', link: '#', icon: AcademicCapIcon, sub_links: [
+      { name: 'Unit Suggestions', link: '/view/compare_study_planner' },
+      { name: 'Graduation Eligibility & Double Major', link: '/view/graduation-eligibility' },
+    ] },
+    { name: 'Study Planner Assistant', link: '/view/ai-assistant', icon: BookOpenIcon },
+  ];
+  const filteredLinks = temporaryStudent
+    ? studentLinks
+    : filterLinksByPermissions(LINKS).filter(link => !(isAdminLoginSession() && link.name === 'Students'));
 
   // Toggle the dropdown visibility for each item
   const toggleDropdown = (index) => {

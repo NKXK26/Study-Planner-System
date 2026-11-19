@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { buildBcsPlan, getPlannerCompletionResult, parseTranscriptRows, scorePlannerMatch, rankTopPlannerMatches, deriveTranscriptAcademicPeriod, detectCompletedBcsDoubleMajors } from '../src/app/libs/bcsPlannerRules.mjs';
-import { getWilQualifyingCompletedUnitCodes, scheduleRemainingUnits, scheduleWilBreakPlacement } from '../src/app/view/unit_suggestion/plannerHelpers.js';
+import { buildBcsPlan, getPlannerCompletionResult, getPlannerScopedMappings, parseTranscriptRows, scorePlannerMatch, rankTopPlannerMatches, deriveTranscriptAcademicPeriod, detectCompletedBcsDoubleMajors } from '../src/app/libs/bcsPlannerRules.mjs';
+import { balanceSemesterLoads, getWilQualifyingCompletedUnitCodes, scheduleRemainingUnits, scheduleWilBreakPlacement } from '../src/app/view/unit_suggestion/plannerHelpers.js';
 
 const unit = (code, name, type) => ({ UnitCode: code, Name: name, CreditPoints: 12.5, unitType: { ID: type === 'Core' ? 2 : type === 'Major' ? 3 : type === 'WIL Placement' ? 17 : 1, Name: type }, offeredTerms: ['Semester 1', 'Semester 2'] });
 const planner = {
+  id: 123,
   name: '25-Sep-CSCS',
   units: [
     ...Array.from({ length: 8 }, (_, i) => unit(`COR${String(i).padStart(5, '0')}`, `Core ${i}`, 'Core')),
@@ -50,6 +51,9 @@ assert.deepEqual(detectedCompletedDoubleMajor.candidates[0].uniqueUnits, ['DS000
 assert.equal(detectCompletedBcsDoubleMajors({ primaryPlanner: { ...planner, id: 77 }, planners: [dataSciencePlanner], completedUnits: passedWithDataScience.completed, studentIntake: passedWithDataScience.intakeTerm, primaryEligible: false }).status, 'not-assessed', 'second-major detection is gated on primary-major eligibility');
 assert.equal(parseTranscriptRows([{ ...passed('FAIL00001'), Grade: 'F' }]).completed.length, 0, 'failed transcript grades are not treated as passed units');
 assert.equal(parseTranscriptRows([{ ...passed('FAIL00002'), Grade: 'FAIL' }]).completed.length, 0, 'FAIL transcript grades are not treated as passed units');
+for (const status of ['Current', 'Scheduled', 'Future', 'In Progress']) {
+  assert.equal(parseTranscriptRows([{ ...passed(`STAT${String(status.length).padStart(5, '0')}`), Status: status, Grade: '' }]).completed.length, 0, `${status} units do not count as completed`);
+}
 const plannerWithConfirmedMajor = { ...planner, plannerTemplate: { name: 'Bachelor of Computer Science – Cybersecurity' } };
 const completedMajorResult = getPlannerCompletionResult({ planner: plannerWithConfirmedMajor, bcsPlan: buildBcsPlan(plannerWithConfirmedMajor, transcript.completed, transcript.intakeTerm) });
 assert.deepEqual(completedMajorResult, { eligible: true, majorName: 'Cybersecurity', courseName: 'Bachelor of Computer Science', warning: null }, 'completion wording uses the selected planner template major, not a transcript/title guess');
@@ -63,7 +67,7 @@ assert.equal(unconfirmedMajorResult.majorName, null, 'a completed planner withou
 const transcriptMissingCore = parseTranscriptRows(allNewCompleted.filter(row => row.Course !== 'COR00000'));
 const incompleteWithoutMapping = buildBcsPlan(plannerWithConfirmedMajor, transcriptMissingCore.completed, transcriptMissingCore.intakeTerm);
 assert.equal(getPlannerCompletionResult({ planner: plannerWithConfirmedMajor, bcsPlan: incompleteWithoutMapping }).eligible, false, 'removing a valid academic mapping leaves the planner incomplete');
-const completeWithMappedCore = buildBcsPlan(plannerWithConfirmedMajor, transcriptMissingCore.completed, transcriptMissingCore.intakeTerm, { Core: [{ code: 'EXT00001', categoryLabel: 'Core' }] });
+const completeWithMappedCore = buildBcsPlan(plannerWithConfirmedMajor, transcriptMissingCore.completed, transcriptMissingCore.intakeTerm, { Core: [{ code: 'EXT00001', categoryLabel: 'Core', plannerId: plannerWithConfirmedMajor.id }] });
 assert.equal(getPlannerCompletionResult({ planner: plannerWithConfirmedMajor, bcsPlan: completeWithMappedCore }).majorName, 'Cybersecurity', 'a confirmed academic mapping updates completed-major eligibility');
 
 transcript = parseTranscriptRows([...Array.from({ length: 8 }, (_, i) => passed(`REC${String(i % 4).padStart(5, '0')}`, '2024_MAR_S1'))]);
@@ -123,11 +127,38 @@ plan = buildBcsPlan(planner, parseTranscriptRows([{ ...passed('COR00000'), Term:
 assert.equal(plan.eligible, false, 'missing intake metadata cannot produce a BCS eligibility result');
 
 const externalCore = { code: 'EXT00001', categoryLabel: 'Core' };
-const mappedCorePlan = buildBcsPlan(planner, [], { raw: '2024_SEP_S2', order: 2024_092 }, { '2': [externalCore] });
+const mappedCorePlan = buildBcsPlan(planner, [], { raw: '2024_SEP_S2', order: 2024_092 }, { '2': [{ ...externalCore, plannerId: planner.id }] });
 assert.equal(mappedCorePlan.counts.core, 1, 'a mapped Core completion reduces the BCS Core requirement');
-const mappedOtherPlan = buildBcsPlan(planner, [], { raw: '2024_SEP_S2', order: 2024_092 }, { __other__: [{ code: 'EXT00002', categoryLabel: 'Other', isOtherMapping: true }] });
+const mappedOtherPlan = buildBcsPlan(planner, [], { raw: '2024_SEP_S2', order: 2024_092 }, { __other__: [{ code: 'EXT00002', categoryLabel: 'Other', isOtherMapping: true, plannerId: planner.id }] });
 assert.equal(mappedOtherPlan.counts.core, 0, 'an Other mapping never satisfies an academic requirement');
 assert.equal(getPlannerCompletionResult({ planner: plannerWithConfirmedMajor, bcsPlan: mappedOtherPlan }).eligible, false, 'Other mappings cannot produce a completed-major result');
+
+const cssdRegressionPlanner = {
+  id: 601, name: '23-Feb-CSSD',
+  units: [
+    ...['COS10004','COS10009','COS10025','COS10026','COS20007','COS40005','COS40006','TNE10006'].map(code => unit(code, code, 'Core')),
+    ...['COS20019','COS20031','COS30008','COS30043','COS30049','COS40003','SWE30003','SWE30009'].map(code => unit(code, code, 'Major')),
+    ...['COS10003','COS10022','COS10082','COS20015','COS20028','COS20030','COS20083','COS30015','COS30017','COS30018','COS30019','COS30020','SWE40006'].map(code => unit(code, code, 'Elective')),
+  ],
+};
+const cssdPassedCodes = ['COS10004','COS10009','COS10025','COS10026','COS20007','COS40005','COS40006','TNE10006','COS20019','COS20031','COS30008','COS30043','COS30049','COS40003','SWE30003','SWE30009','COS10003','COS10022','COS30015','COS30017','COS30018','COS30019','COS30045','INF10024'];
+const cssdPassed = cssdPassedCodes.map(code => ({ code, name: code, creditPoints: 12.5 }));
+const cssdMappings = { Elective: [
+  { code: 'COS30045', creditPoints: 12.5, categoryLabel: 'Elective', plannerId: cssdRegressionPlanner.id },
+  { code: 'INF10024', creditPoints: 12.5, categoryLabel: 'Elective', plannerId: cssdRegressionPlanner.id },
+] };
+const cssdPlanWithMappings = buildBcsPlan(cssdRegressionPlanner, cssdPassed, { raw: '2023_FEB_S1', order: 2023_021 }, cssdMappings);
+assert.equal(cssdPlanWithMappings.eligible, true, '23-Feb-CSSD plus its two mapped Elective units meets its recorded pre-Sep-2024 requirements');
+assert.equal(getPlannerCompletionResult({ planner: cssdRegressionPlanner, bcsPlan: cssdPlanWithMappings }).eligible, true);
+assert.equal(cssdPlanWithMappings.counts.elective, 8, 'passed external transcript units still count when mapped to CSSD Elective');
+assert.equal(buildBcsPlan(cssdRegressionPlanner, cssdPassed, { raw: '2023_FEB_S1', order: 2023_021 }, { Elective: [{ ...cssdMappings.Elective[0] }] }).eligible, false, 'removing one mapping restores one outstanding Elective requirement');
+assert.equal(buildBcsPlan(cssdRegressionPlanner, cssdPassed, { raw: '2023_FEB_S1', order: 2023_021 }, { Elective: [cssdMappings.Elective[0], { code: 'COS30015', categoryLabel: 'Elective', plannerId: cssdRegressionPlanner.id }] }).eligible, false, 'mapping a code already completed inside the selected planner does not count twice');
+assert.equal(buildBcsPlan(cssdRegressionPlanner, cssdPassed, { raw: '2023_FEB_S1', order: 2023_021 }, { Elective: cssdMappings.Elective.map(mapping => ({ ...mapping, plannerId: 602 })) }).eligible, false, 'mappings assigned to another planner cannot complete CSSD');
+assert.equal(buildBcsPlan(cssdRegressionPlanner, cssdPassed, { raw: '2023_FEB_S1', order: 2023_021 }, { __other__: cssdMappings.Elective.map(mapping => ({ ...mapping, categoryLabel: 'Other', isOtherMapping: true })) }).eligible, false, 'Other mappings never satisfy CSSD requirements');
+assert.equal(getPlannerScopedMappings({ Elective: cssdMappings.Elective }, 602).Elective.length, 0, 'changing selected planner excludes mappings assigned to another planner');
+const otherPlannerCopy = { ...cssdRegressionPlanner, id: 602, name: '23-Feb-CSAI' };
+const cssdMappingRank = rankTopPlannerMatches([], [otherPlannerCopy, cssdRegressionPlanner], { year: 2023, month: 2, order: 2023_021 }, 5, { mappedExternalUnits: cssdMappings });
+assert.equal(cssdMappingRank[0].plannerId, cssdRegressionPlanner.id, 'CSSD mappings improve CSSD ranking only, not another planner');
 
 let schedule = scheduleRemainingUnits([
   { ID: 1, UnitCode: 'COS40005', CreditPoints: 12.5, scheduleCategoryKey: 'core', offeredTerms: ['Semester 1', 'Semester 2'] },
@@ -135,6 +166,12 @@ let schedule = scheduleRemainingUnits([
 ], new Map(), 0, 1, 1, 0, { core: 2 }).schedule;
 assert.equal(schedule[0].units[0].UnitCode, 'COS40005');
 assert.equal(schedule[1].units[0].UnitCode, 'COS40006', 'Project B cannot be scheduled in the same or an earlier semester than Project A');
+
+const fourPlusTwoSchedule = [
+  { year: 2, semester: 2, unitCount: 4, totalCredits: 50, units: ['A','B','C','D'].map(code => ({ UnitCode: code, CreditPoints: 12.5 })) },
+  { year: 3, semester: 1, unitCount: 2, totalCredits: 25, units: ['E','F'].map(code => ({ UnitCode: code, CreditPoints: 12.5 })) },
+];
+assert.deepEqual(balanceSemesterLoads(fourPlusTwoSchedule, new Map()), fourPlusTwoSchedule, 'load balancing preserves a valid four-unit then two-unit plan');
 
 schedule = scheduleRemainingUnits([{ ID: 3, UnitCode: 'FAIL00001', CreditPoints: 12.5, scheduleCategoryKey: 'core', offeredTerms: ['Semester 2'], requireKnownAvailability: true }], new Map(), 0, 1, 1, 0, { core: 1 }).schedule;
 assert.equal(schedule[0].semester, 2, 'an outstanding failed unit is placed in its next recorded available semester');
@@ -159,6 +196,53 @@ qualifyingCodes = getWilQualifyingCompletedUnitCodes({
   },
 });
 assert.equal(qualifyingCodes.size, 12, 'prescribed electives and explicit academic mappings count, while MPU, zero-credit, WIL, and Other do not');
+
+const approvedElectiveMappings = ['AE1', 'AE2', 'AE3'].map((code, index) => ({
+  code, name: `Approved Elective ${index + 1}`, creditPoints: 12.5, categoryLabel: 'Elective', plannerId: 22,
+}));
+const mar25Planner = {
+  id: 22, name: '25-Mar-CSCS',
+  units: [
+    ...['COS10004','COS10009','COS10025','COS10026','COS20007','COS40005','COS40006','TNE10006'].map(code => unit(code, code, 'Core')),
+    unit('COS10026', 'Web Technology Project', 'Core'),
+    ...['COS20019','COS20030','COS20031','COS30015','COS30049','SWE30003','TNE20003','TNE30009'].map(code => unit(code, code, 'Cybersecurity Major')),
+    unit('COS10003', 'Computer and Logic Essentials*', 'Elective'),
+    ...['COS10022','COS10082','COS20028','COS20083','COS30018','COS30019','COS30020','COS30045','COS30047','ICT20016','INF10024','SWE30009','TNE10005'].map(code => unit(code, code, 'Elective')),
+  ],
+};
+const mar25Transcript = parseTranscriptRows([
+  ...['AE1','AE2','AE3','COS10003','COS10004','COS10009','COS20031','TNE10006','COS10025','COS10026','COS20019','COS10022','COS20007','COS20030'].map(code => passed(code, '2025_MAR_S1')),
+  { ...passed('COS40005', '2026_MAR_S1'), Grade: '', Status: 'Current' },
+  { ...passed('COS30015', '2026_MAR_S1'), Grade: '', Status: 'Current' },
+  { ...passed('TNE30009', '2025_SEP_S2'), Grade: 'N' },
+]);
+const mar25Mappings = {
+  Elective: approvedElectiveMappings,
+  __other__: [{ code: 'AIMFECS', name: 'Academic Integrity Training Module', creditPoints: 0, categoryLabel: 'Other', isOtherMapping: true, plannerId: mar25Planner.id }],
+};
+const mar25Plan = buildBcsPlan(mar25Planner, mar25Transcript.completed, mar25Transcript.intakeTerm, mar25Mappings);
+assert.equal(mar25Plan.counts.recommended, 4, 'three mapped Approved Electives plus passed COS10022 satisfy the recommended Elective count');
+assert.deepEqual(mar25Plan.units.filter(candidate => ['COS30020','SWE30009','TNE10005'].includes(candidate.UnitCode)), [], 'mapped Electives prevent unnecessary elective recommendations');
+assert.deepEqual(mar25Plan.units.map(candidate => candidate.UnitCode).sort(), ['COS30015','COS30049','COS40005','COS40006','ICT20016','SWE30003','TNE20003','TNE30009'].sort(), 'only the outstanding Core, Cybersecurity Major and WIL units remain');
+const mar25WithEquivalentWil = parseTranscriptRows([
+  ...mar25Transcript.completed.map(item => ({ Course: item.code, 'Course Title': item.name, Credits: item.creditPoints, Grade: 'P', Status: 'Complete', Term: '2025_MAR_S1' })),
+  passed('ICT20026', '2024_SEP_S2'),
+]);
+const mar25PlanWithEquivalentWil = buildBcsPlan(mar25Planner, mar25WithEquivalentWil.completed, mar25WithEquivalentWil.intakeTerm, mar25Mappings);
+assert.equal(mar25PlanWithEquivalentWil.counts.wil, 1, 'a passed equivalent ICT20026 satisfies the selected ICT20016 WIL requirement');
+assert.equal(mar25PlanWithEquivalentWil.categoryNeeds['bcs-wil'], 0, 'a passed equivalent WIL code clears the new curriculum WIL requirement');
+assert.equal(mar25PlanWithEquivalentWil.units.some(candidate => candidate.UnitCode === 'ICT20016'), false, 'do not recommend ICT20016 again after an equivalent WIL pass');
+const mar25WithUnpassedEquivalentWil = parseTranscriptRows([{ ...passed('ICT20026', '2024_SEP_S2'), Grade: 'N' }]);
+const mar25PlanWithUnpassedEquivalentWil = buildBcsPlan(mar25Planner, mar25WithUnpassedEquivalentWil.completed, mar25Transcript.intakeTerm, mar25Mappings);
+assert.equal(mar25PlanWithUnpassedEquivalentWil.counts.wil, 0, 'an unsuccessful ICT20026 attempt does not satisfy WIL');
+assert.equal(mar25PlanWithUnpassedEquivalentWil.units.some(candidate => candidate.UnitCode === 'ICT20016'), true, 'keep recommending ICT20016 when the equivalent WIL attempt is not passed');
+const mar25WilQualifying = getWilQualifyingCompletedUnitCodes({ plannerUnits: mar25Planner.units, completedUnits: mar25Transcript.completed, mappedExternalUnits: mar25Mappings });
+assert.equal(mar25WilQualifying.size, 14, 'explicit Elective mappings named Approved Elective count toward WIL while Other does not');
+const mar25AcademicPeriod = deriveTranscriptAcademicPeriod(mar25Transcript.attempts);
+const mar25Wil = scheduleWilBreakPlacement({ wilUnits: [unit('ICT20016', 'Work Integrated Learning Placement', 'WIL Placement')], completedAcademicUnits: mar25WilQualifying.size, currentYear: mar25AcademicPeriod.next.year, currentSemester: mar25AcademicPeriod.next.semester });
+assert.equal(mar25Wil.placement.term, 'Summer', 'after a March Semester 1 transcript, eligible WIL is placed in the next Summer break');
+assert.equal(mar25Wil.placement.units[0].UnitCode, 'ICT20016');
+assert.match(mar25Wil.warning, /provisional availability/i, 'semester-only WIL availability permits the first eligible break provisionally');
 
 let wilResult = scheduleWilBreakPlacement({ wilUnits: [wilUnit], completedAcademicUnits: 11, currentYear: 2, currentSemester: 1 });
 assert.equal(wilResult.placement, null, '11 passed academic units cannot receive WIL');

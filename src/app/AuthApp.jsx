@@ -16,11 +16,15 @@ class AuthApp extends Component {
       isLoggingIn: false,
       processingLogin: false,
       userProfile: null,
+      loginView: 'choose',
+      adminPassword: '',
     };
 
     this.login = this.login.bind(this);
     this.logout = this.logout.bind(this);
     this.devModeLogin = this.devModeLogin.bind(this);
+    this.studentLogin = this.studentLogin.bind(this);
+    this.adminPasswordLogin = this.adminPasswordLogin.bind(this);
 
     // Create the MSAL application object
     this.publicClientApplication = new PublicClientApplication(msalConfig);
@@ -109,10 +113,63 @@ class AuthApp extends Component {
       this.setState({ isLoggingIn: false });
     }
   }
+
+  async studentLogin() {
+    // TEMPORARY UNRESTRICTED STUDENT MODE: development-only until real student auth and permissions exist.
+    if (process.env.NEXT_PUBLIC_MODE !== 'DEV') {
+      this.setState({ error: new Error('Temporary Student Login is available only in the local development environment.') });
+      return;
+    }
+    const profile = {
+      email: 'student@temporary.local',
+      roles: ['Student'],
+      isAuthenticated: true,
+      temporaryUnrestrictedStudent: true,
+      timestamp: Date.now(),
+    };
+    try {
+      const response = await fetch('/api/auth/student-session', { method: 'POST' });
+      if (!response.ok) throw new Error('Could not start the student session.');
+      localStorage.clear();
+      localStorage.setItem('userProfile', JSON.stringify(profile));
+      this.setState({ isAuthenticated: true, user: { username: profile.email, name: 'Student' }, userProfile: profile, error: null });
+      window.location.assign('/view/dashboard');
+    } catch (error) {
+      this.setState({ error });
+    }
+  }
+
+  async adminPasswordLogin(event) {
+    event.preventDefault();
+    if (this.state.isLoggingIn) return;
+    this.setState({ isLoggingIn: true, error: null });
+    try {
+      const response = await fetch('/api/auth/admin-password-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: this.state.adminPassword }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Incorrect admin password.');
+      await fetch('/api/auth/student-session', { method: 'DELETE' }).catch(() => {});
+      const profile = data.userProfile;
+      localStorage.clear();
+      localStorage.setItem('sessionToken', data.sessionToken);
+      localStorage.setItem('sessionUser', JSON.stringify(data.sessionUser));
+      localStorage.setItem('userProfile', JSON.stringify(profile));
+      this.setState({ isAuthenticated: true, user: { username: profile.email, name: data.sessionUser.name }, userProfile: profile, adminPassword: '', error: null });
+      window.location.assign('/view/dashboard');
+    } catch (error) {
+      this.setState({ error: new Error(error.message || 'Unable to sign in. Please try again.') });
+    } finally {
+      this.setState({ isLoggingIn: false });
+    }
+  }
   async processBackendLogin(msalAccount, idToken) {
     this.setState({ processingLogin: true });
 
     try {
+      await fetch('/api/auth/student-session', { method: 'DELETE' }).catch(() => {});
       console.log("Processing backend authentication for:", msalAccount.username);
 
       // Call your user-login endpoint
@@ -312,6 +369,7 @@ class AuthApp extends Component {
   //latest
   async logout() {
     try {
+      await fetch('/api/auth/student-session', { method: 'DELETE' }).catch(() => {});
       // Clear session storage first
       localStorage.clear();
 
@@ -321,6 +379,12 @@ class AuthApp extends Component {
         user: {},
         userProfile: null
       });
+
+      const accounts = this.publicClientApplication.getAllAccounts();
+      if (!accounts.length) {
+        window.location.assign('/');
+        return;
+      }
 
       try {
         // Try popup logout, but if it fails (popup blocker), use redirect instead
@@ -377,6 +441,30 @@ class AuthApp extends Component {
             <h1 className="text-gray-800 mb-2 text-6xl font-light tracking-tight">WELCOME</h1>
             <div className="w-64 h-0.5 bg-[#dc2d27] mx-auto mt-3 mb-3"></div>
             <h2 className="text-[#dc2d27] mb-8 text-2xl font-semibold">Student Study Planner</h2>
+            {this.state.loginView === 'choose' ? (
+              <div className="space-y-3">
+                <p className="text-gray-600 mb-5 text-sm">Choose how you want to access the system</p>
+                <button type="button" className="w-full rounded-lg border border-gray-200 p-4 text-left transition-colors hover:border-[#dc2d27] hover:bg-red-50" onClick={this.studentLogin}>
+                  <span className="block font-semibold text-gray-800">Student Login</span>
+                  <span className="mt-1 block text-sm text-gray-600">Access the student study planner system.</span>
+                </button>
+                <button type="button" className="w-full rounded-lg border border-gray-200 p-4 text-left transition-colors hover:border-[#dc2d27] hover:bg-red-50" onClick={() => this.setState({ loginView: 'admin', error: null })}>
+                  <span className="block font-semibold text-gray-800">Admin Login</span>
+                  <span className="mt-1 block text-sm text-gray-600">Sign in with your administrator or staff password.</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4 text-left">
+                <form onSubmit={this.adminPasswordLogin} className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">Password
+                    <input type="password" autoComplete="current-password" required value={this.state.adminPassword} onChange={event => this.setState({ adminPassword: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-[#dc2d27] focus:outline-none" />
+                  </label>
+                  <button type="submit" disabled={this.state.isLoggingIn} className="w-full rounded-lg bg-[#dc2d27] px-6 py-3.5 font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50">{this.state.isLoggingIn ? 'Logging in...' : 'Login'}</button>
+                </form>
+                <button type="button" onClick={() => this.setState({ loginView: 'choose', error: null, adminPassword: '' })} className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Choose another login type</button>
+              </div>
+            )}
+            {false && <div>
             <p className="text-gray-600 mb-8 text-sm">
               Sign in with your Microsoft account to access the system
             </p>
@@ -428,6 +516,7 @@ class AuthApp extends Component {
                 </button>
               </div>
             )}
+            </div>}
 
             {this.state.error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm animate-fade-in">

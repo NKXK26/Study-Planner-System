@@ -1,3 +1,4 @@
+import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import {NextResponse} from 'next/server';
 import prisma from '@utils/db/db';
 import {toolIdentity} from '@app/libs/plannerTools.server';
@@ -12,9 +13,11 @@ export async function POST(req){
   const transcript=documentEvidence(document).transcript;
   if(!transcript)throw new Error('The completed-unit table cannot be verified. Upload a readable DPA XLSX with Course, Status and Earned columns.');
   if(body.plannerId!=null&&body.plannerId!==''&&!/^[1-9]\d{0,11}$/.test(String(body.plannerId)))throw new Error('Select a valid programme planner.');
-  const unitSelect=await plannerUnitReadSelect(prisma);
+  const planners = process.env.PLANNER_CATALOGUE_URL ? await publishedPlanningPool() : await (async () => {
+    const unitSelect=await plannerUnitReadSelect(prisma);
   const records=await prisma.studyPlanner.findMany({orderBy:{createdAt:'desc'},include:{studyPlannerUnits:{select:unitSelect},plannerTemplate:{include:{requirements:{include:{unitType:true}}}}}});
-  const planners=records.map(p=>({...p,units:p.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}))}));
+  return records.map(p=>({...p,units:p.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}))}));
+  })();
   const data=graduationEligibilityReport({transcript,planners,plannerId:body.plannerId});
   return NextResponse.json({success:true,data},{headers:{'Cache-Control':'no-store'}});
  }catch(e){return NextResponse.json({success:false,message:e.status&&[401,403].includes(e.status)?'Sign in with permission to read study planners.':e.message||'Could not check eligibility. Please retry.'},{status:e.status||400});}

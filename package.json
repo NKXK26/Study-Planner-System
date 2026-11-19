@@ -5,6 +5,7 @@
   "main": "electron/main.js",
   "scripts": {
     "test": "node scripts/test-new-modules.cjs",
+    "test:auth-password": "node scripts/test-auth-password.mjs",
     "test:integration": "node scripts/test-new-modules.cjs --integration",
     "dev": "next dev",
     "build": "node --max-old-space-size=8196 node_modules/next/dist/bin/next build",
@@ -12,11 +13,17 @@
     "lint": "next lint",
     "db:export": "node scripts/export-database-prisma.js",
     "db:seed": "node scripts/seed-from-inserts.js",
+    "db:seed:demo-admin": "node scripts/seed-demo-admin.mjs",
     "db:setup": "node scripts/setup-database.js",
     "db:add-units": "node scripts/add-missing-units.js",
+    "catalogue:generate": "prisma generate --schema central/schema.prisma",
+    "catalogue:migrate": "prisma migrate deploy --schema central/schema.prisma",
+    "catalogue:start": "node central/server.mjs",
+    "catalogue:import": "node central/import.mjs",
+    "test:catalogue": "node central/test.mjs",
     "electron:dev": "npm run build && electron .",
-    "electron:build": "npm run build && electron-builder --win --publish never",
-    "electron:release": "npm run build && electron-builder --win --publish always",
+    "electron:build": "node scripts/build-electron.js && electron-builder --win --publish never",
+    "electron:release": "npm run electron:build",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -31,6 +38,7 @@
     "@prisma/client": "^6.19.3",
     "@supabase/supabase-js": "^2.56.0",
     "@xyflow/react": "^12.10.2",
+    "ajv": "^6.14.0",
     "better-sqlite3": "^12.9.0",
     "bootstrap": "^5.3.6",
     "cytoscape": "^3.33.3",
@@ -50,7 +58,7 @@
     "papaparse": "^5.5.2",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^3.11.174",
-    "prisma": "^6.5.0",
+    "prisma": "^6.19.3",
     "rate-limiter-flexible": "^8.1.0",
     "react": "^18.3.1",
     "react-bootstrap": "^2.10.10",
@@ -81,13 +89,13 @@
   "description": "A centralized Student Study Planner System designed to streamline unit planning and management for university students.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hamm0208/student-study-planner-system.git"
+    "url": "git+https://github.com/NKXK26/Study-Planner-System.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/hamm0208/student-study-planner-system/issues"
+    "url": "https://github.com/NKXK26/Study-Planner-System/issues"
   },
-  "homepage": "https://github.com/hamm0208/student-study-planner-system#readme"
+  "homepage": "https://github.com/NKXK26/Study-Planner-System#readme"
 }

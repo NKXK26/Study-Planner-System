@@ -1,3 +1,4 @@
+import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
@@ -73,7 +74,7 @@ export async function POST(request) {
         }
 
         // ── 1. Fetch published units from DB ──────────────────────────────────────
-        const allUnits = await prisma.unit.findMany({
+        const allUnits = process.env.PLANNER_CATALOGUE_URL ? (await publishedPlanningPool()).flatMap(p=>p.units) : await prisma.unit.findMany({
             where: { Availability: 'published' },
             select: { ID: true, UnitCode: true, Name: true, CreditPoints: true },
         });

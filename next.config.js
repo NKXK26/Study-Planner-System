@@ -33,5 +33,7 @@ const nextConfig = {
 // Keep a running dev server isolated from production builds (including Electron).
 module.exports = (phase) => ({
   ...nextConfig,
-  distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
+  distDir: process.env.ELECTRON_BUILD === '1'
+    ? '.next-electron'
+    : phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next',
 });

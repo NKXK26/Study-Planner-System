@@ -1,3 +1,4 @@
+import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import { unitPlanningInclude } from '@app/libs/unitPlanningProperties.mjs';
 import { NextResponse } from 'next/server';
 import prisma from '@utils/db/db';
@@ -11,6 +12,12 @@ async function authorized(req) {
 export async function GET(req) {
   if (!await authorized(req)) return NextResponse.json({success:false,message:'Please sign in.'},{status:401});
   try {
+    if (process.env.PLANNER_CATALOGUE_URL) {
+      const pool = await publishedPlanningPool();
+      return NextResponse.json({success:true,planners:pool.map(({id,name})=>({id,name})),
+        intakes:pool.map(p=>({id:p.id,status:p.status,label:[p.courseCode,p.major,p.intakeYear,p.intakeMonth].join(' / ')})),
+        terms:[...new Set(pool.flatMap(p=>p.units.flatMap(u=>u.offeredTerms)))]});
+    }
     const [intakes, planners, terms] = await Promise.all([
       prisma.courseIntake.findMany({include:{Major:{include:{Course:true}},Term:true}}),
       prisma.studyPlanner.findMany({select:{id:true,name:true},orderBy:{name:'asc'}}),
@@ -29,20 +36,22 @@ export async function POST(req) {
     if (!review.transcript.completed.length) throw new Error('No completed units with earned credits are available. Review the DPA before planning.');
   } catch(e) { return NextResponse.json({success:false,message:e.message || 'Invalid planning request.'},{status:400}); }
   try {
-    const [intake,planner]=await Promise.all([
+    const official = process.env.PLANNER_CATALOGUE_URL ? (await publishedPlanningPool()).find(p=>p.id===body.plannerId && p.id===body.intakeId) : null;
+    if (process.env.PLANNER_CATALOGUE_URL && !official) return NextResponse.json({message:'Choose the intake belonging to the published revision.'},{status:409});
+    const [intake,planner]=official ? [{Status:official.status,Major:{Course:{Code:official.courseCode,Name:''},Name:official.major},Term:{Name:official.intakeYear+'-'+official.intakeMonth}},official] : await Promise.all([
       prisma.courseIntake.findUnique({where:{ID:body.intakeId},include:{Major:{include:{Course:true}},Term:true}}),
       prisma.studyPlanner.findUnique({where:{id:body.plannerId},include:{studyPlannerUnits:{include:{unit:{include:unitPlanningInclude},unitType:true}},plannerTemplate:{include:{requirements:{include:{unitType:true}}}}}}),
     ]);
     if (!intake?.Major?.Course || !intake.Term || !planner) return NextResponse.json({success:false,message:'The selected programme or planner no longer exists. Reload the choices.'},{status:400});
-    const units=planner.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}));
+    const units=official?.units ?? planner.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}));
     const relations=units.flatMap(u=>u.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit || []);
     let plan;
     try { plan=semesterPlan({transcript:review.transcript,planner:{...planner,units},relations,term:body.term,maxCredits:body.maxCredits,maxUnits:body.maxUnits}); }
     catch(e) { return NextResponse.json({success:false,message:e.message},{status:400}); }
-    plan.warnings.push('Programme-to-planner linkage is student-confirmed: the database has no formal mapping for these planner pools.');
+    if (!official) plan.warnings.push('Programme-to-planner linkage is student-confirmed: the database has no formal mapping for these planner pools.');
     if (intake.Status?.toLowerCase()!=='published') plan.warnings.push('The selected intake is not published; advisor confirmation is required.');
     const generatedAt=new Date().toISOString();
-    const result={generatedAt,programme:`${intake.Major.Course.Code} ${intake.Major.Course.Name} / ${intake.Major.Name} / ${intake.Term.Name}`,plannerName:planner.name,year:body.year,term:body.term,maxUnits:body.maxUnits,maxCredits:body.maxCredits,documentName:document.name,review,plan};
+    const result={generatedAt,programme:`${intake.Major.Course.Code} ${intake.Major.Course.Name} / ${intake.Major.Name} / ${intake.Term.Name}`,plannerId:planner.id,version:planner.version,plannerName:planner.name,year:body.year,term:body.term,maxUnits:body.maxUnits,maxCredits:body.maxCredits,documentName:document.name,review,plan};
     return NextResponse.json({success:true,...result});
   } catch { return NextResponse.json({success:false,message:'Planning records are unavailable. Your review is retained; please retry.'},{status:503}); }
 }

@@ -10,13 +10,20 @@ function RoleBubble({
   isAuthenticated,
 }) {
   const [open, setOpen] = useState(false);
+  const [temporaryStudent, setTemporaryStudent] = useState(false);
+  const [devRoleOverride, setDevRoleOverride] = useState(false);
   const bubbleRef = useRef(null);
 
-  const showBubble =
+  useEffect(() => {
+    try { setTemporaryStudent(JSON.parse(localStorage.getItem("userProfile") || "null")?.temporaryUnrestrictedStudent === true); } catch { setTemporaryStudent(false); }
+  }, []);
+  useEffect(() => {
+    try { setDevRoleOverride(localStorage.getItem("devRoleOverride") === "1"); } catch { setDevRoleOverride(false); }
+  }, [selectedRoleName]);
+  const showBubble = !temporaryStudent && (
     (isAuthenticated && canUserSwitchRoles) ||
-    (typeof window !== "undefined" &&
-      localStorage.getItem("devRoleOverride") === "1") ||
-    process.env.NEXT_PUBLIC_MODE === "DEV";
+    devRoleOverride ||
+    process.env.NEXT_PUBLIC_MODE === "DEV");
 
   // Close bubble when clicking outside
   useEffect(() => {
@@ -63,8 +70,7 @@ function RoleBubble({
           {/* Header with label + close icon */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
-              {typeof window !== "undefined" &&
-              localStorage.getItem("devRoleOverride") === "1"
+              {devRoleOverride
                 ? "Viewing as:"
                 : process.env.NEXT_PUBLIC_MODE === "DEV"
                 ? "DEV Role:"
@@ -88,8 +94,7 @@ function RoleBubble({
             ))}
           </select>
 
-          {typeof window !== "undefined" &&
-            localStorage.getItem("devRoleOverride") === "1" && (
+          {devRoleOverride && (
               <button
                 onClick={resetOverride}
                 className="text-xs px-2 py-1 rounded bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-medium"

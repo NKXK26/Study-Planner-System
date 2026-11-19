@@ -28,23 +28,19 @@ async function runDbSetup() {
 
   const dbMissing = !fs.existsSync(dbPath)
   const schemaOutdated = currentVersion < SCHEMA_VERSION
+  let versionBackupCreated = false
 
-  if (dbMissing || schemaOutdated) {
-    if (dbMissing) {
-      console.log('First launch — copying bundled database...')
-    } else {
-      console.log(`Schema updated (v${currentVersion} → v${SCHEMA_VERSION}) — replacing database...`)
-      // Optional: back up the old DB before replacing
-      const backupPath = path.join(userData, `planner.backup.v${currentVersion}.db`)
-      fs.copyFileSync(dbPath, backupPath)
-      console.log('Old DB backed up to:', backupPath)
-    }
-
+  if (dbMissing) {
+    console.log('First launch — copying bundled database...')
     fs.copyFileSync(sourceDb, dbPath)
-    fs.writeFileSync(versionPath, String(SCHEMA_VERSION))
-    console.log('Done.')
-  } else {
-    console.log(`Database up to date (v${SCHEMA_VERSION}), skipping copy.`)
+    console.log('Bundled database copied.')
+  } else if (schemaOutdated) {
+    console.log(`Database schema revision changed (v${currentVersion} → v${SCHEMA_VERSION}); preserving local records and applying in-place upgrades.`)
+    let backupPath = path.join(userData, `planner.backup.v${currentVersion}.db`)
+    if (fs.existsSync(backupPath)) backupPath = path.join(userData, `planner.backup.v${currentVersion}.${Date.now()}.db`)
+    fs.copyFileSync(dbPath, backupPath)
+    versionBackupCreated = true
+    console.log('Existing database backed up to:', backupPath)
   }
 
   // Existing v6 databases predate Maker's optional study-period columns.
@@ -55,11 +51,13 @@ async function runDbSetup() {
   const db = new PrismaClient({ datasources: { db: { url: `file:${dbPath.replace(/\\/g, '/')}` } } })
   try {
     const upgraded = await upgradePlannerSchema(db, async () => {
+      if (versionBackupCreated) return
       const backupPath = path.join(userData, `planner.before-study-periods.${Date.now()}.db`)
       fs.copyFileSync(dbPath, backupPath)
       console.log('Planner database backed up to:', backupPath)
     })
     if (upgraded) console.log('Planner study-period columns added; existing records retained.')
+    if (schemaOutdated || dbMissing) fs.writeFileSync(versionPath, String(SCHEMA_VERSION))
   } finally {
     await db.$disconnect()
   }

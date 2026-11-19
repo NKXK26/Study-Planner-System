@@ -1,5 +1,5 @@
-import {plannerUnitReadSelect} from '@app/libs/plannerReadCompatibility.mjs';
-﻿import prisma from '@utils/db/db';
+import {readLocalCatalogue} from '@app/libs/readLocalCatalogue.mjs';
+import prisma from '@utils/db/db';
 import { NextResponse } from 'next/server';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
 
@@ -29,6 +29,13 @@ async function validateAuthenticatedRequest(req) {
 }
 
 export async function GET(req) {
+    if (process.env.PLANNER_CATALOGUE_URL && (req.headers.get('x-temporary-student') === 'true' || req.cookies?.get('temporary_student')?.value === '1')) {
+        const {readOfficialCatalogue} = await import('@app/libs/officialCatalogue.mjs');
+        try {
+            const catalogue = await readOfficialCatalogue();
+            return NextResponse.json({...catalogue,success:true,count:catalogue.data.length});
+        } catch { return NextResponse.json({message:'Published catalogue unavailable.'},{status:503}); }
+    }
     const authResult = await validateAuthenticatedRequest(req);
     if (authResult.error) return authResult.error;
 
@@ -42,41 +49,7 @@ export async function GET(req) {
 
     let studyPlanners;
     try {
-        const unitSelect=await plannerUnitReadSelect(prisma);
-        studyPlanners = await prisma.studyPlanner.findMany({
-            where: id ? { id } : {},
-            orderBy: { createdAt: 'desc' },
-            include: {
-                studyPlannerUnits: {
-                    select: {
-                        ...unitSelect,
-                        unit: {
-                            include: {
-                                UnitTermOffered: { select: { TermType: true } },
-                                UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit: {
-                                    select: {
-                                        UnitRelationship: true,
-                                        LogicalOperators: true,
-                                        MinCP: true,
-                                        Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit: {
-                                            select: { ID: true, UnitCode: true, Name: true },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                        unitType: true,
-                    },
-                },
-                plannerTemplate: {
-                    include: {
-                        requirements: {
-                            include: { unitType: true },
-                        },
-                    },
-                },
-            },
-        });
+        studyPlanners = await readLocalCatalogue(prisma,id);
     } catch (error) {
         console.error('GET /api/study-planner error:', error);
         return NextResponse.json({ success: false, message: 'Failed to load study planners', details: error?.message ?? 'Unknown error' }, { status: 500 });
@@ -86,35 +59,7 @@ export async function GET(req) {
         return NextResponse.json({ success: false, message: 'Study planner not found' }, { status: 404 });
     }
 
-    const transformed = studyPlanners.map(planner => ({
-        id: planner.id,
-        name: planner.name,
-        createdAt: planner.createdAt,
-        plannerTemplateId: planner.plannerTemplateId ?? null,
-        plannerTemplate: planner.plannerTemplate,   // ✅ added
-        units: planner.studyPlannerUnits.map(j => ({
-            ID: j.unit.ID,
-            UnitCode: j.unit.UnitCode,
-            Name: j.unit.Name,
-            CreditPoints: j.unit.CreditPoints,
-            Availability: j.unit.Availability,
-            unitTypeId: j.unitTypeId,
-            unitType: j.unitType,
-            plannedYear: j.plannedYear,
-                plannedSemester: j.plannedSemester,
-                plannedDates: j.plannedDates,
-                sortOrder: j.sortOrder,
-                offeredTerms: j.unit.UnitTermOffered.map(term => term.TermType),
-            requisites: j.unit.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit.map(requisite => ({
-                relationship: requisite.UnitRelationship,
-                logicalOperator: requisite.LogicalOperators,
-                minCredits: requisite.MinCP,
-                unit: requisite.Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit,
-            })),
-        })),
-    }));
-
-    return NextResponse.json({ success: true, count: studyPlanners.length, data: transformed });
+    return NextResponse.json({ success: true, count: studyPlanners.length, data: studyPlanners });
 }
 
 export async function DELETE(req) {

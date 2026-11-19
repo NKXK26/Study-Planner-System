@@ -17,6 +17,8 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [temporaryStudent, setTemporaryStudent] = useState(false);
+  const [devRoleOverride, setDevRoleOverride] = useState(false);
   const pathname = usePathname();
   const isChatPage = pathname === '/view/ai-assistant';
   // Role context
@@ -29,10 +31,15 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
   //const pathname = usePathname();
 
   // Check if user can switch roles (from context or localStorage as fallback)
-  const canUserSwitchRoles = canSwitchRoles || (typeof window !== 'undefined' && localStorage.getItem('canSwitchRoles') === 'true');
-
+  const canUserSwitchRoles = canSwitchRoles;
   useEffect(() => {
     setMounted(true);
+    try {
+      setTemporaryStudent(JSON.parse(localStorage.getItem('userProfile') || 'null')?.temporaryUnrestrictedStudent === true);
+    } catch { setTemporaryStudent(false); }
+    const syncRoleOverride = () => setDevRoleOverride(localStorage.getItem('devRoleOverride') === '1');
+    syncRoleOverride();
+    window.addEventListener('storage', syncRoleOverride);
 
     // Add click outside listener
     const handleClickOutside = (event) => {
@@ -47,8 +54,15 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('storage', syncRoleOverride);
+    };
   }, []);
+
+  useEffect(() => {
+    try { setDevRoleOverride(localStorage.getItem('devRoleOverride') === '1'); } catch { setDevRoleOverride(false); }
+  }, [selectedRoleName]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -102,18 +116,19 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
   */
   const handleLogout = onLogout || (async () => {
     try {
+      await fetch('/api/auth/student-session', { method: 'DELETE' }).catch(() => {});
       // const msalInstance = new PublicClientApplication(msalConfig);
       await msalInstance.initialize();
 
       const account = msalInstance.getAllAccounts()[0];
-      if (!account) {
-        console.warn("No account found to log out");
-        return;
-      }
       let DataCacherObject = new DataCacher();
 
       DataCacherObject.ClearAllCache();
       localStorage.clear();
+      if (!account) {
+        window.location.assign('/');
+        return;
+      }
       await msalInstance.logoutRedirect({
         account,
         postLogoutRedirectUri: "/"
@@ -165,7 +180,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
           )}
 
           {/* Logo auth, to make the logo a div instead of href when clicked on for non users */}
-          {(isAuthenticated || process.env.NEXT_PUBLIC_MODE == "DEV") ? (
+          {!temporaryStudent && (isAuthenticated || process.env.NEXT_PUBLIC_MODE == "DEV") ? (
             //This is the logo when the user HAS LOGGED IN
             <a href="/view/dashboard" className="hover:opacity-80 transition-opacity">
               <img src="/images/swinburne_logo.png" alt="Logo" className="h-[2rem] w-auto"></img>
@@ -199,7 +214,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
           )}
 
           {/* Account Icon - visible to all authenticated users */}
-          {(isAuthenticated || process.env.NEXT_PUBLIC_MODE == "DEV") && (
+          {!temporaryStudent && (isAuthenticated || process.env.NEXT_PUBLIC_MODE == "DEV") && (
             <a
               href="/view/account"
               className="p-2 rounded-full hover:bg-gray-700/50 transition-colors duration-200"
@@ -223,14 +238,14 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
           )}
 
           {/* Role selection - visible only to Superadmin users, in DEV mode, or when explicitly in role override mode */}
-          {(
+          {!temporaryStudent && (
             (isAuthenticated && canUserSwitchRoles) ||
-            (typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1') ||
+            devRoleOverride ||
             (process.env.NEXT_PUBLIC_MODE === 'DEV')
           ) && (
               <div className={isChatPage ? 'flex min-w-0 flex-wrap items-center gap-2' : 'sm:flex hidden items-center gap-2'}>
                 <label className="text-white text-sm hidden sm:block">
-                  {typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1'
+                  {devRoleOverride
                     ? 'Viewing as:'
                     : process.env.NEXT_PUBLIC_MODE === 'DEV'
                       ? 'DEV Role:'
@@ -247,7 +262,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
-                {typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1' && (
+                {devRoleOverride && (
                   <button
                     className="ml-1 text-xs px-2 py-1 rounded bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-medium"
                     onClick={resetOverride}
@@ -256,7 +271,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
                     Reset to Actual Role
                   </button>
                 )}
-                {typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1' && (
+                {devRoleOverride && (
                   <span className="text-xs text-yellow-200 hidden sm:inline" title="Temporary role view for testing">
                     (Override)
                   </span>
@@ -309,7 +324,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
         <div className={isChatPage ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden' : 'flex-1 overflow-auto'}>
           <main className={isChatPage ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'p-4'}>
             {/* Show role override warning for superadmin */}
-            {typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1' && (
+            {devRoleOverride && (
               <div className={`bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4 ${isChatPage ? 'shrink-0' : ''}`}>
                 <div className="flex">
                   <div className="flex-shrink-0">

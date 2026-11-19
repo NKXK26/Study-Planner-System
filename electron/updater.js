@@ -1,5 +1,5 @@
 const { autoUpdater } = require('electron-updater')
-const { dialog } = require('electron')
+const { app, dialog } = require('electron')
 const log = require('electron-log')
 
 autoUpdater.logger = log
@@ -10,6 +10,8 @@ autoUpdater.autoDownload = true          // silently download in background
 autoUpdater.autoInstallOnAppQuit = false // we control when to install
 
 function initUpdater(mainWindow) {
+  if (!app.isPackaged) return
+
   // Wait 8 seconds after launch — don't compete with server startup
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch(err => {

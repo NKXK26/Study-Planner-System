@@ -10,6 +10,21 @@ import { useEffect, useState } from 'react';
 export default function ClientLayout({ children }) {
 	const pathname = usePathname();
 	const isLoginPage = pathname === '/';
+	const [catalogueNotice,setCatalogueNotice] = useState('');
+	useEffect(() => {
+		if (pathname === '/view/compare_study_planner') return;
+		let active = true;
+		const refresh = async () => {
+			try {
+				const response = await fetch('/api/official-planners?status=1',{cache:'no-store'});
+				const status = await response.json();
+				if (active) setCatalogueNotice(status.warning || status.message || '');
+			} catch { if (active) setCatalogueNotice('Planner catalogue unavailable.'); }
+		};
+		refresh();
+		window.addEventListener('online', refresh);
+		return () => { active = false; window.removeEventListener('online',refresh); };
+	}, [pathname]);
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 
 	useEffect(() => {
@@ -34,6 +49,8 @@ export default function ClientLayout({ children }) {
 	) : (
 		<RoleProvider>
 			<SidebarLayout isAuthenticated={isAuthenticated}>
+				{catalogueNotice && ['/view/dashboard','/view/graduation-eligibility','/view/ai-assistant'].includes(pathname) &&
+					<p role="status" className="px-4 pt-2 text-sm text-amber-700">{catalogueNotice}</p>}
 				{children}
 			</SidebarLayout>
 			{/* <LightDarkMode /> */}

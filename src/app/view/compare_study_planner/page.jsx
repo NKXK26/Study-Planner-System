@@ -17,7 +17,7 @@ import { parseTranscript } from '@app/libs/doubleMajorChecker.mjs';
 import ReplacementWorkspace from '@/app/view/unit_suggestion/ReplacementWorkspace';
 import UnitPoolToolbox from '@/app/view/unit_suggestion/UnitPoolToolbox';
 import { generateStudyPlannerPdf } from '@/app/view/unit_suggestion/Exportstudyplannerpdf';
-import { buildBcsPlan, parseTranscriptRows, rankTopPlannerMatches, deriveTranscriptAcademicPeriod, getBcsWilDisplayName, getPlannerCompletionResult, detectCompletedBcsDoubleMajors, unitCode } from '@/app/libs/bcsPlannerRules.mjs';
+import { buildBcsPlan, parseTranscriptRows, rankTopPlannerMatches, deriveTranscriptAcademicPeriod, getBcsWilDisplayName, getPlannerCompletionResult, detectCompletedBcsDoubleMajors, getPlannerScopedMappings, resolveDuplicatePlannerUnitCodes, unitCode } from '@/app/libs/bcsPlannerRules.mjs';
 import {
 	CategoryBadge, DraggableUnitCard, PanelUnitCard,
 	ExternalUnitCard, SemesterDropZone,
@@ -25,7 +25,7 @@ import {
 import {
 	DEFAULT_CREDIT_POINTS, MAX_UNITS_PER_SEMESTER,
 	getNormalizedUnitCode, extractUnitCode,
-	scheduleRemainingUnits, balanceSemesterLoads,
+	scheduleRemainingUnits,
 	optimizeFinalSemester, compactFinalSemesters, isWilPlacementUnit,
 	scheduleWilBreakPlacement, getWilQualifyingCompletedUnitCodes,
 } from '@/app/view/unit_suggestion/plannerHelpers';
@@ -244,6 +244,7 @@ function getNeededUnitsPerCategory(planner, completedMap, mappedExternalUnits) {
 	}
 
 	const completedCountByCategory = new Map();
+	const plannerUnitCodes = new Set(plannerUnits.map(unit => extractUnitCode(unit.UnitCode).toUpperCase()));
 		template.requirements.forEach(req => {
 			completedCountByCategory.set(String(req.unitTypeId), 0);
 	});
@@ -257,10 +258,17 @@ function getNeededUnitsPerCategory(planner, completedMap, mappedExternalUnits) {
 		}
 	});
 
+	const countedMappedCodes = new Set();
 	Object.entries(mappedExternalUnits || {}).filter(([cat]) => cat !== OTHER_MAPPING_KEY).forEach(([cat, units]) => {
 		if (!completedCountByCategory.has(String(cat))) return;
 		const current = completedCountByCategory.get(String(cat)) || 0;
-		completedCountByCategory.set(String(cat), current + units.length);
+		const mappedCount = (units || []).filter(unit => {
+			const code = extractUnitCode(unit.code ?? unit.UnitCode).toUpperCase();
+			if (!code || unit.isOtherMapping || plannerUnitCodes.has(code) || countedMappedCodes.has(code)) return false;
+			countedMappedCodes.add(code);
+			return true;
+		}).length;
+		completedCountByCategory.set(String(cat), current + mappedCount);
 	});
 
 	const neededByCategory = new Map();
@@ -401,10 +409,7 @@ const AddUnitModal = ({ isOpen, onClose, availableUnits, onAddUnit }) => {
 };
 
 // ─── Inline Study Planner ─────────────────────────────────────────────────────
-const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onMappingsChange }) => {
-	const [allPlanners, setAllPlanners] = useState([]);
-	const [plannersLoading, setPlannersLoading] = useState(false);
-	const [plannersError, setPlannersError] = useState(null);
+const InlineStudyPlanner = ({ setCatalogueWarningForReceipt, allPlanners, completedUnits, studentInfo, initialPlannerId, onMappingsChange, onPlannerContextChange }) => {
 	const [recommendations, setRecommendations] = useState(null);
 	const [editableSchedule, setEditableSchedule] = useState([]);
 	const [scheduleLoading, setScheduleLoading] = useState(false);
@@ -434,14 +439,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 		? selectedFieldPlanner.plannerTemplate.requirements.map(req => ({ key: String(req.unitTypeId), label: req.unitType?.Name || `Unit type ${req.unitTypeId}`, description: 'Count toward this planner requirement' }))
 		: [...new Map((selectedFieldPlanner?.units || []).filter(unit => unit.unitTypeId != null).map(unit => [String(unit.unitTypeId), { key: String(unit.unitTypeId), label: unit.unitType?.Name || `Unit type ${unit.unitTypeId}`, description: 'Planner unit category' }])).values()]);
 	const mappingCategories = [...plannerCategories, { key: OTHER_MAPPING_KEY, label: 'Other', description: 'Keep as a recorded external completion; does not satisfy planner requirements' }];
-	const selectedBcsPlan = buildBcsPlan(selectedFieldPlanner, completedUnits, studentInfo?.intakeTerm, mappedExternalUnits);
-	const currentCompletion = useMemo(() => {
-		if (!selectedFieldPlanner) return null;
-		const completedMap = buildCompletedMap(completedUnits, mappedExternalUnits);
-		const genericPlan = getNeededUnitsPerCategory(selectedFieldPlanner, completedMap, mappedExternalUnits);
-		return getPlannerCompletionResult({ planner: selectedFieldPlanner, bcsPlan: selectedBcsPlan, genericPlan });
-	}, [selectedFieldPlanner, selectedBcsPlan, completedUnits, mappedExternalUnits]);
-
+	const selectedPlannerMappings = useMemo(() => getPlannerScopedMappings(mappedExternalUnits, selectedFieldPlanner?.id), [mappedExternalUnits, selectedFieldPlanner?.id]);
 	const computePlannerScores = useCallback((planners, completed, mappings) => {
 		if (!planners.length || !completed.length) return [];
 		const ranked = rankTopPlannerMatches(completed, planners, studentInfo?.intakeTerm, planners.length, { mappedExternalUnits: mappings });
@@ -451,30 +449,54 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 		});
 	}, [studentInfo?.intakeTerm]);
 
-	const rankedPlanners = useMemo(() => computePlannerScores(allPlanners, completedUnits, mappedExternalUnits), [allPlanners, completedUnits, mappedExternalUnits, computePlannerScores]);
-	const highestRankedPlanner = rankedPlanners[0] || null;
-	const highestMatchingPlanner = highestRankedPlanner?.overlapCount > 0 ? highestRankedPlanner : null;
-	const highestRankedCompletion = useMemo(() => {
-		if (!highestMatchingPlanner) return null;
-		const plannerMappings = Object.fromEntries(Object.entries(mappedExternalUnits).map(([key, units]) => [key, (units || []).filter(unit => Number(unit.plannerId) === Number(highestMatchingPlanner.id))]));
-		const bcsPlan = buildBcsPlan(highestMatchingPlanner, completedUnits, studentInfo?.intakeTerm, plannerMappings);
-		const genericPlan = getNeededUnitsPerCategory(highestMatchingPlanner, buildCompletedMap(completedUnits, plannerMappings), plannerMappings);
-		return getPlannerCompletionResult({ planner: highestMatchingPlanner, bcsPlan, genericPlan });
-	}, [highestMatchingPlanner, completedUnits, mappedExternalUnits, studentInfo?.intakeTerm]);
-	const highestRankedDoubleMajor = useMemo(() => detectCompletedBcsDoubleMajors({
-		primaryPlanner: highestMatchingPlanner,
+	const selectedBcsPlan = useMemo(
+		() => buildBcsPlan(selectedFieldPlanner, completedUnits, studentInfo?.intakeTerm, selectedPlannerMappings),
+		[selectedFieldPlanner, completedUnits, studentInfo?.intakeTerm, selectedPlannerMappings],
+	);
+	const currentGenericPlan = useMemo(() => {
+		if (!selectedFieldPlanner) return null;
+		return getNeededUnitsPerCategory(selectedFieldPlanner, buildCompletedMap(completedUnits, selectedPlannerMappings), selectedPlannerMappings);
+	}, [selectedFieldPlanner, completedUnits, selectedPlannerMappings]);
+	const currentCompletion = useMemo(() => {
+		if (!selectedFieldPlanner) return null;
+		return getPlannerCompletionResult({ planner: selectedFieldPlanner, bcsPlan: selectedBcsPlan, genericPlan: currentGenericPlan });
+	}, [selectedFieldPlanner, selectedBcsPlan, currentGenericPlan]);
+	const selectedDoubleMajor = useMemo(() => detectCompletedBcsDoubleMajors({
+		primaryPlanner: selectedFieldPlanner,
 		planners: allPlanners,
 		completedUnits,
 		studentIntake: studentInfo?.intakeTerm,
-		primaryEligible: Boolean(highestRankedCompletion?.eligible),
+		primaryEligible: Boolean(currentCompletion?.eligible),
 		normalizeCode: code => unitCode(getNormalizedUnitCode(code)),
-	}), [highestMatchingPlanner, allPlanners, completedUnits, studentInfo?.intakeTerm, highestRankedCompletion]);
+	}), [selectedFieldPlanner, allPlanners, completedUnits, studentInfo?.intakeTerm, currentCompletion]);
+	const completionFailureMessage = useMemo(() => {
+		if (!selectedFieldPlanner || currentCompletion?.eligible) return '';
+		const reasons = [];
+		if (selectedBcsPlan) {
+			if (selectedBcsPlan.metadataIssues.length) reasons.push(...selectedBcsPlan.metadataIssues);
+			const needs = selectedBcsPlan.categoryNeeds;
+			const names = { 'bcs-core': 'Core', 'bcs-major': 'Major', 'bcs-elective': 'Elective', 'bcs-prescribed': 'prescribed Elective', 'bcs-recommended': 'recommended Elective', 'bcs-wil': 'WIL' };
+			for (const [key, count] of Object.entries(needs)) if (count > 0) reasons.push(`${names[key] || key}: ${count} unit${count === 1 ? '' : 's'} still required.`);
+		} else if (currentGenericPlan && !currentGenericPlan.completionEligible) {
+			const labels = new Map((selectedFieldPlanner.plannerTemplate?.requirements || []).map(req => [String(req.unitTypeId), req.unitType?.Name || `Unit type ${req.unitTypeId}`]));
+			for (const [key, count] of Object.entries(currentGenericPlan.categoryNeeds || {})) if (count > 0) reasons.push(`${labels.get(key) || 'Planner category'}: ${count} unit${count === 1 ? '' : 's'} still required.`);
+		}
+		const mappingsForOtherPlanner = Object.values(mappedExternalUnits).flat().some(unit => Number(unit.plannerId) !== Number(selectedFieldPlanner.id));
+		if (mappingsForOtherPlanner) reasons.push('Some external-unit mappings belong to a different planner and do not count here.');
+		const excludedAttempts = (studentInfo?.transcriptAttempts || []).some(attempt => !attempt.passing && (attempt.grade || attempt.status));
+		if (excludedAttempts) reasons.push('Failed or in-progress attempts do not count as completed units.');
+		return reasons.length ? reasons.join(' ') : 'The selected planner has not met all recorded requirements.';
+	}, [selectedFieldPlanner, currentCompletion, selectedBcsPlan, currentGenericPlan, mappedExternalUnits, studentInfo?.transcriptAttempts]);
 
 	useEffect(() => { onMappingsChange?.(mappedExternalUnits); }, [mappedExternalUnits, onMappingsChange]);
+	useEffect(() => {
+		onPlannerContextChange?.({ planner: selectedFieldPlanner, mappings: selectedPlannerMappings, completion: currentCompletion, doubleMajor: selectedDoubleMajor });
+	}, [onPlannerContextChange, selectedFieldPlanner, selectedPlannerMappings, currentCompletion, selectedDoubleMajor]);
 
 	// Core schedule generator (uses category requirements)
 	const generateSchedule = useCallback((planner, mapped = mappedExternalUnits) => {
 		if (!planner) return;
+		mapped = getPlannerScopedMappings(mapped, planner.id);
 		setScheduleLoading(true);
 		setEditableSchedule([]);
 		try {
@@ -507,9 +529,10 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 			// New BCS curriculum has one canonical WIL unit. Older planners may use
 			// ICT20016 or ICT20026, but must not receive a fabricated ICT20016 entry.
 			const selectedPlannerWilUnits = bcsPlan?.isNew
-				? detectedPlannerWilUnits.filter(unit => extractUnitCode(unit.UnitCode) === 'ICT20016')
+				? detectedPlannerWilUnits.filter(unit => extractUnitCode(unit.UnitCode) === (planner.wilCode || 'ICT20016'))
 				: detectedPlannerWilUnits;
-			const hasPassedPlannerWil = selectedPlannerWilUnits.some(unit => {
+			const hasPassedEquivalentBcsWil = Boolean(bcsPlan) && bcsPlan.passedWil;
+			const hasPassedPlannerWil = hasPassedEquivalentBcsWil || selectedPlannerWilUnits.some(unit => {
 				const code = extractUnitCode(unit.UnitCode).toUpperCase();
 				return completedMap.has(code) || completedMap.has(getNormalizedUnitCode(code));
 			});
@@ -596,7 +619,6 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 			}
 
 			schedule = compactFinalSemesters(schedule, completedMap);
-			schedule = balanceSemesterLoads(schedule, completedMap);
 			schedule = optimizeFinalSemester(schedule);
 			const qualifyingWilCodes = getWilQualifyingCompletedUnitCodes({
 				plannerUnits,
@@ -640,10 +662,15 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 			setEditableSchedule(schedule);
 			setShowFullPlan(true);
 
+			if (planner.version) {
+				const receipt = {id:planner.id, name:planner.name, version:planner.version, publishedAt:planner.publishedAt, generatedAt:new Date().toISOString()};
+				try { localStorage.setItem('planner-recommendation:'+crypto.randomUUID(),JSON.stringify(receipt)); }
+				catch { setCatalogueWarningForReceipt('Recommendation history could not be saved on this device. Export the comparison to keep its revision.'); }
+			}
 			setRecommendations({
 				totalCompleted,
 				totalCredits,
-				plannerName: planner.name,
+				plannerName: planner.version ? planner.name+" (ID "+planner.id+", v"+planner.version+")" : planner.name,
 				completedPercent: (totalCompleted / plannerUnits.length) * 100,
 				currentYear,
 				currentSemester,
@@ -676,7 +703,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 			categoryNames = [...categoryNames, 'WIL'];
 		}
 
-		const completedMap = buildCompletedMap(completedUnits, mappedExternalUnits);
+		const completedMap = buildCompletedMap(completedUnits, selectedPlannerMappings);
 
 		const scheduledCodeSet = new Set();
 		editableSchedule.flatMap(s => s.units).forEach(u => {
@@ -700,21 +727,20 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 			result[target].push({ ...withWilDisplay(unit, isBcsPlanner), status, isMappedExternal: false });
 		});
 
-		(mappedExternalUnits[OTHER_MAPPING_KEY] || []).forEach(u => result.Other.push({
+		(selectedPlannerMappings[OTHER_MAPPING_KEY] || []).forEach(u => result.Other.push({
 				...u, status: 'completed', isMappedExternal: true,
 				CreditPoints: u.creditPoints || DEFAULT_CREDIT_POINTS, Name: u.name, UnitCode: u.code,
 			}));
 
 		Object.keys(result).forEach(cat => { if (!result[cat].length && cat !== 'Other') delete result[cat]; });
 		return result;
-	}, [selectedFieldPlanner, selectedBcsPlan, completedUnits, editableSchedule, mappedExternalUnits]);
+	}, [selectedFieldPlanner, selectedBcsPlan, completedUnits, editableSchedule, selectedPlannerMappings]);
 
 	const handleSelectPlanner = (planner) => {
 		setSelectedFieldPlanner(planner);
 		setRecommendations(null);
-		setMappedExternalUnits({});
 		setDebugInfo(null);
-		generateSchedule(planner, {});
+		generateSchedule(planner, getPlannerScopedMappings(mappedExternalUnits, planner.id));
 	};
 
 	// External unit mapping
@@ -723,7 +749,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 		if (!code) return;
 		const category = mappingCategories.find(item => item.key === String(categoryKey)) || mappingCategories.find(item => item.key === OTHER_MAPPING_KEY);
 		setMappedExternalUnits(prev => {
-			const alreadyMapped = Object.values(prev).flat().some(unit => getNormalizedUnitCode(String(unit.code ?? '').toUpperCase()) === code);
+			const alreadyMapped = Object.values(prev).flat().some(unit => Number(unit.plannerId) === Number(selectedFieldPlanner?.id) && getNormalizedUnitCode(String(unit.code ?? '').toUpperCase()) === code);
 			if (alreadyMapped) return prev;
 			const unitToAdd = {
 				...externalUnit, code: String(externalUnit.code ?? externalUnit.UnitCode).trim().toUpperCase(),
@@ -741,8 +767,8 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 		const code = getNormalizedUnitCode(String(unitToRemove.code ?? unitToRemove.UnitCode ?? '').toUpperCase());
 		const key = String(unitToRemove.categoryKey ?? categoryKey);
 		setUnrecognisedUnits(prev => prev.some(unit => getNormalizedUnitCode(String(unit.code ?? '').toUpperCase()) === code) ? prev : [...prev, { code: unitToRemove.code ?? unitToRemove.UnitCode, name: unitToRemove.name ?? unitToRemove.Name ?? '', creditPoints: unitToRemove.creditPoints ?? unitToRemove.CreditPoints ?? 0 }]);
-		setMappedExternalUnits(prev => ({ ...prev, [key]: (prev[key] || []).filter(unit => getNormalizedUnitCode(String(unit.code ?? '').toUpperCase()) !== code) }));
-	}, []);
+		setMappedExternalUnits(prev => ({ ...prev, [key]: (prev[key] || []).filter(unit => Number(unit.plannerId) !== Number(selectedFieldPlanner?.id) || getNormalizedUnitCode(String(unit.code ?? '').toUpperCase()) !== code) }));
+	}, [selectedFieldPlanner?.id]);
 
 	const handleReplaceUnrecognisedUnit = useCallback((dbUnit, category) => {
 		handleMapExternalToCategory(category, {
@@ -759,11 +785,11 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 			const wilQualifyingUnitCodes = Array.from(getWilQualifyingCompletedUnitCodes({
 				plannerUnits: selectedFieldPlanner?.units || [],
 				completedUnits,
-				mappedExternalUnits,
+				mappedExternalUnits: selectedPlannerMappings,
 			}));
 			const response = await SecureFrontendAuthHelper.authenticatedFetch('/api/study-planner/validate-schedule', {
 				method: 'POST', headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ schedule: candidate, completedUnits, wilQualifyingUnitCodes, strictAvailability: Boolean(selectedBcsPlan) }),
+				body: JSON.stringify({ plannerRevisionId:selectedFieldPlanner?.version ? selectedFieldPlanner.id : null, schedule: candidate, completedUnits, wilQualifyingUnitCodes, strictAvailability: Boolean(selectedBcsPlan) }),
 			});
 			const result = await response.json();
 			if (!response.ok || !result.valid) {
@@ -776,7 +802,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 			setScheduleValidationError(`Could not validate this change: ${error.message}`);
 			return false;
 		}
-	}, [completedUnits, mappedExternalUnits, selectedBcsPlan, selectedFieldPlanner]);
+	}, [completedUnits, selectedPlannerMappings, selectedBcsPlan, selectedFieldPlanner]);
 
 	// Remove unit from semester
 	const handleRemoveUnit = useCallback(async (semIdx, unitIdx) => {
@@ -792,12 +818,12 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 		try {
 			await generateStudyPlannerPdf({
 				editableSchedule, recommendations, studentInfo, completedUnits,
-				graduationAssessment: highestRankedDoubleMajor,
+				graduationAssessment: selectedDoubleMajor,
 				filename: `study-planner-${studentInfo?.studentId ?? 'student'}-${(recommendations?.plannerName ?? 'planner').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}.pdf`,
 			});
 		} catch (err) { console.error('PDF export failed:', err); }
 		finally { setPdfLoading(false); }
-	}, [editableSchedule, recommendations, studentInfo, completedUnits, highestRankedDoubleMajor]);
+	}, [editableSchedule, recommendations, studentInfo, completedUnits, selectedDoubleMajor]);
 
 	// Add semester
 	const handleAddSemester = () => {
@@ -879,15 +905,6 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 
 	// Effects
 	useEffect(() => {
-		setPlannersLoading(true);
-		SecureFrontendAuthHelper.authenticatedFetch('/api/study-planner')
-			.then(r => r.json())
-			.then(json => { if (json.success) setAllPlanners(json.data || []); else setPlannersError('Failed to load planners.'); })
-			.catch(() => setPlannersError('Network error fetching planners.'))
-			.finally(() => setPlannersLoading(false));
-	}, []);
-
-	useEffect(() => {
 		if (!allPlanners.length || !completedUnits?.length) return;
 		const scored = computePlannerScores(allPlanners, completedUnits, mappedExternalUnits);
 		setAllPlannersWithScores(scored);
@@ -928,11 +945,12 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 	const groupedUnits = getPlannerUnitsWithStatus();
 	const allExternalMapped = unrecognisedUnits.length === 0;
 	const hasGraduationResult = selectedFieldPlanner && recommendations;
-	const mappedExternalList = Object.values(mappedExternalUnits).flat();
+	const mappedExternalList = Object.values(selectedPlannerMappings).flat();
 
 	return (
 		<div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
-			{/* Header */}
+			{catalogueWarning && <p role="status" className="text-amber-700">{catalogueWarning}</p>}
+							{/* Header */}
 			<div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
 				<div className="flex items-center gap-3">
 					<div className="border border-[#cc2131]/30 text-[#cc2131] bg-[#cc2131]/5 p-2 rounded-xl">
@@ -940,7 +958,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 					</div>
 					<div>
 						<h2 className="text-xl font-bold text-[#111827]">Study Planner Recommendation</h2>
-						<p className="text-gray-500 text-xs">{plannersLoading ? 'Loading planners…' : `${allPlanners.length} planner(s) available`}</p>
+						<p className="text-gray-500 text-xs">{`${allPlanners.length} planner(s) available`}</p>
 					</div>
 				</div>
 				<div className="flex gap-2">
@@ -958,7 +976,6 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 			</div>
 
 			<div className="p-6 bg-gray-50/40 space-y-5">
-				{plannersError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm flex items-center gap-2"><ExclamationTriangleIcon className="h-4 w-4" />{plannersError}</div>}
 				{scheduleValidationError && <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm flex items-start gap-2"><ExclamationTriangleIcon className="h-4 w-4 mt-0.5 flex-shrink-0" />{scheduleValidationError}</div>}
 				{studentCurrentPeriod && <div className="text-sm rounded-xl border border-blue-200 bg-blue-50 text-blue-900 px-4 py-3">Current transcript period: <strong>Year {studentCurrentPeriod.year}, Semester {studentCurrentPeriod.semester}</strong> ({studentCurrentPeriod.term.raw}). The next teaching period is <strong>Year {currentYear}, Semester {currentSemester}</strong>.</div>}
 
@@ -1055,10 +1072,10 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 				)}
 				{currentCompletion?.eligible && (
 					<div className={`rounded-xl border p-4 text-sm ${currentCompletion.majorName ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
-						{Number(selectedFieldPlanner?.id) === Number(highestMatchingPlanner?.id) && highestRankedDoubleMajor?.status === 'double'
-							? <p><span className="font-semibold">🎓 Double major requirements met.</span> {highestRankedDoubleMajor.primaryMajor} and {highestRankedDoubleMajor.candidates[0].secondMajor}.</p>
-							: Number(selectedFieldPlanner?.id) === Number(highestMatchingPlanner?.id) && highestRankedDoubleMajor?.status === 'review'
-								? <><p className="font-semibold">🎓 Primary major requirements met.</p><p className="mt-1 text-amber-800">Possible completed second majors need review: {highestRankedDoubleMajor.candidates.map(candidate => candidate.secondMajor).join(', ')}.</p></>
+						{selectedDoubleMajor?.status === 'double'
+							? <p><span className="font-semibold">🎓 Double major requirements met.</span> {selectedDoubleMajor.primaryMajor} and {selectedDoubleMajor.candidates[0].secondMajor}.</p>
+							: selectedDoubleMajor?.status === 'review'
+								? <><p className="font-semibold">🎓 Primary major requirements met.</p><p className="mt-1 text-amber-800">Possible completed second majors need review: {selectedDoubleMajor.candidates.map(candidate => candidate.secondMajor).join(', ')}.</p></>
 								: currentCompletion.majorName
 							? <p><span className="font-semibold">🎓 All requirements met!</span> Congratulations — you have completed the {currentCompletion.majorName} major requirements.</p>
 							: <><p className="font-semibold">🎓 All selected-planner requirements are met.</p><p className="mt-1">{currentCompletion.warning}</p></>}
@@ -1190,41 +1207,33 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 				</div>
 
 				{/* Schedule display with Add Unit buttons and unit badges */}
-				{scheduleLoading || plannersLoading ? (
+				{scheduleLoading ? (
 					<div className="text-center py-12">
 						<ArrowPathIcon className="h-10 w-10 text-[#cc2131] animate-spin mx-auto mb-3" />
-						<p className="text-gray-500">{plannersLoading ? 'Fetching planners…' : 'Building your schedule…'}</p>
+						<p className="text-gray-500">Building your schedule…</p>
 					</div>
-				) : editableSchedule.length === 0 && highestMatchingPlanner && highestRankedCompletion?.eligible ? (
+				) : selectedFieldPlanner && currentCompletion?.eligible ? (
 					<div className="text-center py-12">
 						<div className="bg-white border border-gray-200 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
 							<CheckCircleIcon className="h-10 w-10 text-[#cc2131]" />
 						</div>
 						<p className="text-[#111827] text-lg font-medium">🎓 All requirements met!</p>
-						{highestRankedDoubleMajor?.status === 'double' ? (
-							<p className="text-gray-500 mt-2">Congratulations — you have completed the {highestRankedDoubleMajor.primaryMajor} and {highestRankedDoubleMajor.candidates[0].secondMajor} double major requirements.</p>
-						) : highestRankedDoubleMajor?.status === 'review' ? (
+						<p className="text-gray-500 mt-2">Congratulations for completing {selectedFieldPlanner.name}.</p>
+						{selectedDoubleMajor?.status === 'double' ? (
+							<p className="text-gray-500 mt-1">Recorded major coverage also matches {selectedDoubleMajor.primaryMajor} and {selectedDoubleMajor.candidates[0].secondMajor} requirements.</p>
+						) : selectedDoubleMajor?.status === 'review' ? (
 							<div className="mt-2 space-y-1">
-								<p className="text-gray-500">Congratulations for completing {highestMatchingPlanner.plannerName}.</p>
-								<p className="text-amber-700">Possible additional majors detected: {highestRankedDoubleMajor.candidates.map(candidate => candidate.secondMajor).join(', ')}. Please have your double-major eligibility reviewed.</p>
+								<p className="text-amber-700">Possible additional majors detected: {selectedDoubleMajor.candidates.map(candidate => candidate.secondMajor).join(', ')}. Please have the double-major coverage reviewed.</p>
 							</div>
-						) : <p className="text-gray-500 mt-2">Congratulations for completing {highestMatchingPlanner.plannerName}.</p>}
-					</div>
-				) : editableSchedule.length === 0 && !highestMatchingPlanner && currentCompletion?.eligible ? (
-					<div className="text-center py-12">
-						<div className="bg-white border border-gray-200 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-							<CheckCircleIcon className="h-10 w-10 text-[#cc2131]" />
-						</div>
-						<p className="text-[#111827] text-lg font-medium">🎓 All requirements met!</p>
-						<p className="text-gray-500 mt-2">You've completed all required units, but the system could not identify a matching study planner.</p>
+						) : null}
 					</div>
 				) : editableSchedule.length === 0 ? (
 					<div className="text-center py-12">
 						<div className="bg-amber-50 border border-amber-200 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
 							<ExclamationTriangleIcon className="h-10 w-10 text-amber-600" />
 						</div>
-						<p className="text-[#111827] text-lg font-medium">🎓 Study plan complete</p>
-						<p className="text-gray-500 mt-2">The highest matching planner is not yet confirmed as complete. Review outstanding requirements, planner details, and approved mappings before confirming graduation.</p>
+						<p className="text-[#111827] text-lg font-medium">Study plan has no scheduled units</p>
+						<p className="text-gray-500 mt-2">{completionFailureMessage}</p>
 					</div>
 				) : showFullPlan && (
 					<div>
@@ -1308,7 +1317,7 @@ const InlineStudyPlanner = ({ completedUnits, studentInfo, initialPlannerId, onM
 				)}
 			</div>
 
-			<UnitPoolToolbox isOpen={showToolbox} onClose={() => setShowToolbox(false)} />
+			<UnitPoolToolbox catalogue={allPlanners} isOpen={showToolbox} onClose={() => setShowToolbox(false)} />
 			<EquivalencyModal isOpen={equivModal.open} onClose={() => setEquivModal({ open: false, unit: null })}
 				oldUnit={equivModal.unit} intakeYear={intakeYear} currentSem={currentSem} categories={mappingCategories} onReplace={handleReplaceUnrecognisedUnit} />
 			
@@ -1335,8 +1344,23 @@ export default function CompareStudyPlannerPage() {
 	const [exporting, setExporting] = useState(false);
 	const [fileName, setFileName] = useState('');
 	const [expandedPlanners, setExpandedPlanners] = useState([]);
+	const [catalogueWarning, setCatalogueWarning] = useState('');
+	useEffect(() => {
+		let active = true;
+		async function refresh() {
+			try {
+				const response = await fetch('/api/official-planners?status=1', {cache:'no-store'});
+				const result = await response.json();
+				if (active) setCatalogueWarning(result.warning || result.message || '');
+			} catch { if (active) setCatalogueWarning('Planner catalogue unavailable.'); }
+		}
+		refresh();
+		window.addEventListener('online',refresh);
+		return () => { active = false; window.removeEventListener('online',refresh); };
+	}, []);
 	const [plannerCatalog, setPlannerCatalog] = useState([]);
 	const [confirmedMappings, setConfirmedMappings] = useState({});
+	const [selectedPlannerContext, setSelectedPlannerContext] = useState(null);
 	const fileInputRef = useRef(null);
 
 	const hasAccess = isSuperadmin() || can('planner', 'read');
@@ -1360,16 +1384,18 @@ export default function CompareStudyPlannerPage() {
 			const wb = XLSX.utils.book_new();
 			const topPlanner = plannerCatalog.find(planner => Number(planner.id) === Number(matchedPlanners[0]?.plannerId));
 			const topMappings = Object.fromEntries(Object.entries(confirmedMappings).map(([key, units]) => [key, (units || []).filter(unit => Number(unit.plannerId) === Number(topPlanner?.id))]));
-			const topBcsPlan = buildBcsPlan(topPlanner, completedUnits, studentInfo.intakeTerm, topMappings);
-			const topGenericPlan = topPlanner ? getNeededUnitsPerCategory(topPlanner, buildCompletedMap(completedUnits, topMappings), topMappings) : null;
-			const topCompletion = getPlannerCompletionResult({ planner: topPlanner, bcsPlan: topBcsPlan, genericPlan: topGenericPlan });
-			const doubleMajor = detectCompletedBcsDoubleMajors({ primaryPlanner: topPlanner, planners: plannerCatalog, completedUnits, studentIntake: studentInfo.intakeTerm, primaryEligible: Boolean(topCompletion?.eligible), normalizeCode: code => unitCode(getNormalizedUnitCode(code)) });
+			const assessmentPlanner = selectedPlannerContext?.planner ?? topPlanner;
+			const assessmentMappings = selectedPlannerContext?.mappings ?? topMappings;
+			const assessmentBcsPlan = buildBcsPlan(assessmentPlanner, completedUnits, studentInfo.intakeTerm, assessmentMappings);
+			const assessmentGenericPlan = assessmentPlanner ? getNeededUnitsPerCategory(assessmentPlanner, buildCompletedMap(completedUnits, assessmentMappings), assessmentMappings) : null;
+			const assessmentCompletion = selectedPlannerContext?.completion ?? getPlannerCompletionResult({ planner: assessmentPlanner, bcsPlan: assessmentBcsPlan, genericPlan: assessmentGenericPlan });
+			const doubleMajor = selectedPlannerContext?.doubleMajor ?? detectCompletedBcsDoubleMajors({ primaryPlanner: assessmentPlanner, planners: plannerCatalog, completedUnits, studentIntake: studentInfo.intakeTerm, primaryEligible: Boolean(assessmentCompletion?.eligible), normalizeCode: code => unitCode(getNormalizedUnitCode(code)) });
 			const studentRows = [['File', studentInfo.studentId], ['Detected intake', studentInfo.intakeTerm?.raw ?? 'Not detected'], ['Completed Units', studentInfo.completedUnitsCount], ['Total Credits', studentInfo.totalCredits], [], ['Code', 'Name', 'Grade', 'Credits'], ...studentInfo.completedUnitsList.map(u => [u.code, u.name, u.grade, u.creditPoints])];
 			XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(studentRows), 'Completed Units');
 			const plannerRows = [['Rank', 'Planner', 'ID', 'Created', 'Intake match', 'Academic score', 'Matching', 'Credits', 'Student coverage', 'Planner coverage', 'Credit coverage'], ...matchedPlanners.map((p, i) => [i + 1, p.plannerName, p.plannerId, new Date(p.createdAt).toLocaleDateString(), p.intakeMatchLabel, p.academicScore.toFixed(1), p.overlapCount, p.totalMatchedCredits, p.matchStudentPct.toFixed(1) + '%', p.matchPlannerPct.toFixed(1) + '%', p.creditCoveragePct.toFixed(1) + '%'])];
 			XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(plannerRows), 'Top Planners');
 			const doubleMajorLabel = doubleMajor.status === 'double' ? `Eligible: ${doubleMajor.primaryMajor} + ${doubleMajor.candidates[0].secondMajor}` : doubleMajor.status === 'review' ? `Review required: ${doubleMajor.candidates.map(candidate => candidate.secondMajor).join(', ')}` : doubleMajor.status === 'single' ? 'Single major complete; no completed second major detected' : 'Not assessed';
-			const graduationRows = [['Primary planner', matchedPlanners[0]?.plannerName ?? ''], ['Primary requirements eligible', topCompletion?.eligible ? 'Yes' : 'No'], ['Graduation assessment', doubleMajorLabel], ['Second major candidates', doubleMajor.candidates.map(candidate => candidate.secondMajor).join(', ')], ...doubleMajor.candidates.flatMap(candidate => [['Second major', candidate.secondMajor], ['Shared primary-major units', candidate.sharedUnits.join(', ')], ['Additional second-major units', candidate.uniqueUnits.join(', ')]])];
+			const graduationRows = [['Assessed planner', assessmentPlanner?.name ?? ''], ['Planner ID', assessmentPlanner?.id], ['Revision', assessmentPlanner?.version ?? 'Local'], ['Published', assessmentPlanner?.publishedAt ?? ''], ['Primary requirements eligible', assessmentCompletion?.eligible ? 'Yes' : 'No'], ['Graduation assessment', doubleMajorLabel], ['Second major candidates', doubleMajor.candidates.map(candidate => candidate.secondMajor).join(', ')], ...doubleMajor.candidates.flatMap(candidate => [['Second major', candidate.secondMajor], ['Shared primary-major units', candidate.sharedUnits.join(', ')], ['Additional second-major units', candidate.uniqueUnits.join(', ')]])];
 			XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(graduationRows), 'Graduation Assessment');
 			matchedPlanners.forEach((p, i) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[p.plannerName], ['Code', 'Name', 'Credits'], ...p.matchingUnits.map(u => [u.code, u.name, u.creditPoints])]), `Planner_${i + 1}_Matches`.slice(0, 31)));
 			XLSX.writeFile(wb, `study_planner_comparison_${fileName.replace(/\.xlsx$/i, '')}.xlsx`);
@@ -1381,7 +1407,7 @@ export default function CompareStudyPlannerPage() {
 		const file = e.target.files?.[0];
 		if (!file) return;
 		setSearched(true); setFileName(file.name); setError(null);
-		setMatchedPlanners([]); setCompletedUnits([]); setStudentInfo(null); setExpandedPlanners([]); setPlannerCatalog([]); setConfirmedMappings({});
+		setMatchedPlanners([]); setCompletedUnits([]); setStudentInfo(null); setExpandedPlanners([]); setPlannerCatalog([]); setConfirmedMappings({}); setSelectedPlannerContext(null);
 		try {
 			setLoading(true);
 			const transcript = await parseXlsxFile(file);
@@ -1391,13 +1417,15 @@ export default function CompareStudyPlannerPage() {
 			setCompletedUnits(Array.from(unitsMap.values()));
 			const totalCredits = Array.from(unitsMap.values()).reduce((s, u) => s + (u.creditPoints || 0), 0);
 			setStudentInfo({ studentId: file.name, completedUnitsCount: unitsMap.size, totalCredits, intakeTerm: transcript.intakeTerm, transcriptAttempts: transcript.attempts, completedUnitsList: Array.from(unitsMap.values()).map(u => ({ code: u.code, name: u.name, grade: u.grade, creditPoints: u.creditPoints })) });
-			const res = await SecureFrontendAuthHelper.authenticatedFetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/study-planner`);
+			const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/official-planners');
 			if (!res.ok) throw new Error(`Failed to fetch planners: ${res.status}`);
-			const { success, data: allPlanners, message } = await res.json();
+			const { success, data: allPlanners, message, warning } = await res.json();
+			setCatalogueWarning(warning || "");
 			if (!success) throw new Error(message || 'Failed to fetch planners');
 			if (!allPlanners.length) { setError('No study planners found.'); return; }
-			setPlannerCatalog(allPlanners);
-			const top5 = rankTopPlannerMatches(unitsMap, allPlanners, transcript.intakeTerm);
+			const resolvedPlanners = resolveDuplicatePlannerUnitCodes(allPlanners, unitsMap);
+			setPlannerCatalog(resolvedPlanners);
+			const top5 = rankTopPlannerMatches(unitsMap, resolvedPlanners, transcript.intakeTerm);
 			if (!top5.length) setError('No matching planners found for the uploaded units.');
 			else setMatchedPlanners(top5);
 		} catch (err) { setError(err.message || 'Failed to process file'); }
@@ -1546,7 +1574,7 @@ export default function CompareStudyPlannerPage() {
 						{/* Inline study planner */}
 						{showStudyPlanner && (
 							<div className="mt-8">
-								<InlineStudyPlanner completedUnits={completedUnits} studentInfo={studentInfo} initialPlannerId={matchedPlanners[0]?.plannerId} onMappingsChange={setConfirmedMappings} />
+				<InlineStudyPlanner setCatalogueWarningForReceipt={setCatalogueWarning} allPlanners={plannerCatalog} completedUnits={completedUnits} studentInfo={studentInfo} initialPlannerId={matchedPlanners[0]?.plannerId} onMappingsChange={setConfirmedMappings} onPlannerContextChange={setSelectedPlannerContext} />
 							</div>
 						)}
 

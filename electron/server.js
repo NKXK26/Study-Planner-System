@@ -1,6 +1,7 @@
 const net = require('net')
 const path = require('path')
 const fs = require('fs')
+const crypto = require('crypto')
 
 let nextProcess = null
 
@@ -43,18 +44,35 @@ async function startNextServer() {
     : path.join(__dirname, '..', '.next', 'standalone')
 
   const dbPath = path.join(app.getPath('userData'), 'planner.db')
-
+  const sessionSecretPath = path.join(app.getPath('userData'), 'session-secret')
+  fs.mkdirSync(path.dirname(sessionSecretPath), { recursive: true })
+  let sessionSecret
+  try {
+    sessionSecret = fs.readFileSync(sessionSecretPath, 'utf8').trim()
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+    sessionSecret = crypto.randomBytes(48).toString('hex')
+    try {
+      fs.writeFileSync(sessionSecretPath, sessionSecret, { flag: 'wx', mode: 0o600 })
+    } catch (writeError) {
+      if (writeError.code !== 'EEXIST') throw writeError
+      sessionSecret = fs.readFileSync(sessionSecretPath, 'utf8').trim()
+    }
+  }
+  if (sessionSecret.length < 64) throw new Error('The local session secret is invalid. Remove the session-secret file and restart the app.')
 
   const env = {
     ...process.env,
+    ...(!isProd ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
     NODE_ENV: 'production',
     PORT: '3000',
     HOSTNAME: '127.0.0.1',
     NEXT_PUBLIC_SERVER_URL: 'http://localhost:3000',
     DATABASE_URL: `file:${dbPath}`,
     DIRECT_URL: `file:${dbPath}`,
-    NEXT_PUBLIC_MODE: 'DEV',   // ← this enables the dev override bypass in all API routes
-    SESSION_SECRET: 'local-desktop-secret-32-chars-xx',
+    NEXT_PUBLIC_MODE: isProd ? 'PROD' : (process.env.NEXT_PUBLIC_MODE || 'DEV'),
+    PLANNER_CACHE_DIR: path.join(app.getPath('userData'), 'official-catalogue'),
+    SESSION_SECRET: sessionSecret,
     WHITELIST_MODE: 'false',
     DEFAULT_USER_GROUP_ID: '1',
     DEFAULT_USER_ROLE: 'Viewer',

@@ -7,16 +7,19 @@ publish:
   owner: NKXK26
   repo: Study-Planner-System
   releaseType: release
+  publishAutoUpdate: true
+
+artifactName: "Student-Study-Planner-Setup-${version}-${arch}.${ext}"
 
 files:
   - "electron/**/*"
-  - ".next/standalone/**/*"
-  - ".next/static/**/*"
+  - ".next-electron/standalone/**/*"
+  - ".next-electron/static/**/*"
   - "public/**/*"
-  - "prisma/**/*"
+  - "prisma/schema.prisma"
   - "package.json"
   - "next.config.*"
-  - "!.next/cache/**"
+  - "!.next-electron/cache/**"
   - "!.env*"
   - "!**/.env*"
   - "!*.md"
@@ -35,6 +38,7 @@ win:
 nsis:
   oneClick: false
   perMachine: false
+  allowElevation: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
@@ -43,15 +47,17 @@ nsis:
   uninstallerIcon: build-resources/icon.ico
 
 extraResources:
-  - from: build-resources/node
-    to: node
-  - from: .next/standalone
+  - from: build-resources/node/node.exe
+    to: node/node.exe
+  - from: build-resources/icon.ico
+    to: build-resources/icon.ico
+  - from: .next-electron/standalone
     to: app
     filter:
       - "**/*"
       - "!**/.env*"
-  - from: .next/static
-    to: app/.next/static
+  - from: .next-electron/static
+    to: app/.next-electron/static
   - from: public
     to: app/public
   - from: prisma/app.db

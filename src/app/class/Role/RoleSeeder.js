@@ -47,6 +47,14 @@ export default class RoleSeeder {
                 Priority: 20,
                 IsSystem: true,
                 IsActive: true
+            },
+            {
+                Name: 'Student',
+                Description: 'Temporary local demo student identity; unrestricted access is enabled only by the development override',
+                Color: '#CC2131',
+                Priority: 10,
+                IsSystem: true,
+                IsActive: true
             }
         ];
 

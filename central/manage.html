@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Official planner publishing</title>
+<h1>Official planner publishing</h1>
+<label>Revision <select id="versions"></select></label>
+<p>Review the course, intake, major, requirements and units before publishing. To correct or restore an earlier version, create a revision and review the new draft.</p>
+<label>Load exported planner <input id="file" type="file" accept=".json"></label><br>
+<label>Planner definition (JSON)<br><textarea rows="25" cols="95" id="definition"></textarea></label>
+<p><button data-action="create">Create new series</button> <button data-action="save">Save draft</button> <button data-action="revise">Create revision</button> <button data-action="publish">Publish draft</button> <button data-action="archive">Archive</button></p>
+<p role="status" id="message"></p><h2>Revision history</h2><pre id="events"></pre>
+<script>
+let rows = [];
+const byId = id => document.getElementById(id);
+const selected = () => rows.find(r => r.id === Number(byId('versions').value));
+function display() {
+  const row = selected();
+  byId('definition').value = JSON.stringify(row?.snapshot || {name:'',courseCode:'BA-CS',major:'',intakeYear:2026,intakeMonth:3,plannerTemplate:{name:'',requirements:[]},units:[],wilCode:'ICT20016',wilEquivalents:['ICT20016','ICT20026']},null,2);
+  byId('events').textContent = (row?.events || []).map(e=>[e.at,e.actor,e.action].join(' ')).join('\n');
+}
+async function reload(id) {
+  const r = await fetch('/revisions');
+  if (!r.ok) throw Error('Cannot load revisions');
+  rows = await r.json();
+  byId('versions').replaceChildren(...rows.map(row=>new Option(row.snapshot.name+' v'+row.version+' ('+row.status+')',row.id)));
+  if (id) byId('versions').value = id;
+  display();
+}
+byId('versions').onchange = display;
+byId('file').onchange = async event => {
+  try {
+    const file = event.target.files[0];
+    if (!file || file.size > 1024*1024) throw Error('Choose a planner JSON file under 1 MiB.');
+    const planner = JSON.parse(await file.text());
+    if (!Array.isArray(planner.units)) throw Error('Expected one planner definition.');
+    byId('definition').value = JSON.stringify(planner,null,2);
+    byId('message').textContent = 'Review the definition and confirm its course, major and intake before saving.';
+  } catch (error) { byId('message').textContent = error.message; }
+};
+for (const button of document.querySelectorAll('button')) button.onclick = async () => {
+  try {
+    const row = selected(), action = button.dataset.action;
+    if (action === 'publish' && byId('definition').value !== JSON.stringify(row.snapshot,null,2)) throw Error('Save your edits, then review and publish the saved draft.');
+    if (['publish','archive'].includes(action) && !confirm(action+' '+row.snapshot.name+' v'+row.version+'?')) return;
+    const body = {action,id:row?.id,edit:row?.edit};
+    if (['save','create'].includes(action)) body.snapshot = JSON.parse(byId('definition').value);
+    const r = await fetch('/revisions',{method:'POST',headers:{'Content-Type':'application/json','X-Catalogue-Write':'1'},body:JSON.stringify(body)});
+    const result = await r.json();
+    if (!r.ok) throw Error(result.message);
+    await reload(result.id);
+    byId('message').textContent = 'Saved '+result.snapshot.name+' v'+result.version+' ('+result.status+')';
+  } catch(e) { byId('message').textContent = e.message; }
+};
+reload().catch(e=>byId('message').textContent=e.message);
+</script></html>

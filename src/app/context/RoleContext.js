@@ -22,6 +22,7 @@ export const RoleProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [userActualRoles, setUserActualRoles] = useState([]);
     const [canSwitchRoles, setCanSwitchRoles] = useState(false);
+    const [adminLoginSession, setAdminLoginSession] = useState(false);
 
     // load roles and initial selected role from session
     useEffect(() => {
@@ -38,12 +39,30 @@ export const RoleProvider = ({ children }) => {
 
                 // In DEV mode, always enable role switching
                 const isDevMode = typeof window !== 'undefined' && process.env.NEXT_PUBLIC_MODE === 'DEV';
+                let temporaryStudent = false;
+                let isAdminLoginSession = false;
+                try {
+                    const savedProfile = JSON.parse(localStorage.getItem('userProfile') || 'null');
+                    temporaryStudent = savedProfile?.temporaryUnrestrictedStudent === true;
+                    isAdminLoginSession = savedProfile?.adminLoginSession === true &&
+                        Array.isArray(savedProfile.roles) &&
+                        savedProfile.roles.some(role => String(role).trim().toLowerCase() !== 'student');
+                } catch { /* ignore malformed cached profiles */ }
+                setAdminLoginSession(isAdminLoginSession);
+
+                if (temporaryStudent) {
+                    setRoles(['Student']);
+                    setSelectedRoleName('Student');
+                    setUserActualRoles(['Student']);
+                    setCanSwitchRoles(false);
+                    setPermissions(['dashboard:access', 'planner:read']);
+                    setLoading(false);
+                    return;
+                }
 
                 // Restore canSwitchRoles flag from localStorage immediately to prevent it from disappearing
                 const persistedCanSwitch = localStorage.getItem('canSwitchRoles');
-                if (persistedCanSwitch === 'true' || isDevMode) {
-                    setCanSwitchRoles(true);
-                }
+                setCanSwitchRoles(!temporaryStudent && (persistedCanSwitch === 'true' || isDevMode));
 
                 // Restore userActualRoles from localStorage if available
                 try {
@@ -89,10 +108,10 @@ export const RoleProvider = ({ children }) => {
 
                             // Check if user can switch roles (has superadmin role in their actual roles or in DEV mode)
                             const hasSuperadminRole = actualUserRoles.some(role => /^superadmin$/i.test(role));
-                            setCanSwitchRoles(hasSuperadminRole || isDevMode);
+                            setCanSwitchRoles(!temporaryStudent && (hasSuperadminRole || isDevMode));
 
                             // Persist canSwitchRoles flag in localStorage
-                            localStorage.setItem('canSwitchRoles', (hasSuperadminRole || isDevMode) ? 'true' : 'false');
+                            localStorage.setItem('canSwitchRoles', (!temporaryStudent && (hasSuperadminRole || isDevMode)) ? 'true' : 'false');
 
                             // For the selected role, use the current profile (which may be overridden)
                             const currentProfile = localStorage.getItem('userProfile');
@@ -101,6 +120,12 @@ export const RoleProvider = ({ children }) => {
                             initialRoleName = userAssigned;
                         }
                     } catch { /* ignore */ }
+
+                    // Keep the temporary development-only student identity distinct from staff roles.
+                    try {
+                        const currentProfile = JSON.parse(localStorage.getItem('userProfile') || 'null');
+                        if (currentProfile?.temporaryUnrestrictedStudent) initialRoleName = 'Student';
+                    } catch { /* ignore malformed cached profiles */ }
 
                     // In case no user profile or roles, pick the first available role to avoid blank state
                     if (!initialRoleName && roleNames.length > 0) {
@@ -217,6 +242,9 @@ export const RoleProvider = ({ children }) => {
     const setSelectedRoleByName = async (roleName) => {
         // In production, do not allow arbitrary role override via session flags
         const isDevMode = typeof window !== 'undefined' && process.env.NEXT_PUBLIC_MODE === 'DEV';
+        try {
+            if (JSON.parse(localStorage.getItem('userProfile') || 'null')?.temporaryUnrestrictedStudent) return;
+        } catch { /* ignore malformed cached profiles */ }
         const actualRoleName = roleName || selectedRoleName || '';
         setSelectedRoleName(actualRoleName);
 
@@ -278,6 +306,7 @@ export const RoleProvider = ({ children }) => {
     const can = useMemo(() => {
         const permsSet = new Set(permissions || []);
         return (resource, action) => {
+            if (adminLoginSession) return true;
             // In production do not grant blanket access by selected role name alone
             // Only rely on explicit permissions
             if (!permsSet.size) {
@@ -303,7 +332,7 @@ export const RoleProvider = ({ children }) => {
             }
             return false;
         };
-    }, [permissions, selectedRoleName]);
+    }, [permissions, selectedRoleName, adminLoginSession]);
 
     // Check if current selected role is Superadmin
     const isSuperadmin = useMemo(() => {
@@ -311,6 +340,8 @@ export const RoleProvider = ({ children }) => {
             return selectedRoleName && /^superadmin$/i.test(selectedRoleName);
         };
     }, [selectedRoleName]);
+
+    const isAdminLoginSession = useMemo(() => () => adminLoginSession, [adminLoginSession]);
 
     const value = {
         roles,
@@ -322,7 +353,9 @@ export const RoleProvider = ({ children }) => {
         setSelectedRoleByName,
         resetOverride,
         can,
-        isSuperadmin
+        isSuperadmin,
+        isAdminLoginSession,
+        adminLoginSession
     };
     return (
         <RoleContext.Provider value={value}>{children}</RoleContext.Provider>

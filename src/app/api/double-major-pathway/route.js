@@ -1,3 +1,4 @@
+import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import {NextResponse} from 'next/server';
 import prisma from '@utils/db/db';
 import {toolIdentity} from '@app/libs/plannerTools.server';
@@ -13,8 +14,10 @@ export async function POST(req){
     if(!document)throw new Error('Upload your DPA first.');
     const transcript=documentEvidence(document).transcript;
     if(!transcript)throw new Error('The DPA table cannot be verified. Upload a readable XLSX export with Course, Status and Earned columns.');
+    const planners = process.env.PLANNER_CATALOGUE_URL ? await publishedPlanningPool() : await (async () => {
     const records=await prisma.studyPlanner.findMany({orderBy:{createdAt:'desc'},include:{studyPlannerUnits:{include:{unit:{include:unitPlanningInclude},unitType:true}},plannerTemplate:{include:{requirements:{include:{unitType:true}}}}}});
-    const planners=records.map(p=>({...p,units:p.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}))}));
+    return records.map(p=>({...p,units:p.studyPlannerUnits.map(j=>({...j.unit,unitType:j.unitType}))}));
+  })();
     const result=doubleMajorPathway({transcript,planners,primaryId:body.primaryId,secondaryId:body.secondaryId,term:body.term,year:body.year});
     return NextResponse.json({success:true,data:result},{headers:{'Cache-Control':'no-store'}});
   }catch(e){return NextResponse.json({success:false,message:e.message||'Could not generate a double-major draft. Please retry.'},{status:e.status||400});}

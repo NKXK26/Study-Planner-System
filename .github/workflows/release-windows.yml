@@ -1,0 +1,100 @@
+name: Windows desktop release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    env:
+      NEXT_PUBLIC_CLIENT_ID: ${{ vars.NEXT_PUBLIC_CLIENT_ID }}
+      NEXT_PUBLIC_AUTHORITY: ${{ vars.NEXT_PUBLIC_AUTHORITY }}
+      NEXT_PUBLIC_REDIRECTURI: ${{ vars.NEXT_PUBLIC_REDIRECTURI }}
+      NEXT_PUBLIC_POSTLOGOUTREDIRECTURI: ${{ vars.NEXT_PUBLIC_POSTLOGOUTREDIRECTURI }}
+      NEXT_PUBLIC_DB_URL: ${{ vars.NEXT_PUBLIC_DB_URL }}
+      NEXT_PUBLIC_ANON_KEY: ${{ vars.NEXT_PUBLIC_ANON_KEY }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify tag matches package version
+        shell: pwsh
+        run: |
+          $tagVersion = $env:GITHUB_REF_NAME.Substring(1)
+          $packageVersion = node -p "require('./package.json').version"
+          if ($tagVersion -ne $packageVersion) {
+            throw "Tag v$tagVersion must match package.json version $packageVersion"
+          }
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Verify public application configuration
+        shell: pwsh
+        run: |
+          $required = @(
+            'NEXT_PUBLIC_CLIENT_ID',
+            'NEXT_PUBLIC_AUTHORITY',
+            'NEXT_PUBLIC_REDIRECTURI',
+            'NEXT_PUBLIC_POSTLOGOUTREDIRECTURI',
+            'NEXT_PUBLIC_DB_URL',
+            'NEXT_PUBLIC_ANON_KEY'
+          )
+          $missing = @($required | Where-Object { -not [Environment]::GetEnvironmentVariable($_) })
+          if ($missing.Count -gt 0) {
+            throw "Set these GitHub Actions repository Variables before releasing: $($missing -join ', ')"
+          }
+
+      - name: Build Windows x64 installer
+        run: npm run electron:build
+
+      - name: Generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          $releaseFiles = Get-ChildItem dist -File | Where-Object {
+            $_.Name -eq 'latest.yml' -or $_.Name -match '\.exe(\.blockmap)?$' -or $_.Name -match '\.blockmap$'
+          }
+          if (-not ($releaseFiles | Where-Object { $_.Name -match '\.exe$' })) {
+            throw 'The Windows installer was not created.'
+          }
+          if (-not ($releaseFiles | Where-Object { $_.Name -eq 'latest.yml' })) {
+            throw 'electron-updater metadata latest.yml was not created.'
+          }
+          if (-not ($releaseFiles | Where-Object { $_.Name -match '\.blockmap$' })) {
+            throw 'The installer blockmap was not created.'
+          }
+          $lines = foreach ($file in $releaseFiles | Sort-Object Name) {
+            $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($file.Name)"
+          }
+          $lines | Set-Content -LiteralPath dist/SHA256SUMS.txt -Encoding ascii
+
+      - name: Publish installer and updater files to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Student Study Planner ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest.yml
+            dist/SHA256SUMS.txt

@@ -19,8 +19,9 @@ async function createWindow() {
     },
     title: 'Student Study Planner',
     show: false,
-    // Use your own icon in build-resources/
-    icon: path.join(__dirname, '..', 'build-resources', 'icon.ico'),
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, 'build-resources', 'icon.ico')
+      : path.join(__dirname, '..', 'build-resources', 'icon.ico'),
   })
 
   // Show loading screen immediately

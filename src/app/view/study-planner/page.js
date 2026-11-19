@@ -1,10 +1,15 @@
 'use client';
+import {preparePublication} from '@app/libs/publicationDraft.mjs';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
 
 export default function StudyPlannerListPage() {
     const router = useRouter();
+    const [manageUrl,setManageUrl] = useState(null);
+    useEffect(() => {
+        fetch('/api/official-planners?status=1').then(r=>r.json()).then(r=>setManageUrl(r.manageUrl)).catch(()=>{});
+    }, []);
     const [planners, setPlanners] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -18,9 +23,7 @@ export default function StudyPlannerListPage() {
     async function fetchPlanners() {
         setLoading(true);
         try {
-            const res = await fetch('/api/study-planner', {
-                headers: { 'x-dev-override': 'true' },
-            });
+            const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/study-planner');
             const data = await res.json();
             if (data.success) setPlanners(data.data);
             else setError(data.message);
@@ -29,6 +32,15 @@ export default function StudyPlannerListPage() {
         } finally {
             setLoading(false);
         }
+    }
+
+    function exportDefinition(planner) {
+        const definition = new Blob([JSON.stringify(preparePublication(planner),null,2)],{type:'application/json'});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(definition);
+        link.download = 'planner-'+planner.id+'.json';
+        link.click();
+        setTimeout(()=>URL.revokeObjectURL(link.href),1000);
     }
 
     async function handleDelete(id) {
@@ -73,6 +85,7 @@ export default function StudyPlannerListPage() {
                 </button>
             </div>
 
+            {manageUrl && <p className="mb-4"><a className="underline" href={manageUrl} target="_blank" rel="noopener noreferrer">Manage official publications</a> · Planners listed below are local working copies.</p>}
             {/* Search Bar */}
             <div className="mb-6">
                 <div className="relative">
@@ -123,6 +136,7 @@ export default function StudyPlannerListPage() {
                                 </p>
                             </div>
                             <div className="flex gap-2">
+                                {manageUrl && <button onClick={()=>exportDefinition(planner)}>Export for publication</button>}
                                 <button
                                     onClick={() => router.push(`/view/study-planner/${planner.id}`)}
                                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"

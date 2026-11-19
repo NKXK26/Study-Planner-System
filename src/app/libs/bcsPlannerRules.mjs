@@ -14,6 +14,48 @@ const NON_CURRENT_STATUSES = new Set(['future']);
 
 export const unitCode = value => String(value ?? '').trim().toUpperCase();
 
+// A planner can contain duplicate unit codes with different titles. When a
+// transcript includes that code, keep the planner record whose title matches
+// the transcript so a single completed unit is not counted twice.
+export function resolveDuplicatePlannerUnitCodes(planners = [], completedUnits = []) {
+  const completedByCode = completedUnits instanceof Map
+    ? completedUnits
+    : new Map((completedUnits || []).map(unit => [unitCode(unit.code ?? unit.UnitCode), unit]));
+  const normalizeName = value => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+  return planners.map(planner => {
+    const groups = new Map();
+    for (const unit of planner?.units || []) {
+      const code = unitCode(unit.UnitCode ?? unit.code);
+      if (!code) continue;
+      if (!groups.has(code)) groups.set(code, []);
+      groups.get(code).push(unit);
+    }
+
+    const keep = new Set();
+    for (const [code, duplicates] of groups) {
+      if (duplicates.length === 1) {
+        keep.add(duplicates[0]);
+        continue;
+      }
+      const transcriptUnit = completedByCode.get(code);
+      const transcriptName = normalizeName(transcriptUnit?.name ?? transcriptUnit?.Name);
+      if (transcriptName) {
+        const exactMatches = duplicates.filter(unit => normalizeName(unit.Name ?? unit.name) === transcriptName);
+        if (exactMatches.length === 1) {
+          keep.add(exactMatches[0]);
+          continue;
+        }
+      }
+      // Identical duplicate rows are safe to collapse; conflicting titles
+      // without an unambiguous transcript title are left visible for review.
+      if (new Set(duplicates.map(unit => normalizeName(unit.Name ?? unit.name))).size === 1) keep.add(duplicates[0]);
+      else duplicates.forEach(unit => keep.add(unit));
+    }
+    return { ...planner, units: (planner.units || []).filter(unit => keep.has(unit)) };
+  });
+}
+
 export function parseTranscriptTerm(value) {
   const match = String(value ?? '').trim().toUpperCase().match(/^(\d{4})_(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|WINTER|SUMMER)(?:_(S[12]|WT|ST|WINTER|SUMMER))?$/);
   if (!match) return null;
@@ -75,6 +117,10 @@ export function deriveTranscriptAcademicPeriod(attempts = []) {
 // Recognise only explicit intake tokens that administrators already include in a
 // planner/template name (for example "25-Sep-CSCS" or "2025_SEP").
 export function getPlannerIntakeMetadata(planner) {
+  if (planner?.intakeYear && planner.intakeMonth) {
+    const {intakeYear:year,intakeMonth:month} = planner;
+    return {known:true,year,month,order:year*1000+month*10+(month>=8?2:1),source:'publication'};
+  }
   const source = `${planner?.name ?? ''} ${planner?.plannerTemplate?.name ?? ''}`.toUpperCase();
   const patterns = [
     /\b(20\d{2})[-_\s]+(FEB|MAR|SEP)\b/,
@@ -113,6 +159,13 @@ const academicMappingForPlanner = (mappedExternalUnits, plannerId) => Object.val
   return !unit?.isOtherMapping && Number(unit?.plannerId) === Number(plannerId) && /core|major|elective|wil/.test(category);
 });
 
+export function getPlannerScopedMappings(mappedExternalUnits = {}, plannerId) {
+  return Object.fromEntries(Object.entries(mappedExternalUnits || {}).map(([category, units]) => [
+    category,
+    (units || []).filter(unit => Number(unit?.plannerId) === Number(plannerId)),
+  ]));
+}
+
 export function scorePlannerMatch(completedUnits, planner, studentIntake, { mappedExternalUnits = {} } = {}) {
   const completed = completedUnits instanceof Map ? completedUnits : new Map((completedUnits || []).map(unit => [unitCode(unit.code ?? unit.UnitCode), unit]));
   const plannerMap = new Map((planner?.units || []).map(unit => [unitCode(unit.UnitCode ?? unit.code), unit]).filter(([code]) => code));
@@ -123,16 +176,17 @@ export function scorePlannerMatch(completedUnits, planner, studentIntake, { mapp
     matchingUnits.push({ code: unitCode(unit.code ?? unit.UnitCode), name: unit.name ?? unit.Name ?? '', creditPoints: Number(unit.creditPoints ?? unit.CreditPoints) || 0 });
     totalMatchedCredits += Number(unit.creditPoints ?? unit.CreditPoints) || 0;
   }
-  const mapped = academicMappingForPlanner(mappedExternalUnits, planner?.id).filter(unit => !completed.has(unitCode(unit.code ?? unit.UnitCode)));
+  const mapped = academicMappingForPlanner(mappedExternalUnits, planner?.id).filter(unit => !plannerMap.has(unitCode(unit.code ?? unit.UnitCode)));
   mapped.forEach(unit => {
     const creditPoints = Number(unit.creditPoints ?? unit.CreditPoints) || 0;
     matchingUnits.push({ code: unitCode(unit.code ?? unit.UnitCode), name: unit.name ?? unit.Name ?? '', creditPoints, mapped: true });
     totalMatchedCredits += creditPoints;
   });
   const overlapCount = matchingUnits.length;
-  const completedCount = completed.size + mapped.length;
+  const extraMapped = mapped.filter(unit => !completed.has(unitCode(unit.code ?? unit.UnitCode)));
+  const completedCount = completed.size + extraMapped.length;
   const plannerUnitCount = plannerMap.size;
-  const totalCompletedCredits = [...completed.values(), ...mapped].reduce((sum, unit) => sum + (Number(unit.creditPoints ?? unit.CreditPoints) || 0), 0);
+  const totalCompletedCredits = [...completed.values(), ...extraMapped].reduce((sum, unit) => sum + (Number(unit.creditPoints ?? unit.CreditPoints) || 0), 0);
   const studentCoverage = completedCount ? overlapCount / completedCount : 0;
   const plannerCoverage = plannerUnitCount ? overlapCount / plannerUnitCount : 0;
   const creditCoverage = totalCompletedCredits ? totalMatchedCredits / totalCompletedCredits : studentCoverage;
@@ -159,7 +213,7 @@ export function rankTopPlannerMatches(completedUnits, planners, studentIntake, l
 }
 
 export function getBcsMajor(planner) {
-  const source = `${planner?.name ?? ''} ${planner?.plannerTemplate?.name ?? ''}`;
+  const source = planner?.major || `${planner?.name ?? ''} ${planner?.plannerTemplate?.name ?? ''}`;
   return BCS_MAJOR_PATTERNS.find(([, pattern]) => pattern.test(source))?.[0] || null;
 }
 
@@ -216,6 +270,7 @@ export function isBcsPlanner(planner) { return Boolean(getBcsMajor(planner)); }
 // Use it only when it explicitly stores one BCS programme and one major; do not
 // turn a shorthand planner title such as "25-Sep-CSCS" into an official label.
 export function getConfirmedPlannerMajorMetadata(planner) {
+  if (planner?.courseCode === 'BA-CS' && planner.major) return {courseName:'Bachelor of Computer Science',majorName:planner.major,source:'publication'};
   const templateName = String(planner?.plannerTemplate?.name ?? '').trim();
   const match = templateName.match(/^(Bachelor of Computer Science)\s*[–-]\s*([^/]+?)\s*$/i);
   if (!match) return null;
@@ -267,7 +322,7 @@ export function getBcsWilDisplayName(unit) {
 }
 
 export function isWilUnit(unit, { bcsPlanner = false } = {}) {
-  if (bcsPlanner && isBcsCanonicalWilUnit(unit)) return true;
+  if (unit?.isOfficialWil || (bcsPlanner && isBcsCanonicalWilUnit(unit))) return true;
   const type = String(unit?.unitType?.Name ?? unit?.unitTypeName ?? '').toLowerCase();
   const text = `${unit?.UnitCode ?? unit?.code ?? ''} ${unit?.Name ?? unit?.name ?? ''}`.toLowerCase();
   return /\bwil\b|work[-\s]?integrated learning|work integrated learning|internship|\bplacement\b/.test(type) || /\bwil\b|work[-\s]?integrated learning|work integrated learning|internship|\bplacement\b/.test(text);
@@ -293,19 +348,31 @@ export function buildBcsPlan(planner, completedUnits, intakeTerm, mappedExternal
   if (!major) return null;
   const plannerUnits = unique((planner?.units || []).filter(unit => unitCode(unit.UnitCode ?? unit.code)));
   const completedCodes = new Set((completedUnits || []).map(unit => unitCode(unit.code ?? unit.UnitCode)));
+  const allowedWil = new Set(planner.wilEquivalents || BCS_WIL_UNIT_CODES);
+  allowedWil.add(planner.wilCode || 'ICT20016');
+  const hasCompletedBcsWil = [...completedCodes].some(code => allowedWil.has(code));
   const core = plannerUnits.filter(isCore);
   const majors = plannerUnits.filter(isMajor);
   const hasKnownIntake = Boolean(intakeTerm);
   const isNew = Boolean(intakeTerm && intakeTerm.order >= 2024_092);
   const wil = plannerUnits.filter(unit => isNew
-    ? unitCode(unit.UnitCode ?? unit.code) === 'ICT20016'
+    ? unitCode(unit.UnitCode ?? unit.code) === (planner.wilCode || 'ICT20016')
     : isWilUnit(unit, { bcsPlanner: true }));
   const electives = plannerUnits.filter(unit => isElective(unit, { bcsPlanner: true }));
   const prescribed = electives.filter(isPrescribed);
   const recommended = electives.filter(unit => !isPrescribed(unit));
   const mappedCounts = { core: 0, major: 0, elective: 0, wil: 0 };
-  Object.values(mappedExternalUnits || {}).flat().forEach(unit => {
+  const mappedCodes = new Set();
+  const completedPlannerCodes = new Set(plannerUnits
+    .map(unit => unitCode(unit.UnitCode ?? unit.code))
+    .filter(code => completedCodes.has(code)));
+  Object.values(getPlannerScopedMappings(mappedExternalUnits, planner?.id)).flat().forEach(unit => {
     if (unit?.isOtherMapping) return;
+    const code = unitCode(unit?.code ?? unit?.UnitCode);
+    // A mapped transcript unit is already in completedCodes by design. Only
+    // skip it when that code already completes a unit in this planner.
+    if (!code || completedPlannerCodes.has(code) || mappedCodes.has(code)) return;
+    mappedCodes.add(code);
     const categoryName = String(unit?.categoryLabel ?? '').toLowerCase();
     if (categoryName === 'core') mappedCounts.core++;
     else if (categoryName.includes('major')) mappedCounts.major++;
@@ -322,8 +389,13 @@ export function buildBcsPlan(planner, completedUnits, intakeTerm, mappedExternal
 
   const coreNeed = missing(core, completedCodes, 8, 'bcs-core', mappedCounts.core);
   const majorNeed = missing(majors, completedCodes, 8, 'bcs-major', mappedCounts.major);
-  const wilNeed = missing(wil, completedCodes, 1, 'bcs-wil', mappedCounts.wil);
-  const passedWil = mappedCounts.wil > 0 || wil.some(unit => completedCodes.has(unitCode(unit.UnitCode ?? unit.code))) || (!isNew && (completedUnits || []).some(isBcsCanonicalWilUnit));
+  // ICT20016 and ICT20026 are equivalent BCS WIL records. A passed alternate
+  // code satisfies the selected planner's single WIL requirement.
+  const wilCompletedCodes = hasCompletedBcsWil
+    ? new Set([...completedCodes, ...wil.map(unit => unitCode(unit.UnitCode ?? unit.code))])
+    : completedCodes;
+  const wilNeed = missing(wil, wilCompletedCodes, 1, 'bcs-wil', mappedCounts.wil);
+  const passedWil = mappedCounts.wil > 0 || hasCompletedBcsWil || wil.some(unit => completedCodes.has(unitCode(unit.UnitCode ?? unit.code)));
   const electiveTarget = isNew ? 6 : (passedWil ? 6 : 8);
   const prescribedNeed = isNew ? missing(prescribed, completedCodes, 2, 'bcs-prescribed') : { completed: 0, units: [] };
   const recommendedNeed = isNew

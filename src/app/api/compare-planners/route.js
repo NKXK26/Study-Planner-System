@@ -1,3 +1,4 @@
+import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import prisma from '@utils/db/db';
 import { NextResponse } from 'next/server';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -23,9 +24,14 @@ export async function GET(req) {
     const idA = parseInt(url.searchParams.get('a'), 10);
     const idB = parseInt(url.searchParams.get('b'), 10);
 
+    let official;
+    if (process.env.PLANNER_CATALOGUE_URL) {
+        try { official = await publishedPlanningPool(); }
+        catch { return NextResponse.json({message:'Published catalogue unavailable.'},{status:503}); }
+    }
     // If no IDs, return all planners for the dropdown
     if (!idA && !idB) {
-        const planners = await prisma.studyPlanner.findMany({
+        const planners = official ?? await prisma.studyPlanner.findMany({
             orderBy: { createdAt: 'desc' },
             include: {
                 studyPlannerUnits: {
@@ -40,7 +46,7 @@ export async function GET(req) {
                 id: p.id,
                 name: p.name,
                 createdAt: p.createdAt,
-                unitCount: p.studyPlannerUnits.length,
+                unitCount: p.units?.length ?? p.studyPlannerUnits.length,
             })),
         });
     }
@@ -54,7 +60,7 @@ export async function GET(req) {
     }
 
     // Fetch both planners
-    const [plannerA, plannerB] = await Promise.all([
+    const [plannerA, plannerB] = official ? [idA,idB].map(id=>official.find(p=>p.id===id)) : await Promise.all([
         prisma.studyPlanner.findUnique({
             where: { id: idA },
             include: {
@@ -77,7 +83,7 @@ export async function GET(req) {
     if (!plannerB) return NextResponse.json({ success: false, message: `Planner B (ID: ${idB}) not found` }, { status: 404 });
 
     const formatUnits = (planner) =>
-        planner.studyPlannerUnits.map(j => ({
+        planner.units ?? planner.studyPlannerUnits.map(j => ({
             joinId: j.id,
             ID: j.unit.ID,
             UnitCode: j.unit.UnitCode,

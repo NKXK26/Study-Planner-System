@@ -7,7 +7,7 @@ import AccessDenied from '@components/AccessDenied';
 import { ConditionalRequireAuth } from '@components/helper';
 
 export default function AuditLogsPage() {
-    const { userActualRoles, selectedRoleName } = useRole();
+    const { userActualRoles, selectedRoleName, isAdminLoginSession } = useRole();
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -61,7 +61,7 @@ export default function AuditLogsPage() {
     // Check if the currently selected role is Superadmin
     // Use selectedRoleName (which changes when toggling roles) for access control
     // In DEV mode, we still check the selected role to allow testing different permissions
-    const isSuperadmin = selectedRoleName?.toLowerCase() === 'superadmin';
+    const isSuperadmin = selectedRoleName?.toLowerCase() === 'superadmin' || isAdminLoginSession();
 
     // Filter modules, actions, and roles based on search term
     const filteredModules = availableModules.filter(module =>

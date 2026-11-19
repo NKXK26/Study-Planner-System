@@ -1,3 +1,4 @@
+import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import prisma from '@utils/db/db';
 import { NextResponse } from 'next/server';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -20,7 +21,7 @@ const semesterOrder = semester => Number(semester.year) * 10 + (isBreakTerm(seme
 const isWilUnit = unit => {
     const type = String(unit?.unitType?.Name ?? '').toLowerCase();
     const text = `${unit?.UnitCode ?? ''} ${unit?.Name ?? ''}`.toLowerCase();
-    return type.includes('wil') || /\bwil\b|work[-\s]?integrated learning|work integrated learning|internship|\bplacement\b/.test(text);
+    return unit?.isOfficialWil || type.includes('wil') || /\bwil\b|work[-\s]?integrated learning|work integrated learning|internship|\bplacement\b/.test(text);
 };
 
 function isOfferedInSemester(terms, semester, requireKnownAvailability = false) {
@@ -63,7 +64,15 @@ export async function POST(req) {
     const submittedCodes = schedule.flatMap(semester => Array.isArray(semester.units) ? semester.units.map(unit => codeOf(unit.UnitCode || unit.code)) : []).filter(Boolean);
     if (submittedCodes.length > 96) return NextResponse.json({ success: false, message: 'A schedule may contain at most 96 units.' }, { status: 400 });
 
-    const units = await prisma.unit.findMany({
+    let units;
+    if (process.env.PLANNER_CATALOGUE_URL && body.plannerRevisionId != null) {
+        let pool;
+        try { pool = await publishedPlanningPool(); }
+        catch { return NextResponse.json({message:'Published revision unavailable.'},{status:503}); }
+        const planner = pool.find(p => p.id === body.plannerRevisionId);
+        if (!planner) return NextResponse.json({message:'The catalogue changed. Reopen the comparison to use its current revision.'},{status:409});
+        units = planner.units;
+    } else units = await prisma.unit.findMany({
         where: { UnitCode: { in: [...new Set(submittedCodes)] } },
         include: {
             unitType: { select: { Name: true } },

@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+  output = "./generated/client"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("CATALOGUE_DATABASE_URL")
+}
+enum PublicationStatus {
+  Draft
+  Published
+  Archived
+  Superseded
+}
+model Revision {
+  id Int @id @default(autoincrement())
+  series String
+  version Int
+  status PublicationStatus @default(Draft)
+  snapshot Json
+  edit Int @default(1)
+  createdAt DateTime @default(now())
+  publishedAt DateTime?
+  events PublicationEvent[]
+  @@unique([series, version])
+}
+model PublicationEvent {
+  id Int @id @default(autoincrement())
+  revisionId Int
+  revision Revision @relation(fields:[revisionId],references:[id])
+  actor String
+  action String
+  at DateTime @default(now())
+}

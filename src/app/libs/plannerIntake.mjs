@@ -1,6 +1,11 @@
 // Intake labels describe curriculum cohorts, not the semester being scheduled.
 // Do not equate S1/S2 with a named month without an explicit catalogue mapping.
 export function plannerIntake(planner) {
+  if (Number.isInteger(planner?.intakeYear) && planner.intakeMonth >= 1 && planner.intakeMonth <= 12) {
+    const year = planner.intakeYear;
+    const month = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][planner.intakeMonth-1];
+    return {key:year+':'+month.toLowerCase(),label:String(year).slice(-2)+'-'+month,year,period:month.toLowerCase()};
+  }
   const name=String(typeof planner==='string'?planner:planner?.name||'').normalize('NFKC').replace(/[–—]/g,'-').trim();
   const match=name.match(/^(20\d{2}|\d{2})[\s._/-]*(january|february|march|april|may|june|july|august|september|october|november|december|sept|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec|s[12])(?=$|[\s._/-]|cs[a-z])/i);
   if(!match)return null;

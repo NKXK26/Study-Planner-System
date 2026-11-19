@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import AuditLogger from '@app/class/Audit/AuditLogger';
-import SecureAuthHelper from '@utils/auth/FrontendAuthHelper';
 import prisma from '@utils/db/db';
-import { TokenValidation } from "@app/api/api_helper";
+import SecureSessionManager from '@utils/auth/SimpleSessionManager';
 
 /**
  * GET /api/audit_logs
@@ -15,11 +14,11 @@ export async function GET(request) {
 			process.env.NEXT_PUBLIC_MODE === 'DEV';
 
 		if (!isDevOverride) {
-			const authHeader = request.headers.get('Authorization');
-			const token_res = TokenValidation(authHeader);
-	
-			if (!token_res.success) {
-				return NextResponse.json({ success: false, message: token_res.message }, { status: token_res.status });
+			const authenticatedUser = await SecureSessionManager.authenticateUser(request);
+			if (!authenticatedUser) return NextResponse.json({ success: false, message: 'Please sign in.' }, { status: 401 });
+			const isSuperadmin = authenticatedUser.roles.some(role => String(role).toLowerCase() === 'superadmin');
+			if (!isSuperadmin && !authenticatedUser.adminLoginSession) {
+				return NextResponse.json({ success: false, message: 'Insufficient permissions.' }, { status: 403 });
 			}
 		}
 		// Parse query parameters

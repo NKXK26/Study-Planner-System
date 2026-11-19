@@ -132,7 +132,7 @@ const StatCard = ({ label, value, icon: Icon, gradient, colorClasses, theme, isL
 );
 
 const Dashboard = () => {
-	const { can, isSuperadmin, role } = useRole();
+	const { can, isSuperadmin, isAdminLoginSession } = useRole();
 	const { theme } = useLightDarkMode();
 	const [stats, setStats] = useState({
 		totalStudents: 0,
@@ -142,6 +142,15 @@ const Dashboard = () => {
 	});
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState(null);
+	const [accessDenied, setAccessDenied] = useState(false);
+	const [temporaryStudent, setTemporaryStudent] = useState(false);
+	useEffect(() => {
+		setAccessDenied(new URLSearchParams(window.location.search).has('accessDenied'));
+		try {
+			setTemporaryStudent(JSON.parse(localStorage.getItem('userProfile') || 'null')?.temporaryUnrestrictedStudent === true);
+		} catch { setTemporaryStudent(false); }
+	}, []);
+	const hideStudentCount = temporaryStudent || isAdminLoginSession();
 
 	useEffect(() => {
 		const fetchStats = async () => {
@@ -316,8 +325,12 @@ const Dashboard = () => {
 	);
 
 	const filteredModules = useMemo(() => {
+		let temporaryStudent = false;
+		try { temporaryStudent = typeof window !== 'undefined' && JSON.parse(localStorage.getItem('userProfile') || 'null')?.temporaryUnrestrictedStudent === true; } catch {}
+		if (temporaryStudent) return modules.filter(module => ['Graduation', 'Study Planner Assistant'].includes(module.title));
 		const filtered = modules.filter((module) => {
-			if (module.permission === 'system' && isSuperadmin()) return true;
+			if (isAdminLoginSession() && module.title === 'Students') return false;
+			if (module.permission === 'system' && (isSuperadmin() || isAdminLoginSession())) return true;
 			return module.links.some((link) => can(link.permission.split(':')[0], link.permission.split(':')[1]));
 		});
 		// Move new modules to the front, keep relative order
@@ -328,7 +341,7 @@ const Dashboard = () => {
 			...newModules.filter(module => module.title !== 'Graduation'),
 			...oldModules,
 		];
-	}, [modules, can, isSuperadmin]);
+	}, [modules, can, isSuperadmin, isAdminLoginSession]);
 
 const statCards = [
 	{
@@ -388,6 +401,7 @@ const statCards = [
 				errorMessage="Failed to load dashboard data"
 			>
 				<div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
+					{accessDenied && <div role="status" className="relative z-10 mx-auto mt-4 max-w-7xl rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">Access denied. You have been returned to the student dashboard.</div>}
 					{/* Background decorative elements */}
 					<div className="fixed inset-0 overflow-hidden pointer-events-none">
 						<div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-10 dark:opacity-5 animate-blob" />
@@ -417,8 +431,8 @@ const statCards = [
 						{isLoading ? (
 							<StatsSkeleton theme={theme} />
 						) : (
-							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-								{statCards.map((card, idx) => (
+							<div className={`grid grid-cols-1 sm:grid-cols-2 ${hideStudentCount ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-6 mb-12`}>
+								{statCards.filter(card => !(hideStudentCount && card.label === 'Total Students')).map((card, idx) => (
 									<StatCard
 										key={idx}
 										label={card.label}
@@ -488,7 +502,7 @@ const statCards = [
 												<div className="space-y-2.5 pt-3 border-t border-gray-200 dark:border-gray-700">
 													{module.links
 														.filter((link) => {
-															if (module.permission === 'system' && isSuperadmin()) return true;
+										if (module.permission === 'system' && (isSuperadmin() || isAdminLoginSession())) return true;
 															return can(link.permission.split(':')[0], link.permission.split(':')[1]);
 														})
 														.map((link, linkIndex) => (
@@ -561,20 +575,24 @@ async function fetchDashboardData() {
 
 	try {
 		const response = await SecureFrontendAuthHelper.authenticatedFetch(
-			`${process.env.NEXT_PUBLIC_SERVER_URL}/api/dashboard`,
+			'/api/dashboard',
 			{
 				signal: controller.signal,
+				cache: 'no-store',
 			}
 		);
 
 		clearTimeout(timeoutId);
+		const contentType = response.headers.get('content-type') || '';
+		if (!contentType.includes('application/json')) {
+			throw new Error(`Dashboard API returned ${response.status} ${response.statusText} instead of JSON. Check that the local Next.js server is running and the API route compiled.`);
+		}
+		const data = await response.json();
 
 		if (!response.ok) {
-			const error = await response.json().catch(() => ({ message: 'Failed to fetch dashboard data' }));
-			throw new Error(error.message || 'Failed to fetch dashboard data');
+			throw new Error(data.message || data.error || 'Failed to fetch dashboard data');
 		}
 
-		const data = await response.json();
 		return data;
 	} catch (error) {
 		clearTimeout(timeoutId);

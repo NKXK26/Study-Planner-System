@@ -25,7 +25,7 @@ function getPlannerField(name) {
     return 'Other';
 }
 
-const UnitPoolToolbox = ({ isOpen, onClose, onDragStart }) => {
+const UnitPoolToolbox = ({ isOpen, onClose, onDragStart, catalogue }) => {
     const [loading, setLoading] = useState(true);
     const [allPlanners, setAllPlanners] = useState([]);
     const [groupedUnits, setGroupedUnits] = useState([]);
@@ -46,6 +46,7 @@ const UnitPoolToolbox = ({ isOpen, onClose, onDragStart }) => {
     // Fetch all planners
     useEffect(() => {
         if (!isOpen) return;
+        if (catalogue) { setAllPlanners(catalogue); setLoading(false); return; }
         fetch('/api/study-planner', { headers: { 'x-dev-override': 'true' } })
             .then(r => r.json())
             .then(json => {
@@ -55,7 +56,7 @@ const UnitPoolToolbox = ({ isOpen, onClose, onDragStart }) => {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [isOpen]);
+    }, [isOpen, catalogue]);
 
     // Group units by code, merging planners
     useEffect(() => {

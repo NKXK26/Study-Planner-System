@@ -41,6 +41,16 @@ export default class SecureSessionManager {
         return { sessionToken, user_data: sessionData };
     }
 
+    static CreatePasswordSession(user, claims = {}) {
+        const sessionData = { email: user.email, name: user.name, ...claims };
+        const sessionToken = jwt.sign(sessionData, this.SESSION_SECRET, {
+            expiresIn: '24h',
+            issuer: this.APP_ID,
+            audience: this.APP_ID
+        });
+        return { sessionToken, user_data: sessionData };
+    }
+
     static ValidateSession(sessionToken) {
         try {
             // Automatically verifies signature and expiration
@@ -80,12 +90,24 @@ export default class SecureSessionManager {
 
             // GET CURRENT ROLES FROM DATABASE (NOT CLIENT)
             const currentRoles = userProfile.UserRoles?.map(ur => ur.Role.Name) || [];
+            const bearerToken = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+            const validatedSession = bearerToken ? this.ValidateSession(bearerToken) : null;
+            const adminLoginSession = Boolean(
+                validatedSession?.success &&
+                validatedSession.session?.adminLoginSession === true &&
+                validatedSession.session?.email?.toLowerCase() === sessionEmail.toLowerCase() &&
+                currentRoles.some(role => String(role).trim().toLowerCase() !== 'student')
+            );
+            if (adminLoginSession && !currentRoles.some(role => role.toLowerCase() === 'administrator')) {
+                currentRoles.push('Administrator');
+            }
 
             return {
                 id: userProfile.UserID,
                 profileId: userProfile.ID,
                 email: userProfile.UserEmail,
                 roles: currentRoles, // ALWAYS FROM DATABASE
+                adminLoginSession,
                 isActive: userProfile.IsActive,
                 // Additional user info from legacy table if needed
                 firstName: null, // Will be fetched if needed

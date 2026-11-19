@@ -23,23 +23,13 @@ export async function GET(req) {
 			}
 		}
 
-		const res = await prisma.$transaction(async (tx) => {
-			const student_count = await tx.student.count();
-			const unit_count = await tx.unit.count();
-			const course_count = await tx.course.count();
-			const term_count = await tx.term.count({
-				where: { Status: "published" }
-			});
-
-			return {
-				student_count,
-				unit_count,
-				course_count,
-				term_count,
-			};
-		});
-
-		let data = res;
+		const [student_count, unit_count, course_count, term_count] = await Promise.all([
+			prisma.student.count(),
+			prisma.unit.count(),
+			prisma.course.count(),
+			prisma.term.count({ where: { Status: 'published' } }),
+		]);
+		const data = { student_count, unit_count, course_count, term_count };
 
 		return NextResponse.json(
 			{

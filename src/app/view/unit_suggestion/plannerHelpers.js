@@ -129,8 +129,10 @@ const hasTranscriptOutcome = unit => ['Grade', 'grade', 'Status', 'status'].some
 export const isWilQualifyingAcademicUnit = (unit, { mappedCategory, bcsPlanner = false } = {}) => {
     const type = String(mappedCategory ?? unitTypeText(unit)).toLowerCase();
     const text = `${unit?.UnitCode ?? unit?.code ?? ''} ${unit?.Name ?? unit?.name ?? ''} ${type}`.toLowerCase();
+    const explicitlyMappedToAcademicCategory = mappedCategory != null && /core|major|elective/.test(type);
     if (isWilPlacementUnit(unit, { bcsPlanner }) || unitCreditPoints(unit) <= 0) return false;
-    if (/\bmpu\b|academic[ -]?integrity|placeholder|exempt(?:ion|ed)?|approved[ -]?elective/.test(text)) return false;
+    if (/\bmpu\b|academic[ -]?integrity|placeholder|exempt(?:ion|ed)?/.test(text)) return false;
+    if (!explicitlyMappedToAcademicCategory && /approved[ -]?elective/.test(text)) return false;
     return /core|major|elective/.test(type);
 };
 
@@ -166,8 +168,9 @@ export const isAvailableInBreakTerm = (unit, breakTerm) => {
     const requested = String(breakTerm).toLowerCase();
     const hasBreakMetadata = normalized.some(term => /winter|summer/.test(term));
     if (hasBreakMetadata) return normalized.some(term => term.includes(requested));
-    // No break-term metadata is a provisional fallback, not a confirmed offering.
-    return normalized.length === 0;
+    // Semester-only (or absent) availability has no break-term evidence, so
+    // allow the first eligible break provisionally rather than blocking WIL.
+    return true;
 };
 
 export const scheduleWilBreakPlacement = ({ wilUnits = [], completedAcademicUnits = 0, currentYear, currentSemester }) => {
@@ -397,67 +400,11 @@ export const scheduleRemainingUnits = (
 };
 
 // ========================= OPTIMISATION FUNCTIONS =========================
-export function balanceSemesterLoads(schedule, completedUnitsMap) {
-    if (schedule.length < 2) return schedule;
-
-    const balanced = schedule.map(sem => ({
-        ...sem,
-        units: [...sem.units],
-    }));
-
-    let cumulativeCompleted = new Set(completedUnitsMap.keys());
-    const semesterOrders = balanced.map(sem => sem.order);
-
-    for (let i = 0; i < balanced.length - 1; i++) {
-        const currentSem = balanced[i];
-        const nextSem = balanced[i + 1];
-
-        if (nextSem.units.length > 2 || currentSem.units.length < 3) continue;
-
-        for (let uIdx = 0; uIdx < currentSem.units.length; uIdx++) {
-            const unit = currentSem.units[uIdx];
-            const code = (unit.UnitCode || unit.code || '').toUpperCase();
-
-            if (!isAvailableInSemester(unit, nextSem.year, nextSem.semester)) continue;
-
-            let prereqsMet = true;
-            for (const prereq of unit.prerequisites || []) {
-                const normPrereq = getNormalizedUnitCode(prereq);
-                if (cumulativeCompleted.has(prereq) || cumulativeCompleted.has(normPrereq)) continue;
-                let found = false;
-                for (let k = 0; k <= i; k++) {
-                    if (balanced[k].units.some(u => {
-                        const uc = u.UnitCode || u.code;
-                        return uc === prereq || getNormalizedUnitCode(uc) === normPrereq;
-                    })) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    prereqsMet = false;
-                    break;
-                }
-            }
-            if (!prereqsMet) continue;
-
-            if (hasFypConflict(unit, nextSem.units)) continue;
-
-            const credits = unit.CreditPoints || DEFAULT_CREDIT_POINTS;
-            if (nextSem.units.length >= MAX_UNITS_PER_SEMESTER) continue;
-            if (nextSem.totalCredits + credits > MAX_CREDITS_PER_SEMESTER) continue;
-
-            currentSem.units.splice(uIdx, 1);
-            currentSem.unitCount = currentSem.units.length;
-            currentSem.totalCredits -= credits;
-            nextSem.units.push(unit);
-            nextSem.unitCount = nextSem.units.length;
-            nextSem.totalCredits += credits;
-            break;
-        }
-    }
-
-    return balanced.filter(sem => sem.units.length > 0);
+export function balanceSemesterLoads(schedule) {
+    // The scheduler already assigns units by availability, prerequisites, and
+    // term capacity. Moving a valid unit from one term to another can change a
+    // 4+2 plan into 3+3 without satisfying any additional requirement.
+    return schedule;
 }
 
 export function optimizeFinalSemester(schedule) {
