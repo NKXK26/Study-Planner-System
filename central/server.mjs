@@ -108,8 +108,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   catch (error) { console.error(error.message); process.exitCode = 1; }
   if (config) {
     try {
-      const {PrismaClient} = await import('./generated/client/index.js');
-      const {stop} = await startCatalogue(config, new PrismaClient({datasourceUrl:config.databaseUrl}));
+      const {createCatalogueClient} = await import('./database.mjs');
+      const {stop} = await startCatalogue(config, createCatalogueClient(config.databaseUrl));
       const shutdown = () => stop().catch(() => {
         console.error('Catalogue shutdown failed.');
         process.exitCode = 1;

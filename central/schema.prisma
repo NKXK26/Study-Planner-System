@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  moduleFormat = "esm"
+  generatedFileExtension = "mts"
+  importFileExtension = "mts"
   output = "./generated/client"
 }
 datasource db {
   provider = "postgresql"
-  url = env("CATALOGUE_DATABASE_URL")
 }
 enum PublicationStatus {
   Draft

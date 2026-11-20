@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {mkdtemp,readFile,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {PrismaClient} from './generated/client/index.js';
+import {createCatalogueClient} from './database.mjs';
 import {createRequire} from 'node:module';
 import {EventEmitter, once} from 'node:events';
 import {spawnSync} from 'node:child_process';
@@ -15,7 +15,7 @@ import {hashPassword} from '../src/utils/auth/passwordHash.mjs';
 
 const { PrismaClient: SQLite } = createRequire(new URL('../package.json', import.meta.url))('@prisma/client');
 if (!process.env.CATALOGUE_TEST_URL) throw Error('Set CATALOGUE_TEST_URL to a migrated disposable PostgreSQL database');
-const db = new PrismaClient({datasourceUrl:process.env.CATALOGUE_TEST_URL});
+const db = createCatalogueClient(process.env.CATALOGUE_TEST_URL);
 const password = randomUUID(), hash = await hashPassword(password);
 const env = {CATALOGUE_DATABASE_URL: process.env.CATALOGUE_TEST_URL};
 const localConfig = readConfig(env);
@@ -66,7 +66,7 @@ try {
     assert.equal((await fetch(base+endpoint)).status,401);
     assert.equal((await fetch(base+endpoint,{headers:{Authorization:'Basic '+Buffer.from('Student:'+password).toString('base64')}})).status,403);
   }
-  const offlineDb = new PrismaClient({datasourceUrl:'postgresql://fixture:'+password+'@127.0.0.1:1/test?connect_timeout=1'});
+  const offlineDb = createCatalogueClient('postgresql://fixture:'+password+'@127.0.0.1:1/test');
   const unavailable = await startCatalogue({...localConfig,port:0},offlineDb);
   try {
     const offlineBase = 'http://127.0.0.1:'+unavailable.server.address().port;

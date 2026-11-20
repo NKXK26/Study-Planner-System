@@ -1,6 +1,5 @@
 // Run on the trusted publishing host with a private copy of the SQLite file.
 import {createRequire} from 'node:module';
-import {PrismaClient as Central} from './generated/client/index.js';
 import {checkedSnapshot,seriesOf} from './model.mjs';
 import {readFile,writeFile,stat} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -21,7 +20,8 @@ if (mode === 'prepare') {
   } finally {await db.$disconnect();}
 } else if (mode === 'apply') {
   const snapshots = JSON.parse(await readFile(file,'utf8')).map(checkedSnapshot);
-  const central = new Central();
+  const {createCatalogueClient} = await import('./database.mjs');
+  const central = createCatalogueClient(process.env.CATALOGUE_DATABASE_URL);
   try {
     await central.$transaction(async tx=>{
       // Back up every catalogue table from the same consistent snapshot as the import.
@@ -40,5 +40,9 @@ if (mode === 'prepare') {
       }
     },{isolationLevel:'Serializable',timeout:60000});
     console.log('Import committed. Review drafts before publication.');
+  } catch {
+    // PostgreSQL driver errors can include connection details.
+    console.error('Catalogue import failed. Check database access, migration status and the backup destination.');
+    process.exitCode = 1;
   } finally {await central.$disconnect();}
 } else throw Error('Expected prepare <sqlite-copy> <new-review.json> or apply <review.json> <new-backup.json>');

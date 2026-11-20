@@ -28,8 +28,8 @@ The central Prisma schema uses the PostgreSQL connector. Select the PostgreSQL-c
 
 ## Local development
 
-1. Install Node and the project dependencies with `npm ci`. Use an empty PostgreSQL database owned by a dedicated development user. With PostgreSQL installed locally, an administrator can run `createuser --pwprompt planner_dev` followed by `createdb --owner=planner_dev planner_catalogue`.
-2. Set `CATALOGUE_DATABASE_URL` in the publishing terminal. Back up any database that already contains data. Run `npm run catalogue:generate`, then `npm run catalogue:migrate`. This deploys the separate catalogue migration. The migration creates revision and audit tables, one active publication per series, and a trigger protecting published content.
+1. Use the staging Node version (24.14.1), which runs the generated ESM TypeScript client directly. From the repository root, install the isolated dependencies with `npm --prefix central ci --ignore-scripts`. Use an empty PostgreSQL database owned by a dedicated development user. With PostgreSQL installed locally, an administrator can run `createuser --pwprompt planner_dev` followed by `createdb --owner=planner_dev planner_catalogue`.
+2. Set `CATALOGUE_DATABASE_URL` in the publishing terminal. The central CLI reads it from the process environment through `central/prisma.config.mjs`. Back up any database that already contains data. Run `npm --prefix central run generate`, then `npm --prefix central run migrate:staging`. These commands use Prisma 7 and the existing central migration history. The root package's Prisma 6 CLI and generated client serve SQLite, including the temporary SQLite contexts used by the publication test.
 3. Generate a hash using the project's scrypt implementation. In PowerShell the following reads a password with a masked prompt. The command prints only the salted hash. Put it in the publisher JSON in your local process environment or secret manager.
 
    ```powershell
@@ -49,14 +49,14 @@ The free web service sleeps after 15 minutes without inbound traffic. The next r
 
 1. Generate a unique publisher password hash locally using the PowerShell command above, from the repository root. In the Render dashboard, supply `CATALOGUE_PUBLISHERS` as a secret JSON object in the format shown in the configuration table. Give each named operator the role Admin or HOD. Keep the plaintext password in their password manager.
 2. When authorised to deploy, review the intended revision and select `render.yaml` in the Blueprint setup. The Blueprint pins `NODE_VERSION=24.14.1`, sets `NODE_ENV=staging` and `HOST=0.0.0.0`, and obtains `CATALOGUE_DATABASE_URL` from the staging database's internal connection string. The empty PostgreSQL external IP allowlist (`ipAllowList: []`) blocks external connections. Keep local Docker credentials on the development machine.
-3. Confirm the following commands run in `central/`. The isolated lockfile contains only the catalogue dependencies. Explicit Prisma generation supplies the client and engine for the host.
+3. Confirm the following commands run in `central/`. Prisma generates the ESM client in `generated/client/`. The service connects through `@prisma/adapter-pg`, which owns the PostgreSQL connection pool.
 
    | Phase | Command |
    |---|---|
    | Build | `npm ci --ignore-scripts && npm run generate` |
    | Start | `npm run migrate:staging && node server.mjs` |
 
-   Free staging has no `preDeployCommand`. On each start, `npm run migrate:staging` validates the configuration and applies pending central Prisma migrations. The server starts only if that command succeeds. Check migration history with `npx --no-install prisma migrate status --schema schema.prisma` in a private operator session. Keep connection details out of shared logs.
+   Free staging has no `preDeployCommand`. On each start, `npm run migrate:staging` validates the configuration and applies pending central Prisma migrations. The server starts only if that command succeeds. In a private operator session, run `npx --no-install prisma migrate status` from `central/` to check migration history. Keep connection details out of shared logs.
 4. Verify the HTTPS endpoints using the staging hostname. An unauthenticated health check returns HTTP 200 and `{"status":"ok"}` after a database query, or HTTP 503 and `{"status":"unavailable"}` if PostgreSQL is unreachable. A fresh catalogue returns HTTP 200 and `{"data":[]}`. Anonymous management access should return HTTP 401.
 
    ```powershell
