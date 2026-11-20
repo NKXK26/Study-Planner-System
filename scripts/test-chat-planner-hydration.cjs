@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 // Execute the component's actual result effect with setter spies.
-const source=fs.readFileSync('src/components/ChatPlannerTools.jsx','utf8');
+const source=fs.readFileSync('src/components/ChatPlannerTools.jsx','utf8').replace(/\r\n/g,'\n');
 const start=source.indexOf('useEffect(()=>{\n    if(!toolResult?.data)return;');
 assert(start>=0);
 const end=source.indexOf('},[toolResult]);',start);
