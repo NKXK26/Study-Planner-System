@@ -1,8 +1,6 @@
 // Run on the trusted publishing host with a private copy of the SQLite file.
-import {PrismaClient as Local} from '@prisma/client';
+import {createRequire} from 'node:module';
 import {PrismaClient as Central} from './generated/client/index.js';
-import {readLocalCatalogue} from '../src/app/libs/readLocalCatalogue.mjs';
-import {preparePublication} from '../src/app/libs/publicationDraft.mjs';
 import {checkedSnapshot,seriesOf} from './model.mjs';
 import {readFile,writeFile,stat} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -11,6 +9,9 @@ import {isDeepStrictEqual} from 'node:util';
 const [mode,file,destination] = process.argv.slice(2);
 if (mode === 'prepare') {
   if (!(await stat(file)).isFile()) throw Error('SQLite source file required');
+  const {readLocalCatalogue} = await import('../src/app/libs/readLocalCatalogue.mjs');
+  const {preparePublication} = await import('../src/app/libs/publicationDraft.mjs');
+  const {PrismaClient: Local} = createRequire(new URL('../package.json', import.meta.url))('@prisma/client');
   const db = new Local({datasources:{db:{url:'file:'+resolve(file).replaceAll('\\','/')}}});
   try {
     const planners = await readLocalCatalogue(db);

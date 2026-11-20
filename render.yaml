@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: official-planner-catalogue-staging
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: central
+    autoDeployTrigger: "off"
+    buildCommand: npm ci --ignore-scripts && npm run generate
+    startCommand: npm run migrate:staging && node server.mjs
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24.14.1"
+      - key: NODE_ENV
+        value: staging
+      - key: HOST
+        value: 0.0.0.0
+      - key: CATALOGUE_PUBLISHERS
+        sync: false
+      - key: CATALOGUE_DATABASE_URL
+        fromDatabase:
+          name: official-planner-postgres-staging
+          property: connectionString
+
+databases:
+  - name: official-planner-postgres-staging
+    region: singapore
+    plan: free
+    postgresMajorVersion: "16"
+    ipAllowList: []

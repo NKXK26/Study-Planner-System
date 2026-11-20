@@ -25,7 +25,8 @@ export function checkedSnapshot(value) {
   if (!validate(value)) throw fault(400, 'Invalid planner field ' + validate.errors[0].dataPath + ' ' + validate.errors[0].message);
   return value;
 }
-export function fault(status, message) { return Object.assign(new Error(message), { status }); }
+export class CatalogueFault extends Error {}
+export function fault(status, message) { return Object.assign(new CatalogueFault(message), { status }); }
 export const seriesOf = p => JSON.stringify([p.courseCode,p.intakeYear,p.intakeMonth,p.major.trim().toLowerCase()]);
 export function publicPlanner(r) {
   return {...r.snapshot, units:r.snapshot.units.map(u=>({...u,isOfficialWil:u.UnitCode===r.snapshot.wilCode})), id:r.id, version:r.version, status:r.status, createdAt:r.createdAt, publishedAt:r.publishedAt};

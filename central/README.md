@@ -17,7 +17,8 @@ flowchart LR
 |---|---|---|
 | Publishing host only | `CATALOGUE_DATABASE_URL` | `postgresql://<user>:<encoded-password>@<host>:<port>/<catalogue-db>` plus the TLS options required by your host |
 | Publishing host only | `CATALOGUE_PUBLISHERS` | JSON such as `{"<publisher-login>":{"role":"HOD","hash":"<scrypt-hash>"}}`. Roles accepted for writes are Admin and HOD. Assign a separate login to each person. |
-| Publishing host | `CATALOGUE_PORT` | Optional loopback listener port, default 4100 |
+| Publishing host | `HOST` | Defaults to `127.0.0.1` locally. The staging service binds to `0.0.0.0`. |
+| Publishing host | `PORT`, `CATALOGUE_PORT` | The first configured port wins in this order. The local default is 4100. Render supplies `PORT`. |
 | Desktop or Next.js server | `PLANNER_CATALOGUE_URL` | `https://<catalogue-host>/catalogue`. HTTP is accepted on localhost for development. |
 | Next.js server | `PLANNER_CACHE_DIR` | Optional writable cache directory. Electron sets a directory under userData. |
 | Test process only | `CATALOGUE_TEST_URL` | Connection to a migrated disposable PostgreSQL database. Integration tests insert historical test revisions. |
@@ -33,12 +34,44 @@ The central Prisma schema uses the PostgreSQL connector. Select the PostgreSQL-c
 
    ```powershell
    $publisherCredential = Get-Credential -UserName '<publisher-login>' -Message 'Choose a unique catalogue password'
-   $publisherCredential.GetNetworkCredential().Password | node --input-type=module -e "import {hashPassword} from './src/utils/auth/passwordHash.mjs'; let s=''; for await(const c of process.stdin)s+=c; console.log(await hashPassword(s.trimEnd()));"
+   $publisherCredential.GetNetworkCredential().Password | node --input-type=module -e "import {hashPassword} from './central/passwordHash.mjs'; let s=''; process.stdin.setEncoding('utf8'); for await(const c of process.stdin)s+=c; console.log(await hashPassword(s.replace(/\r?\n$/,'')));"
    Remove-Variable publisherCredential
    ```
 
 4. Run `npm run catalogue:start`. Open `http://localhost:4100/manage` and sign in with the named publisher account. The read endpoint is `http://localhost:4100/catalogue`.
 5. In the desktop development terminal set `$env:PLANNER_CATALOGUE_URL='http://localhost:4100/catalogue'` and launch the app. Each desktop needs only the read URL. For installed Windows apps, set the user environment variable and relaunch the app from an environment that has picked up the change.
+
+## Render staging
+
+**Use this configuration only for temporary staging. It must not hold the production official planner catalogue.** The Blueprint uses the `free` plan for both the Node web service and PostgreSQL 16 in Singapore. Automatic deployment is disabled (`autoDeployTrigger: "off"`).
+
+The free web service sleeps after 15 minutes without inbound traffic. The next request wakes it, which can take approximately one minute. Free PostgreSQL expires 30 days after creation and has no managed backups. [Render free-plan limits](https://render.com/docs/free)
+
+1. Generate a unique publisher password hash locally using the PowerShell command above, from the repository root. In the Render dashboard, supply `CATALOGUE_PUBLISHERS` as a secret JSON object in the format shown in the configuration table. Give each named operator the role Admin or HOD. Keep the plaintext password in their password manager.
+2. When authorised to deploy, review the intended revision and select `render.yaml` in the Blueprint setup. The Blueprint pins `NODE_VERSION=24.14.1`, sets `NODE_ENV=staging` and `HOST=0.0.0.0`, and obtains `CATALOGUE_DATABASE_URL` from the staging database's internal connection string. The empty PostgreSQL external IP allowlist (`ipAllowList: []`) blocks external connections. Keep local Docker credentials on the development machine.
+3. Confirm the following commands run in `central/`. The isolated lockfile contains only the catalogue dependencies. Explicit Prisma generation supplies the client and engine for the host.
+
+   | Phase | Command |
+   |---|---|
+   | Build | `npm ci --ignore-scripts && npm run generate` |
+   | Start | `npm run migrate:staging && node server.mjs` |
+
+   Free staging has no `preDeployCommand`. On each start, `npm run migrate:staging` validates the configuration and applies pending central Prisma migrations. The server starts only if that command succeeds. Check migration history with `npx --no-install prisma migrate status --schema schema.prisma` in a private operator session. Keep connection details out of shared logs.
+4. Verify the HTTPS endpoints using the staging hostname. An unauthenticated health check returns HTTP 200 and `{"status":"ok"}` after a database query, or HTTP 503 and `{"status":"unavailable"}` if PostgreSQL is unreachable. A fresh catalogue returns HTTP 200 and `{"data":[]}`. Anonymous management access should return HTTP 401.
+
+   ```powershell
+   curl.exe -i https://<staging-host>/health
+   curl.exe -i https://<staging-host>/catalogue
+   curl.exe -i https://<staging-host>/manage
+   ```
+
+5. Use a named staging publisher over HTTPS to create a synthetic draft. Verify it appears only in the authenticated console, then publish it and verify it appears at `/catalogue`. Browsers access the HTTP service. Only the service connects to PostgreSQL. Use synthetic planner definitions for staging. DPA, transcript and local SQLite files belong on the originating device.
+
+**Backup and rollback.** Keep a reproducible copy of synthetic test data outside the free database. Before a schema change, take a manual export of any staging data you need to retain and verify that it restores into a separate private test database. Review migration compatibility with both the running and incoming service. If a deploy fails after a migration, rolling back the service revision leaves the database at the migrated schema. Roll back the service only when compatible. Otherwise pause publishing, apply a reviewed forward fix or restore into a separate database, then verify health, revision history and publications before switching the internal connection. A restore can lose writes since the backup.
+
+**Paid production deployment.** The current minimum paid plan IDs are `0.5c-512mb` for the web service and `0.1c-256mb` for PostgreSQL. On a paid production web service, run migrations in `preDeployCommand` and use `node server.mjs` as the start command. [Render Blueprint reference](https://render.com/docs/blueprint-spec)
+
+**Publisher authentication.** Basic authentication is for staging over HTTPS. Browsers cache credentials, and the service has per-process rate limiting with no MFA. Close the private browser session after use. Rotate the named publisher's hash in the dashboard and restart to revoke the old password. Production HOD access requires university SSO with MFA and a verified Admin/HOD role before enabling publishing.
 
 ## Import local planners
 
@@ -69,7 +102,7 @@ A configured desktop can use its last successful catalogue for up to 24 hours wh
 
 1. Provision a dedicated PostgreSQL-compatible database and enable encrypted connections and backups. Before applying migrations to an existing catalogue, take and verify a restorable PostgreSQL backup. Use a migration identity authorised to create the tables, trigger and indexes.
 2. Install the reviewed project and dependencies on the service host. Generate the central Prisma client for that host and deploy the migration as above. Run the service with a dedicated runtime database role with SELECT/INSERT/UPDATE on revisions, SELECT/INSERT on events, and sequence access. Keep schema ownership and DDL privileges with the migration role.
-3. Configure named publisher credentials in a server-side secret store. Run the service under a supervised OS account. Put an HTTPS reverse proxy in front of its loopback port, forwarding `/manage`, `/revisions` and `/catalogue`. Disable request-body and Authorization-header logging. The management console uses browser HTTP Basic authentication over TLS. Close the private browser session after publishing. Rotate/revoke accounts in the server environment and restart the service. This authentication has no SSO or MFA. Rate limits are per process and count connections from the proxy together.
+3. Integrate university SSO and MFA for production publishers. Enforce the authorised publishing role on the server. Run the service under a supervised OS account behind HTTPS and disable request-body and Authorization-header logging.
 4. Import and approve the first catalogue. Check the public read endpoint and a student comparison on a separate machine. Distribute the URL to desktop installations. Existing desktop builds need the catalogue-enabled software once. Subsequent planner publications use the service independently of Electron releases.
 5. For verification on a disposable database, migrate it with the central schema, set `CATALOGUE_TEST_URL`, then run `npm run test:catalogue`. Never point the integration test at a production catalogue.
 

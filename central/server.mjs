@@ -1,8 +1,9 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { verifyPassword } from '../src/utils/auth/passwordHash.mjs';
-import { change, publicPlanner, fault } from './model.mjs';
+import { verifyPassword } from './passwordHash.mjs';
+import { readConfig } from './config.mjs';
+import { change, publicPlanner, fault, CatalogueFault } from './model.mjs';
 
 export function createCatalogueServer(db, accounts) {
   const windows = new Map();
@@ -18,6 +19,14 @@ export function createCatalogueServer(db, accounts) {
     res.setHeader('Cache-Control','no-store');
     res.setHeader('X-Content-Type-Options','nosniff');
     try {
+      if (req.url === '/health' && req.method === 'GET') {
+        try {
+          await db.$queryRaw`SELECT 1`;
+        } catch {
+          return send(503, {status:'unavailable'});
+        }
+        return send(200, {status:'ok'});
+      }
       if (req.url === '/catalogue' && req.method === 'GET') {
         const rows = await db.revision.findMany({where:{status:'Published'},orderBy:{id:'asc'}});
         return send(200,{data:rows.map(publicPlanner)});
@@ -57,15 +66,59 @@ export function createCatalogueServer(db, accounts) {
       return send(200,await change(db,{name,role:account.role},body));
     } catch (e) {
       const conflict = ['P2002','P2025','P2034'].includes(e.code);
-      send(e.status || (conflict ? 409 : 500),{message:e.status ? e.message : conflict ? 'Concurrent change. Reload and retry.' : 'Catalogue operation failed'});
+      if (e instanceof CatalogueFault) return send(e.status, {message:e.message});
+      send(conflict ? 409 : 500,{message:conflict ? 'Concurrent change. Reload and retry.' : 'Catalogue operation failed'});
     }
   });
 }
 
+export async function startCatalogue({host, port, accounts}, db) {
+  const server = createCatalogueServer(db, accounts);
+  let stopping;
+  function stop() {
+    if (!stopping) stopping = (async () => {
+      const deadline = setTimeout(() => server.closeAllConnections(), 10000);
+      try {
+        await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      } finally {
+        clearTimeout(deadline);
+        await db.$disconnect();
+      }
+    })();
+    return stopping;
+  }
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+  } catch (error) {
+    await db.$disconnect();
+    throw error;
+  }
+  return {server, stop};
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const {PrismaClient} = await import('./generated/client/index.js');
-  const accounts = JSON.parse(process.env.CATALOGUE_PUBLISHERS || '{}');
-  const db = new PrismaClient();
-  await db.$connect();
-  createCatalogueServer(db,accounts).listen(Number(process.env.CATALOGUE_PORT || 4100),'127.0.0.1');
+  let config;
+  try { config = readConfig(process.env); }
+  catch (error) { console.error(error.message); process.exitCode = 1; }
+  if (config) {
+    try {
+      const {PrismaClient} = await import('./generated/client/index.js');
+      const {stop} = await startCatalogue(config, new PrismaClient({datasourceUrl:config.databaseUrl}));
+      const shutdown = () => stop().catch(() => {
+        console.error('Catalogue shutdown failed.');
+        process.exitCode = 1;
+      });
+      process.on('SIGTERM', shutdown);
+      process.on('SIGINT', shutdown);
+    } catch {
+      console.error('Catalogue startup failed. Check the listener and generated client.');
+      process.exitCode = 1;
+    }
+  }
 }
