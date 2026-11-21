@@ -24,7 +24,7 @@ services:
       - key: PLANNER_CACHE_DIR
         value: /tmp/study-planner-catalogue
       - key: PLANNER_CATALOGUE_TIMEOUT_MS
-        value: "30000"
+        value: "60000"
       - key: DATABASE_URL
         value: file:/tmp/student-portal.db
       - key: DIRECT_URL

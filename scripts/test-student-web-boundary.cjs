@@ -43,7 +43,7 @@ const fs=require('node:fs');
   assert.match(render,/npm ci --ignore-scripts --include=dev/);
   assert.match(render,/NEXT_PUBLIC_APP_EDITION[\s\S]*value: student-web/);
   assert.match(render,/DATABASE_URL[\s\S]*file:\/tmp\/student-portal\.db/);
-  assert.match(render,/PLANNER_CATALOGUE_TIMEOUT_MS[\s\S]*value: "30000"/);
+  assert.match(render,/PLANNER_CATALOGUE_TIMEOUT_MS[\s\S]*value: "60000"/);
 
   console.log('Student web routes, privacy boundary, central planner adapter and staging configuration passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
