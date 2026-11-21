@@ -410,7 +410,7 @@ const AddUnitModal = ({ isOpen, onClose, availableUnits, onAddUnit }) => {
 };
 
 // ─── Inline Study Planner ─────────────────────────────────────────────────────
-const InlineStudyPlanner = ({ setCatalogueWarningForReceipt, allPlanners, completedUnits, studentInfo, initialPlannerId, onMappingsChange, onPlannerContextChange }) => {
+const InlineStudyPlanner = ({ catalogueWarning = '', setCatalogueWarningForReceipt, allPlanners, completedUnits, studentInfo, initialPlannerId, onMappingsChange, onPlannerContextChange }) => {
 	const [recommendations, setRecommendations] = useState(null);
 	const [editableSchedule, setEditableSchedule] = useState([]);
 	const [scheduleLoading, setScheduleLoading] = useState(false);
@@ -1571,7 +1571,16 @@ export default function CompareStudyPlannerPage() {
 						{/* Inline study planner */}
 						{showStudyPlanner && (
 							<div className="mt-8">
-				<InlineStudyPlanner setCatalogueWarningForReceipt={setCatalogueWarning} allPlanners={plannerCatalog} completedUnits={completedUnits} studentInfo={studentInfo} initialPlannerId={matchedPlanners[0]?.plannerId} onMappingsChange={setConfirmedMappings} onPlannerContextChange={setSelectedPlannerContext} />
+								<InlineStudyPlanner
+									catalogueWarning={catalogueWarning}
+									setCatalogueWarningForReceipt={setCatalogueWarning}
+									allPlanners={plannerCatalog}
+									completedUnits={completedUnits}
+									studentInfo={studentInfo}
+									initialPlannerId={matchedPlanners[0]?.plannerId}
+									onMappingsChange={setConfirmedMappings}
+									onPlannerContextChange={setSelectedPlannerContext}
+								/>
 							</div>
 						)}
 
