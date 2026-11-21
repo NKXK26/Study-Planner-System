@@ -40,6 +40,7 @@ const fs=require('node:fs');
   assert.match(chat,/document:studentWebEdition\?null:document/);
   const render=fs.readFileSync('render.yaml','utf8');
   assert.match(render,/name: study-planner-student-staging/);
+  assert.match(render,/npm ci --ignore-scripts --include=dev/);
   assert.match(render,/NEXT_PUBLIC_APP_EDITION[\s\S]*value: student-web/);
   assert.match(render,/DATABASE_URL[\s\S]*file:\/tmp\/student-portal\.db/);
   assert.match(render,/PLANNER_CATALOGUE_TIMEOUT_MS[\s\S]*value: "30000"/);

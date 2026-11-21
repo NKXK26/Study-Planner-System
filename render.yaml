@@ -5,7 +5,7 @@ services:
     region: singapore
     plan: free
     autoDeployTrigger: "off"
-    buildCommand: npm ci --ignore-scripts && npx prisma generate && npm run build
+    buildCommand: npm ci --ignore-scripts --include=dev && npx prisma generate && npm run build
     startCommand: npm start
     healthCheckPath: /
     envVars:
