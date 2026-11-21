@@ -17,6 +17,7 @@ import { parseTranscript } from '@app/libs/doubleMajorChecker.mjs';
 import ReplacementWorkspace from '@/app/view/unit_suggestion/ReplacementWorkspace';
 import UnitPoolToolbox from '@/app/view/unit_suggestion/UnitPoolToolbox';
 import { generateStudyPlannerPdf } from '@/app/view/unit_suggestion/Exportstudyplannerpdf';
+import { wilContext, wilOrder } from '@/app/libs/wilWindow.mjs';
 import { buildBcsPlan, parseTranscriptRows, rankTopPlannerMatches, deriveTranscriptAcademicPeriod, getBcsWilDisplayName, getPlannerCompletionResult, detectCompletedBcsDoubleMajors, getPlannerScopedMappings, resolveDuplicatePlannerUnitCodes, unitCode } from '@/app/libs/bcsPlannerRules.mjs';
 import {
 	CategoryBadge, DraggableUnitCard, PanelUnitCard,
@@ -27,7 +28,7 @@ import {
 	getNormalizedUnitCode, extractUnitCode,
 	scheduleRemainingUnits,
 	optimizeFinalSemester, compactFinalSemesters, isWilPlacementUnit,
-	scheduleWilBreakPlacement, getWilQualifyingCompletedUnitCodes,
+	scheduleWilBreakPlacement, getWilQualifyingCompletedUnitCodes, recordedWilAttempts,
 } from '@/app/view/unit_suggestion/plannerHelpers';
 
 // ─── Category Selector ────────────────────────────────────────────────────────
@@ -498,6 +499,7 @@ const InlineStudyPlanner = ({ setCatalogueWarningForReceipt, allPlanners, comple
 		if (!planner) return;
 		mapped = getPlannerScopedMappings(mapped, planner.id);
 		setScheduleLoading(true);
+		setScheduleValidationError('');
 		setEditableSchedule([]);
 		try {
 			const plannerUnits = planner.units || [];
@@ -625,40 +627,27 @@ const InlineStudyPlanner = ({ setCatalogueWarningForReceipt, allPlanners, comple
 				completedUnits,
 				mappedExternalUnits: mapped,
 			});
-			const wilBreak = scheduleWilBreakPlacement({
-				wilUnits: outstandingWilUnits,
-				completedAcademicUnits: qualifyingWilCodes.size,
-				currentYear,
-				currentSemester,
-			});
-			const scheduledWilAttempt = (studentInfo?.transcriptAttempts || []).find(attempt => {
-				const plannerWil = selectedPlannerWilUnits.find(unit => extractUnitCode(unit.UnitCode) === extractUnitCode(attempt.code));
-				const status = String(attempt.status ?? '').trim().toLowerCase();
-				return plannerWil && isWilPlacementUnit(attempt, { bcsPlanner: isBcsPlanner }) && ['scheduled', 'current'].includes(status) && attempt.term?.isBreak;
-			});
-			if (scheduledWilAttempt && !hasPassedPlannerWil) {
-				const attemptsThroughWil = (studentInfo?.transcriptAttempts || []).filter(attempt => !attempt.term?.order || attempt.term.order <= scheduledWilAttempt.term.order);
-				const scheduledYear = deriveTranscriptAcademicPeriod(attemptsThroughWil)?.current?.year ?? currentYear;
-				const wilStatus = String(scheduledWilAttempt.status ?? '').trim() || 'Scheduled';
-				const existingPlacement = {
-					year: scheduledYear,
-					term: scheduledWilAttempt.term.breakTerm,
-					transcriptTerm: scheduledWilAttempt.term.raw,
-					semester: null,
-					isBreakTerm: true,
-					isTranscriptScheduledWil: true,
-					units: [{ ...selectedPlannerWilUnits.find(unit => extractUnitCode(unit.UnitCode) === extractUnitCode(scheduledWilAttempt.code)), CreditPoints: 25, creditPoints: 25, isWilBreakPlacement: true, status: wilStatus }],
-					unitCount: 1,
-					totalCredits: 25,
-				};
-				schedule.unshift(existingPlacement);
-				if (qualifyingWilCodes.size < 12) setScheduleValidationError(`${wilStatus} WIL placement (${scheduledWilAttempt.term.raw}) is preserved from the transcript, but the selected planner records only ${qualifyingWilCodes.size} qualifying completed Core, Major, or Elective units. Manual academic review is required.`);
-			} else if (wilBreak.placement) schedule.push(wilBreak.placement);
+			const attempts = studentInfo?.transcriptAttempts || [];
+			const context = wilContext(planner, attempts, studentInfo?.intakeTerm, currentYear, currentSemester);
+			context.academicsComplete = normalNeededUnits.length === 0;
+			const records = recordedWilAttempts({attempts, wilUnits:selectedPlannerWilUnits, context, schedule,
+				equivalents:isBcsPlanner ? (planner.wilEquivalents ?? ['ICT20016','ICT20026']) : [],
+				plannerUnits, mappedExternalUnits:mapped});
+			const active = records.filter(record => record.active);
+			const wilBreak = scheduleWilBreakPlacement({wilUnits:active.length ? [] : outstandingWilUnits,
+				completedAcademicUnits:qualifyingWilCodes.size, context, schedule});
+			for (const record of active.filter(r => r.term && r.year)) {
+				schedule.push({year:record.year, term:record.term, transcriptTerm:record.raw, semester:null,
+					isBreakTerm:true, isTranscriptScheduledWil:true, unitCount:1, totalCredits:25,
+					units:[{...record.unit, UnitCode:record.code, CreditPoints:25, status:record.status}]});
+			}
+			if (wilBreak.placement) schedule.push(wilBreak.placement);
+			schedule.sort((a,b) => wilOrder(a,context)-wilOrder(b,context));
 			if (bcsPlan?.isNew && !selectedPlannerWilUnits.length) {
 				setScheduleValidationError('This planner requires WIL, but ICT20016 is missing from its unit list. Please update the planner.');
 			} else if (!selectedPlannerWilUnits.length && planner.plannerTemplate?.requirements?.some(req => /wil/i.test(req?.unitType?.Name ?? ''))) {
 				setScheduleValidationError('WIL remains outstanding: no WIL unit could be identified in the selected planner, so no WIL placement was scheduled.');
-			} else if (wilBreak.warning) setScheduleValidationError(wilBreak.warning);
+			}
 			setEditableSchedule(schedule);
 			setShowFullPlan(true);
 
@@ -668,6 +657,8 @@ const InlineStudyPlanner = ({ setCatalogueWarningForReceipt, allPlanners, comple
 				catch { setCatalogueWarningForReceipt('Recommendation history could not be saved on this device. Export the comparison to keep its revision.'); }
 			}
 			setRecommendations({
+				recordedWil: records,
+				wilWarning: wilBreak.warning,
 				totalCompleted,
 				totalCredits,
 				plannerName: planner.version ? planner.name+" (ID "+planner.id+", v"+planner.version+")" : planner.name,
@@ -782,14 +773,15 @@ const InlineStudyPlanner = ({ setCatalogueWarningForReceipt, allPlanners, comple
 	const validateAndSetSchedule = useCallback(async (candidate) => {
 		setScheduleValidationError('');
 		try {
-			const wilQualifyingUnitCodes = Array.from(getWilQualifyingCompletedUnitCodes({
-				plannerUnits: selectedFieldPlanner?.units || [],
-				completedUnits,
-				mappedExternalUnits: selectedPlannerMappings,
-			}));
 			const response = await SecureFrontendAuthHelper.authenticatedFetch('/api/study-planner/validate-schedule', {
 				method: 'POST', headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ plannerRevisionId:selectedFieldPlanner?.version ? selectedFieldPlanner.id : null, schedule: candidate, completedUnits, wilQualifyingUnitCodes, strictAvailability: Boolean(selectedBcsPlan) }),
+				body: JSON.stringify({
+					plannerId:selectedFieldPlanner?.id,
+					plannerRevisionId:selectedFieldPlanner?.version ? selectedFieldPlanner.id : null,
+					schedule:candidate.filter(entry => !entry.isTranscriptScheduledWil),
+					wilContext:wilContext(selectedFieldPlanner, studentInfo?.transcriptAttempts || [], studentInfo?.intakeTerm, currentYear, currentSemester),
+					completedUnits, mappedExternalUnits:selectedPlannerMappings, strictAvailability:Boolean(selectedBcsPlan),
+				}),
 			});
 			const result = await response.json();
 			if (!response.ok || !result.valid) {
@@ -802,7 +794,7 @@ const InlineStudyPlanner = ({ setCatalogueWarningForReceipt, allPlanners, comple
 			setScheduleValidationError(`Could not validate this change: ${error.message}`);
 			return false;
 		}
-	}, [completedUnits, selectedPlannerMappings, selectedBcsPlan, selectedFieldPlanner]);
+	}, [completedUnits, selectedPlannerMappings, selectedBcsPlan, selectedFieldPlanner, studentInfo, currentYear, currentSemester]);
 
 	// Remove unit from semester
 	const handleRemoveUnit = useCallback(async (semIdx, unitIdx) => {
@@ -976,6 +968,10 @@ const InlineStudyPlanner = ({ setCatalogueWarningForReceipt, allPlanners, comple
 			</div>
 
 			<div className="p-6 bg-gray-50/40 space-y-5">
+				{recommendations?.recordedWil?.map((r,i) => <div key={i} className="text-sm">
+					Transcript WIL: {r.code} · {r.raw || 'Term unknown'} · {r.status} {r.grade}. {r.warning}
+				</div>)}
+				{recommendations?.wilWarning && <div role="status" className="text-sm text-amber-800">{recommendations.wilWarning}</div>}
 				{scheduleValidationError && <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm flex items-start gap-2"><ExclamationTriangleIcon className="h-4 w-4 mt-0.5 flex-shrink-0" />{scheduleValidationError}</div>}
 				{studentCurrentPeriod && <div className="text-sm rounded-xl border border-blue-200 bg-blue-50 text-blue-900 px-4 py-3">Current transcript period: <strong>Year {studentCurrentPeriod.year}, Semester {studentCurrentPeriod.semester}</strong> ({studentCurrentPeriod.term.raw}). The next teaching period is <strong>Year {currentYear}, Semester {currentSemester}</strong>.</div>}
 
@@ -1293,6 +1289,7 @@ const InlineStudyPlanner = ({ setCatalogueWarningForReceipt, allPlanners, comple
 														<div className="text-xs text-gray-400">{unit.CreditPoints || DEFAULT_CREDIT_POINTS} CP</div>
 													</div>
 													<button
+														disabled={sem.isTranscriptScheduledWil}
 														onClick={() => handleRemoveUnit(semIdx, unitIdx)}
 														className="text-red-500 hover:text-red-700"
 													>

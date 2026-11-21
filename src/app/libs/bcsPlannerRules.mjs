@@ -77,7 +77,7 @@ export function parseTranscriptRows(rows = []) {
     const code = unitCode(row?.Course ?? row?.course ?? row?.code);
     const term = parseTranscriptTerm(row?.Term ?? row?.term);
     return {
-      row: index + 2, code, term,
+      row: index + 2, code, term, rawTerm: String(row?.Term ?? row?.term ?? ''),
       name: String(row?.['Course Title'] ?? row?.name ?? '').trim(),
       creditPoints: Number(row?.Credits ?? row?.Earned ?? row?.creditPoints) || 0,
       grade: String(row?.Grade ?? row?.grade ?? '').trim(),

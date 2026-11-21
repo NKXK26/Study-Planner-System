@@ -1,4 +1,5 @@
 import { isPassingTranscriptAttempt, isWilUnit } from '../../libs/bcsPlannerRules.mjs';
+import { finalTeachingOrder, transcriptWilOrder, withinWilWindow } from '../../libs/wilWindow.mjs';
 
 // ========================= CONSTANTS =========================
 export const REQUIRED_CORE = 8;
@@ -117,7 +118,8 @@ export const isAvailableInSemester = (unit, _year, semester) => {
     return true;
 };
 
-export const isWilPlacementUnit = (unit, options = {}) => isWilUnit(unit, options);
+export const isWilPlacementUnit = (unit, options = {}) =>
+    ['ICT20016','ICT20026'].includes(extractUnitCode(unit?.UnitCode ?? unit?.code)) || isWilUnit(unit, options);
 
 const unitTypeText = unit => String(unit?.unitType?.Name ?? unit?.unitTypeName ?? unit?.categoryLabel ?? unit?.categoryKey ?? '').toLowerCase();
 const unitCreditPoints = unit => Number(unit?.CreditPoints ?? unit?.creditPoints ?? 0);
@@ -144,19 +146,26 @@ export const getWilQualifyingCompletedUnitCodes = ({ plannerUnits = [], complete
     });
 
     const qualifyingCodes = new Set();
+    const passedCodes = new Set();
     completedUnits.forEach(completed => {
         if (hasTranscriptOutcome(completed) && !isPassingTranscriptAttempt(completed)) return;
+        if (/^(failed|in[- ]progress)$/i.test(completed.status ?? completed.Status ?? '')) return;
+        const earned = completed.creditPoints ?? completed.CreditPoints ?? completed.Earned ?? completed.Credits;
+        if (earned != null && !(Number(earned) > 0)) return;
         const code = getNormalizedUnitCode(extractUnitCode(completed?.code ?? completed?.UnitCode));
+        if (!code || /^MPU|^ICT200(?:16|26)$/.test(code)) return;
+        passedCodes.add(code);
         const plannerUnit = plannerByCode.get(code);
         if (plannerUnit && isWilQualifyingAcademicUnit(plannerUnit, { bcsPlanner })) qualifyingCodes.add(code);
     });
 
     Object.entries(mappedExternalUnits || {}).forEach(([category, mappings]) => {
-        if (String(category).toLowerCase() === '__other__') return;
+        if (['__other__','other'].includes(String(category).toLowerCase())) return;
         (Array.isArray(mappings) ? mappings : []).forEach(mapping => {
             const code = getNormalizedUnitCode(extractUnitCode(mapping?.code ?? mapping?.UnitCode));
             const mappedCategory = mapping?.categoryLabel ?? mapping?.categoryKey ?? category;
-            if (code && !mapping?.isOtherMapping && isWilQualifyingAcademicUnit(mapping, { mappedCategory, bcsPlanner })) qualifyingCodes.add(code);
+            const source = getNormalizedUnitCode(extractUnitCode(mapping.originalCode || code));
+            if (passedCodes.has(source) && !mapping.isOtherMapping && isWilQualifyingAcademicUnit(mapping, { mappedCategory, bcsPlanner })) qualifyingCodes.add(source);
         });
     });
     return qualifyingCodes;
@@ -173,15 +182,17 @@ export const isAvailableInBreakTerm = (unit, breakTerm) => {
     return true;
 };
 
-export const scheduleWilBreakPlacement = ({ wilUnits = [], completedAcademicUnits = 0, currentYear, currentSemester }) => {
+export const scheduleWilBreakPlacement = ({ wilUnits = [], completedAcademicUnits = 0, currentYear = 1, currentSemester = 1,
+    context = {firstSemester:1, currentOrder:getSemesterOrderValue(currentYear,currentSemester)-1, labelOffset:-3}, schedule = [] }) => {
     if (!wilUnits.length) return { placement: null, warning: null };
+    if (!context.firstSemester) return {placement:null, warning:'WIL remains outstanding. The intake calendar is unknown. Academic review is required.'};
+    const finalOrder = finalTeachingOrder(schedule, context);
+    const candidates = (context.firstSemester === 2 ? ['Summer','Winter'] : ['Winter','Summer'])
+        .map(term => ({year:3,term})).filter(entry => withinWilWindow(entry, context, finalOrder));
+    if (!candidates.length) return {placement:null, warning:'WIL remains outstanding. No Year Three break remains before the final teaching semester. Academic review is required.'};
     if (completedAcademicUnits < 12) {
         return { placement: null, warning: 'WIL remains outstanding: at least 12 distinct passed academic units are required before WIL can be scheduled.' };
     }
-    const startYear = Math.max(1, Number(currentYear) || 1);
-    const candidates = Number(currentSemester) === 1
-        ? [{ year: startYear, term: 'Winter' }, { year: startYear, term: 'Summer' }, { year: startYear + 1, term: 'Winter' }]
-        : [{ year: startYear, term: 'Summer' }, { year: startYear + 1, term: 'Winter' }, { year: startYear + 1, term: 'Summer' }];
     for (const candidate of candidates) {
         const available = wilUnits.find(unit => isAvailableInBreakTerm(unit, candidate.term));
         if (!available) continue;
@@ -200,8 +211,28 @@ export const scheduleWilBreakPlacement = ({ wilUnits = [], completedAcademicUnit
             warning: hasBreakAvailabilityMetadata ? null : `WIL was placed in the first eligible ${candidate.term} break using provisional availability because the selected planner has no Winter/Summer offering data.`,
         };
     }
-    return { placement: null, warning: 'WIL remains outstanding: the selected planner does not record an available Winter or Summer placement after the student becomes eligible.' };
+    return { placement: null, warning: 'WIL remains outstanding. No offered Year Three break fits before the final teaching semester. Academic review is required.' };
 };
+
+export function recordedWilAttempts({ attempts, wilUnits, equivalents, context, schedule, plannerUnits, mappedExternalUnits }) {
+    const records = [];
+    for (const attempt of attempts) {
+        const unit = wilUnits.find(u => u.UnitCode === attempt.code)
+            ?? (equivalents.includes(attempt.code) ? wilUnits[0] : null);
+        if (!unit) continue;
+        const order = transcriptWilOrder(attempt.term, context.intake);
+        const year = order === null ? null : Math.floor(order / 2) + 1;
+        const term = attempt.term?.breakTerm;
+        const prior = attempts.filter(a => a.passing && a.term?.order < attempt.term?.order);
+        const count = getWilQualifyingCompletedUnitCodes({ plannerUnits, completedUnits:prior, mappedExternalUnits }).size;
+        const valid = term && withinWilWindow({year,term}, context, finalTeachingOrder(schedule,context), true)
+            && isAvailableInBreakTerm(unit, term) && count >= 12;
+        records.push({code:attempt.code, status:attempt.status, grade:attempt.grade, raw:attempt.term?.raw || attempt.rawTerm,
+            year, term, unit, active:/^(current|scheduled|in[- ]progress)$/i.test(attempt.status),
+            warning:valid ? null : 'Academic review required: check the recorded term, placement availability and 12 qualifying passes before enrolment.'});
+    }
+    return records;
+}
 
 // ========================= FYP CONFLICT DETECTION =========================
 export function hasFypConflict(unit, existingUnits) {

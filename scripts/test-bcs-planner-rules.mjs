@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { buildBcsPlan, getPlannerCompletionResult, getPlannerScopedMappings, parseTranscriptRows, scorePlannerMatch, rankTopPlannerMatches, deriveTranscriptAcademicPeriod, detectCompletedBcsDoubleMajors } from '../src/app/libs/bcsPlannerRules.mjs';
-import { balanceSemesterLoads, getWilQualifyingCompletedUnitCodes, scheduleRemainingUnits, scheduleWilBreakPlacement } from '../src/app/view/unit_suggestion/plannerHelpers.js';
+import { wilContext, withinWilWindow, finalTeachingOrder } from '../src/app/libs/wilWindow.mjs';
+import { recordedWilAttempts, balanceSemesterLoads, getWilQualifyingCompletedUnitCodes, scheduleRemainingUnits, scheduleWilBreakPlacement } from '../src/app/view/unit_suggestion/plannerHelpers.js';
 
 const unit = (code, name, type) => ({ UnitCode: code, Name: name, CreditPoints: 12.5, unitType: { ID: type === 'Core' ? 2 : type === 'Major' ? 3 : type === 'WIL Placement' ? 17 : 1, Name: type }, offeredTerms: ['Semester 1', 'Semester 2'] });
 const planner = {
@@ -189,7 +190,7 @@ let qualifyingCodes = getWilQualifyingCompletedUnitCodes({ plannerUnits: qualify
 assert.equal(qualifyingCodes.size, 10, 'only selected-planner Core/Major/Elective passes qualify for WIL');
 qualifyingCodes = getWilQualifyingCompletedUnitCodes({
   plannerUnits: qualifyingPlannerUnits,
-  completedUnits: [...qualifyingCompleted, { code: 'PRE00001', Grade: 'P' }, { code: 'MPU00001', Grade: 'P' }, { code: 'AIN00001', Grade: 'P' }, { code: 'ICT20016', Grade: 'P' }],
+  completedUnits: [...qualifyingCompleted, {code:'EXT00001',Grade:'P',creditPoints:12.5}, { code: 'PRE00001', Grade: 'P' }, { code: 'MPU00001', Grade: 'P' }, { code: 'AIN00001', Grade: 'P' }, { code: 'ICT20016', Grade: 'P' }],
   mappedExternalUnits: {
     Elective: [{ code: 'EXT00001', name: 'Approved transfer elective', CreditPoints: 12.5, categoryKey: 'Elective' }],
     __other__: [{ code: 'EXT00002', name: 'Other transfer', CreditPoints: 12.5, categoryKey: '__other__', isOtherMapping: true }],
@@ -239,23 +240,56 @@ assert.equal(mar25PlanWithUnpassedEquivalentWil.units.some(candidate => candidat
 const mar25WilQualifying = getWilQualifyingCompletedUnitCodes({ plannerUnits: mar25Planner.units, completedUnits: mar25Transcript.completed, mappedExternalUnits: mar25Mappings });
 assert.equal(mar25WilQualifying.size, 14, 'explicit Elective mappings named Approved Elective count toward WIL while Other does not');
 const mar25AcademicPeriod = deriveTranscriptAcademicPeriod(mar25Transcript.attempts);
-const mar25Wil = scheduleWilBreakPlacement({ wilUnits: [unit('ICT20016', 'Work Integrated Learning Placement', 'WIL Placement')], completedAcademicUnits: mar25WilQualifying.size, currentYear: mar25AcademicPeriod.next.year, currentSemester: mar25AcademicPeriod.next.semester });
-assert.equal(mar25Wil.placement.term, 'Summer', 'after a March Semester 1 transcript, eligible WIL is placed in the next Summer break');
-assert.equal(mar25Wil.placement.units[0].UnitCode, 'ICT20016');
-assert.match(mar25Wil.warning, /provisional availability/i, 'semester-only WIL availability permits the first eligible break provisionally');
+const march = wilContext(mar25Planner,mar25Transcript.attempts,mar25Transcript.intakeTerm,mar25AcademicPeriod.next.year,mar25AcademicPeriod.next.semester);
+const recommend = (context, units=[wilUnit], count=12, schedule=[]) => scheduleWilBreakPlacement({
+  wilUnits:units, completedAcademicUnits:count, context, schedule,
+});
+assert.equal(march.currentOrder,2);
+assert.equal(recommend(march,[wilUnit],11).placement,null);
+const deferred = recommend(march,[wilUnit],mar25WilQualifying.size);
+assert.equal(deferred.placement.year,3);
+assert.equal(deferred.placement.term,'Winter');
+assert.equal(deferred.placement.semester,null);
+assert.equal(deferred.placement.isBreakTerm,true);
+assert.equal(deferred.placement.totalCredits,25);
+assert.equal(deferred.placement.units.length,1);
+assert.match(deferred.warning,/provisional availability/i);
+const inThirdYear = {...march,currentOrder:4};
+const inFinal = {...march,currentOrder:5};
+const summerOnly = [{...wilUnit,offeredTerms:['Summer']}];
+const winterOnly = [{...wilUnit,offeredTerms:['Winter']}];
+assert.equal(recommend(inThirdYear,winterOnly).placement.term,'Winter');
+assert.equal(recommend(inThirdYear,summerOnly).placement,null);
+assert.match(recommend(inFinal).warning,/academic review/i);
+const extended = [{year:4,semester:1,units:[mar25Planner.units[0]]}];
+assert.equal(recommend(inFinal,summerOnly,12,extended).placement.term,'Summer');
+assert.equal(recommend({...march,currentOrder:6},summerOnly,12,extended).placement,null);
+assert.equal(withinWilWindow({year:2,term:'Summer'},march,5),false);
+assert.equal(withinWilWindow({year:3,term:'Summer'},march,5),false);
+assert.equal(withinWilWindow({year:3,semester:1},march,5),false);
+assert.equal(finalTeachingOrder([{year:3,semester:1,units:[wilUnit]}],march),4);
+const september = parseTranscriptRows([passed('COR00000','2025_SEP_S2'),passed('COR00001','2027_SEP_S2')]);
+const sepContext = wilContext(planner,september.attempts,september.intakeTerm,4,1);
+assert.equal(sepContext.currentOrder,4);
+assert.equal(recommend(sepContext,summerOnly).placement.term,'Summer');
+assert.equal(recommend(sepContext,winterOnly).placement,null);
+assert.equal(finalTeachingOrder([{year:4,semester:1,units:[wilUnit]}],sepContext),5);
 
-let wilResult = scheduleWilBreakPlacement({ wilUnits: [wilUnit], completedAcademicUnits: 11, currentYear: 2, currentSemester: 1 });
-assert.equal(wilResult.placement, null, '11 passed academic units cannot receive WIL');
-wilResult = scheduleWilBreakPlacement({ wilUnits: [wilUnit], completedAcademicUnits: 12, currentYear: 2, currentSemester: 1 });
-assert.equal(wilResult.placement.year, 2, 'WIL is not artificially delayed until Year Three');
-assert.equal(wilResult.placement.term, 'Winter', 'eligibility after Semester 1 uses the following Winter break');
-assert.equal(wilResult.placement.totalCredits, 25, 'WIL break placement is 25 CP');
-assert.equal(wilResult.placement.units.length, 1, 'WIL has its own dedicated break entry');
-wilResult = scheduleWilBreakPlacement({ wilUnits: [wilUnit], completedAcademicUnits: 12, currentYear: 2, currentSemester: 2 });
-assert.equal(wilResult.placement.term, 'Summer', 'eligibility after Semester 2 uses the following Summer break');
-const summerOnlyWil = { ...wilUnit, offeredTerms: ['Summer'] };
-wilResult = scheduleWilBreakPlacement({ wilUnits: [summerOnlyWil], completedAcademicUnits: 12, currentYear: 3, currentSemester: 1 });
-assert.equal(wilResult.placement.term, 'Summer', 'explicit availability skips an unavailable Winter break');
+const recorded = parseTranscriptRows([{...passed('ICT20026','2026_JUN_WT'),Grade:'',Status:'Scheduled'},
+  {...passed('ICT20016','2026_SEP_S2'),Grade:'N'}]);
+const records = recordedWilAttempts({attempts:recorded.attempts,wilUnits:[wilUnit],equivalents:['ICT20026'],
+  context:march,schedule:[],plannerUnits:mar25Planner.units,mappedExternalUnits:{}});
+assert.deepEqual(records.map(r=>[r.code,r.raw,r.year,r.term,r.active]),[
+  ['ICT20026','2026_JUN_WT',2,'Winter',true],['ICT20016','2026_SEP_S2',2,null,false],
+]);
+assert(records.every(r=>r.warning.includes('Academic review')));
+const badCompletions = [
+  {code:'COR00000',Grade:'N'}, {code:'COR00001',Grade:'P',Status:'Current'},
+  {code:'COR00002',Grade:'P',creditPoints:0}, {code:'ICT20026',Grade:'P'},
+  {code:'MPU00001',Grade:'P'}, {code:'EXT00001',Grade:'N'},
+];
+assert.equal(getWilQualifyingCompletedUnitCodes({plannerUnits:qualifyingPlannerUnits,completedUnits:badCompletions,
+  mappedExternalUnits:{Elective:[{code:'EXT00001',creditPoints:12.5,categoryLabel:'Elective'}]}}).size,0);
 schedule = scheduleRemainingUnits([wilUnit], new Map(), 0, 3, 1, 12, { wil: 1 }).schedule;
 assert.equal(schedule.length, 0, 'WIL is never added to an ordinary teaching-semester schedule');
 

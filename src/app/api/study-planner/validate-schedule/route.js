@@ -2,7 +2,9 @@ import {publishedPlanningPool} from '@app/libs/officialCatalogue.mjs';
 import prisma from '@utils/db/db';
 import { NextResponse } from 'next/server';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
-import { isPassingTranscriptAttempt } from '@app/libs/bcsPlannerRules.mjs';
+import { getPlannerScopedMappings, isPassingTranscriptAttempt } from '@app/libs/bcsPlannerRules.mjs';
+import { finalTeachingOrder, wilOrder, withinWilWindow } from '@app/libs/wilWindow.mjs';
+import { getWilQualifyingCompletedUnitCodes, isAvailableInBreakTerm } from '@app/view/unit_suggestion/plannerHelpers';
 import { isStudentPortalRequest } from '@app/libs/studentPortalAccess.mjs';
 
 const MAX_UNITS_PER_SEMESTER = 4;
@@ -19,11 +21,10 @@ async function authenticate(req) {
 
 const codeOf = value => String(value ?? '').trim().toUpperCase();
 const isBreakTerm = semester => ['winter', 'summer'].includes(String(semester.term ?? semester.breakTerm ?? '').toLowerCase());
-const semesterOrder = semester => Number(semester.year) * 10 + (isBreakTerm(semester) ? (String(semester.term ?? semester.breakTerm).toLowerCase() === 'winter' ? 3 : 8) : Number(semester.semester));
 const isWilUnit = unit => {
     const type = String(unit?.unitType?.Name ?? '').toLowerCase();
     const text = `${unit?.UnitCode ?? ''} ${unit?.Name ?? ''}`.toLowerCase();
-    return unit?.isOfficialWil || type.includes('wil') || /\bwil\b|work[-\s]?integrated learning|work integrated learning|internship|\bplacement\b/.test(text);
+    return ['ICT20016','ICT20026'].includes(codeOf(unit.UnitCode)) || unit?.isOfficialWil || type.includes('wil') || /\bwil\b|work[-\s]?integrated learning|work integrated learning|internship|\bplacement\b/.test(text);
 };
 
 function isOfferedInSemester(terms, semester, requireKnownAvailability = false) {
@@ -56,7 +57,6 @@ export async function POST(req) {
     try { body = await req.json(); } catch { return NextResponse.json({ success: false, message: 'Invalid JSON body' }, { status: 400 }); }
     const schedule = Array.isArray(body.schedule) ? body.schedule : null;
     const completedUnits = Array.isArray(body.completedUnits) ? body.completedUnits : [];
-    const wilQualifyingUnitCodes = new Set((Array.isArray(body.wilQualifyingUnitCodes) ? body.wilQualifyingUnitCodes : []).map(codeOf).filter(Boolean));
     const strictAvailability = body.strictAvailability === true;
     if (!schedule || schedule.length > 24) return NextResponse.json({ success: false, message: 'Provide a schedule containing at most 24 semesters.' }, { status: 400 });
 
@@ -67,13 +67,14 @@ export async function POST(req) {
     if (submittedCodes.length > 96) return NextResponse.json({ success: false, message: 'A schedule may contain at most 96 units.' }, { status: 400 });
 
     let units;
+    let plannerUnits;
     if (process.env.PLANNER_CATALOGUE_URL && body.plannerRevisionId != null) {
         let pool;
         try { pool = await publishedPlanningPool(); }
         catch { return NextResponse.json({message:'Published revision unavailable.'},{status:503}); }
         const planner = pool.find(p => p.id === body.plannerRevisionId);
         if (!planner) return NextResponse.json({message:'The catalogue changed. Reopen the comparison to use its current revision.'},{status:409});
-        units = planner.units;
+        units = plannerUnits = planner.units;
     } else units = await prisma.unit.findMany({
         where: { UnitCode: { in: [...new Set(submittedCodes)] } },
         include: {
@@ -85,8 +86,18 @@ export async function POST(req) {
         },
     });
     const unitByCode = new Map(units.map(unit => [codeOf(unit.UnitCode), unit]));
+    if (!plannerUnits && units.some(isWilUnit) && Number.isInteger(body.plannerId)) {
+        const links = await prisma.studyPlannerUnit.findMany({where:{studyPlannerId:body.plannerId},
+            select:{unit:{select:{UnitCode:true,Name:true,CreditPoints:true}},unitType:{select:{Name:true}}}});
+        plannerUnits = links.map(link => ({...link.unit,unitType:link.unitType}));
+    }
+    const wilQualifyingUnitCodes = getWilQualifyingCompletedUnitCodes({ plannerUnits:plannerUnits ?? [],
+        completedUnits:completedUnits.filter(u => isPassingTranscriptAttempt(u) && Number(u.creditPoints) > 0),
+        mappedExternalUnits:getPlannerScopedMappings(body.mappedExternalUnits, body.plannerRevisionId ?? body.plannerId), bcsPlanner:strictAvailability });
     const errors = [];
     const seen = new Set();
+    const context = body.wilContext ?? {firstSemester:1, currentOrder:-1, labelOffset:-3};
+    const finalOrder = finalTeachingOrder(schedule, context);
 
     for (const semester of schedule) {
         const semesterUnits = Array.isArray(semester.units) ? semester.units : [];
@@ -103,17 +114,28 @@ export async function POST(req) {
             const unit = unitByCode.get(code);
             if (!unit) { errors.push(`${code || 'A unit'} is not a known database unit and cannot be validated.`); continue; }
             if (seen.has(code)) errors.push(`${code} appears more than once in the schedule.`);
+            if (['ICT20016','ICT20026'].includes(code) && ['ICT20016','ICT20026'].some(wil =>
+                seen.has(wil) || completedUnits.some(u => codeOf(u.code) === wil && isPassingTranscriptAttempt(u)))) {
+                errors.push('The equivalent WIL placement is already completed or scheduled.');
+            }
             seen.add(code);
             if (breakTerm && !isWilUnit(unit)) errors.push(`${code} cannot be placed in a Winter/Summer break entry.`);
             if (!breakTerm && isWilUnit(unit)) errors.push(`${code} is a WIL placement and must be scheduled in a dedicated Winter/Summer break entry.`);
+            if (breakTerm && isWilUnit(unit) && (semester.semester != null || !withinWilWindow(semester, context, finalOrder))) {
+                errors.push(`${code} requires a Year Three break before the final teaching semester. Academic review is required.`);
+            }
             if (unit.CreditPoints == null) errors.push(`${code} has no stored credit value and cannot be workload-validated.`);
             else semesterCredits += unit.CreditPoints;
-            if (!isOfferedInSemester(unit.UnitTermOffered.map(term => term.TermType), semester, strictAvailability)) errors.push(`${code} is not recorded as offered in Year ${semester.year}, Semester ${semester.semester}.`);
+            const offeredTerms = unit.UnitTermOffered.map(term => term.TermType);
+            const offered = breakTerm && isWilUnit(unit)
+                ? isAvailableInBreakTerm({offeredTerms}, semester.term ?? semester.breakTerm)
+                : isOfferedInSemester(offeredTerms, semester, strictAvailability);
+            if (!offered) errors.push(`${code} is not recorded as offered in Year ${semester.year}, ${breakTerm ? semester.term ?? semester.breakTerm : 'Semester '+semester.semester}.`);
         }
         if (!breakTerm && semesterCredits > MAX_CREDITS_PER_SEMESTER) errors.push(`Year ${semester.year}, Semester ${semester.semester} exceeds the ${MAX_CREDITS_PER_SEMESTER} CP workload limit.`);
     }
 
-    const ordered = [...schedule].sort((a, b) => semesterOrder(a) - semesterOrder(b));
+    const ordered = [...schedule].sort((a, b) => wilOrder(a, context) - wilOrder(b, context));
     const priorCodes = new Set(completedCodes);
     let priorCredits = completedCredits;
     for (const semester of ordered) {
