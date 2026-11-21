@@ -12,10 +12,8 @@ publish:
 artifactName: "Student-Study-Planner-Setup-${version}-${arch}.${ext}"
 
 files:
-  - "electron/**/*"
-  - ".next-electron/standalone/**/*"
-  - ".next-electron/static/**/*"
-  - "public/**/*"
+  - "electron/*.js"
+  - "electron/loading.html"
   - "prisma/schema.prisma"
   - "package.json"
   - "next.config.*"
@@ -24,6 +22,8 @@ files:
   - "!**/.env*"
   - "!*.md"
   - "!src/**"
+
+beforePack: ./scripts/verify-desktop-seed.js
 
 directories:
   output: dist
@@ -54,11 +54,28 @@ extraResources:
   - from: .next-electron/standalone
     to: app
     filter:
-      - "**/*"
+      - "server.js"
+      - "package.json"
+      - "node_modules/**/*"
+      - ".next-electron/**/*"
+      - "scripts/extract_colors.py"
       - "!**/.env*"
+      - "!**/*.{db,sqlite,sqlite3,sql,bak,backup}*"
+      - "!**/{public,uploads}/**"
   - from: .next-electron/static
     to: app/.next-electron/static
+    filter:
+      - "**/*"
+      - "!**/*.{db,sqlite,sqlite3,sql,bak,backup}*"
+      - "!**/.env*"
+      - "!**/uploads/**"
   - from: public
     to: app/public
-  - from: prisma/app.db
-    to: app/prisma/app.db
+    filter:
+      - "images/Website-banner-scaled.jpg"
+      - "images/swinburne_logo.png"
+      - "images/login-banner.jpg"
+      - "images/favicon.png"
+      - "images/arrow_drop_down.png"
+  - from: build-resources/seed/planner-seed.db
+    to: seed/planner-seed.db

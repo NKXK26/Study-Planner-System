@@ -3,6 +3,9 @@ import { useRef } from 'react';
 import Auth from '@utils/auth/FrontendAuthHelper';
 import { parseTranscript } from '@app/libs/doubleMajorChecker.mjs';
 import { validateDocument } from '@app/libs/chatDpa.mjs';
+import { isStudentClientEdition } from '@app/libs/studentPortalAccess.mjs';
+
+const studentWebEdition = isStudentClientEdition();
 
 export default function ChatDocumentUpload({ document, onChange, busy, setReading, onError, helpText, compact=false, kind='dpa' }) {
   const field = useRef(null);
@@ -10,7 +13,8 @@ export default function ChatDocumentUpload({ document, onChange, busy, setReadin
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!(kind==='planner'?/\.pdf$/i:/\.(pdf|xlsx)$/i).test(file.name) || file.size > 5 * 1024 * 1024) { onError(`Choose a PDF${kind==='planner'?'':' or XLSX'} up to 5 MB.`); return; }
+    const localStudentDpa = studentWebEdition && kind === 'dpa';
+    if (!(kind==='planner'?/\.pdf$/i:localStudentDpa?/\.xlsx$/i:/\.(pdf|xlsx)$/i).test(file.name) || file.size > 5 * 1024 * 1024) { onError(localStudentDpa ? 'Choose the DPA XLSX export (up to 5 MB). PDF upload is disabled in the public portal so the file stays in your browser.' : `Choose a PDF${kind==='planner'?'':' or XLSX'} up to 5 MB.`); return; }
     setReading(true); onError('');
     try {
       let next;
@@ -44,9 +48,9 @@ export default function ChatDocumentUpload({ document, onChange, busy, setReadin
     finally { setReading(false); }
   }
   return <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
-    <input ref={field} type="file" accept={kind==='planner'?'.pdf':'.pdf,.xlsx'} onChange={upload} disabled={busy} className="hidden" aria-label={kind==='planner'?'Attach study planner PDF':'Attach DPA PDF or XLSX'} />
-    <button type="button" disabled={busy} title="PDF or XLSX, up to 5 MB" onClick={() => field.current?.click()} className="rounded-lg border border-neutral-300 bg-white px-3 py-2 font-medium text-neutral-900 hover:border-red-400 hover:bg-red-50 disabled:opacity-40">{kind==='planner'?'Attach planner PDF':compact?'Attach DPA':'Attach DPA PDF / XLSX'}</button>
+    <input ref={field} type="file" accept={kind==='planner'?'.pdf':studentWebEdition?'.xlsx':'.pdf,.xlsx'} onChange={upload} disabled={busy} className="hidden" aria-label={kind==='planner'?'Attach study planner PDF':studentWebEdition?'Attach DPA XLSX':'Attach DPA PDF or XLSX'} />
+    <button type="button" disabled={busy} title={studentWebEdition&&kind==='dpa'?'XLSX, up to 5 MB; processed in this browser':'PDF or XLSX, up to 5 MB'} onClick={() => field.current?.click()} className="rounded-lg border border-neutral-300 bg-white px-3 py-2 font-medium text-neutral-900 hover:border-red-400 hover:bg-red-50 disabled:opacity-40">{kind==='planner'?'Attach planner PDF':compact?'Attach DPA':studentWebEdition?'Attach DPA XLSX':'Attach DPA PDF / XLSX'}</button>
     {document && <span className="rounded-lg bg-neutral-100 px-3 py-2 break-words">{document.name}<button type="button" disabled={busy} onClick={() => onChange(null)} className="ml-3 text-red-700 underline">Remove</button></span>}
-    {kind==='planner'?null:compact?<details className="text-xs text-neutral-500"><summary>Upload info</summary><p>{helpText || 'Up to 5 MB. Extracted text is sent to your configured AI service. Clear chat to discard it.'}</p></details>:<p className="mt-1 opacity-60">{helpText || 'Up to 5 MB. Extracted text is sent to your configured AI service. Clear chat to discard it.'}</p>}
+    {kind==='planner'?null:compact?<details className="text-xs text-neutral-500"><summary>Upload info</summary><p>{helpText || (studentWebEdition?'XLSX up to 5 MB. This browser reads the worksheet; the file itself is not uploaded.':'Up to 5 MB. Extracted text is sent to your configured AI service. Clear chat to discard it.')}</p></details>:<p className="mt-1 opacity-60">{helpText || (studentWebEdition?'XLSX up to 5 MB. This browser reads the worksheet; the file itself is not uploaded.':'Up to 5 MB. Extracted text is sent to your configured AI service. Clear chat to discard it.')}</p>}
   </div>;
 }

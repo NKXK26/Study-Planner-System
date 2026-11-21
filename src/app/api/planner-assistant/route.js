@@ -15,12 +15,13 @@ import { POST as generateReviewedPlan } from './planning/route';
 import { composeToolReply } from '@app/libs/plannerResponse.mjs';
 import { interpretPlannerRequest } from '@app/libs/plannerRequest.mjs';
 import { plannerAiStatus, resolvePlannerModel } from '@app/libs/plannerAiStatus.mjs';
+import { isStudentPortalRequest } from '@app/libs/studentPortalAccess.mjs';
 
 export async function GET(req) {
   const verify=new URL(req.url).searchParams.get('verify')==='1';
   if(verify){
     const dev=req.headers.get('x-dev-override')==='true'&&process.env.NEXT_PUBLIC_MODE==='DEV';
-    if(!dev&&!await SecureSessionManager.authenticateUser(req))return NextResponse.json({message:'Please sign in to test AI.'},{status:401});
+    if(!isStudentPortalRequest(req)&&!dev&&!await SecureSessionManager.authenticateUser(req))return NextResponse.json({message:'Please sign in to test AI.'},{status:401});
   }
   try{return NextResponse.json(await plannerAiStatus({verify,model:new URL(req.url).searchParams.get('model')}),{headers:{'Cache-Control':'no-store'}});}
   catch(e){return NextResponse.json({message:e.message},{status:e.status||503});}
@@ -29,10 +30,12 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const dev = req.headers.get('x-dev-override') === 'true' && process.env.NEXT_PUBLIC_MODE === 'DEV';
-    if (!dev && !await SecureSessionManager.authenticateUser(req)) return NextResponse.json({ success: false, message: 'Please sign in.' }, { status: 401 });
+    const studentPortal = isStudentPortalRequest(req);
+    if (!studentPortal && !dev && !await SecureSessionManager.authenticateUser(req)) return NextResponse.json({ success: false, message: 'Please sign in.' }, { status: 401 });
     let body, document;
     try {
       body = await req.json();
+      if (studentPortal && (body.document != null || body.plannerDocument != null)) throw new Error('Attachments are disabled in the public student AI assistant. Use Unit Suggestions or Graduation checks to process a DPA XLSX locally in your browser.');
       document = validateDocument(body.document);
       readPlannerDocument(body.plannerDocument);
     } catch (e) { return NextResponse.json({ success: false, message: e.message || 'Invalid request.' }, { status: 400 }); }

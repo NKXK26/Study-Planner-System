@@ -22,7 +22,7 @@ The database and application state live in Electron's per-user application data 
 
 ### Developers: run locally
 
-Requirements: Windows, Node.js 20, and npm.
+Requirements: Windows, Node.js 20, and npm. Desktop development and installer builds also require Python 3.12 with the standard SQLite module available as `python`.
 
 ```powershell
 git clone https://github.com/NKXK26/Study-Planner-System.git
@@ -53,6 +53,16 @@ npm run electron:build
 The build forces production mode for the packaged app, builds Next.js standalone output, and creates the NSIS installer under `dist/`. The folder also contains `latest.yml` and the installer blockmap used by the updater. Local builds do not publish a GitHub Release. `npm run electron:release` is retained as a local build alias; releases should be published through the tagged GitHub Actions workflow below.
 
 ### Publish a new version
+
+#### Verify the desktop starter database
+
+Run `npm run db:seed:desktop` to create `build-resources/seed/planner-seed.db` from the checked-in SQLite Prisma schema and `build-resources/desktop-reference.json`. Review changes to that manifest as release inputs. Its rows contain academic reference fields and the Viewer role, group and permissions. The generator builds an empty database from the schema and inserts only the listed columns. Every other application table must be empty.
+
+Run `npm run db:validate:desktop` to check table counts, foreign keys, integrity and byte equality with an independent clean build. Run `npm run test:desktop-seed` for the first-launch and upgrade regressions. The desktop production build generates and validates the seed, and the packager repeats validation before packaging. The working database, SQL exports, accounts and demo seed scripts are outside this workflow.
+
+On first launch the app creates a per-user database and session secret. A desktop installation requires no local administrator bootstrap. The production sign-in flow provisions ordinary users with Viewer access. Configure the read URL and provision named publishers on the catalogue host using the [official catalogue guide](central/README.md). Fresh installations need the published catalogue for official planners. The seed includes no local planner drafts or templates because the local tables carry no publication approval.
+
+#### Tag and publish
 
 1. Update the `version` in `package.json` and `package-lock.json` (for example, run `npm version patch`, then review the generated commit and tag).
 2. Commit and push the version change to the repository.

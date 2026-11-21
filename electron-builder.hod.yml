@@ -1,0 +1,29 @@
+appId: my.edu.swinburne.studyplanner.hod
+productName: HOD Study Planner Console
+artifactName: HOD-Study-Planner-Console-${version}-${arch}.${ext}
+directories:
+  app: electron
+  output: dist-hod
+  buildResources: build-resources
+files:
+  - hod-main.js
+  - hod-preload.js
+  - hod-login.html
+  - package.json
+asar: true
+npmRebuild: false
+win:
+  icon: icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  requestedExecutionLevel: asInvoker
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: HOD Study Planner Console
+  installerIcon: icon.ico
+  uninstallerIcon: icon.ico

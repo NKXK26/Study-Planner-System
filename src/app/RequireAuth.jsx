@@ -19,6 +19,12 @@ export default function RequireAuth({ children }) {
                     if (profile && profile.email) {
                         console.log('User authenticated via localStorage:', profile.email);
 
+                        if (profile.studentPortalSession === true || profile.temporaryUnrestrictedStudent === true) {
+                            setIsAuthenticated(true);
+                            setIsReady(true);
+                            return;
+                        }
+
                         // Validate with server to ensure user still exists and is authorized
                         const validationResult = await validateSessionWithServer(profile.email);
 

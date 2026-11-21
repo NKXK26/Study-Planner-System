@@ -10,6 +10,7 @@ const fs = require('node:fs');
   const dpa = await import('../src/app/libs/chatDpa.mjs');
   const checker = await import('../src/app/libs/doubleMajorChecker.mjs');
   const { replacementCandidates } = await import('../src/app/libs/unitReplacement.mjs');
+  const { isStudentPortalRequest } = await import('../src/app/libs/studentPortalAccess.mjs');
   assert.equal(knowledge.retrievePlannerKnowledge('can i do 2 majors')[0].id, 'double-major');
   assert.equal(knowledge.retrievePlannerKnowledge('dual major pls')[0].id, 'double-major');
   assert(knowledge.retrievePlannerKnowledge('reccomend what i take next semester').some(d => d.id === 'transcript'));
@@ -33,8 +34,8 @@ const fs = require('node:fs');
   const planner = (id, name, code) => ({ id, name:'24-Sep-'+name, studyPlannerUnits: [unit('COS10001'), unit(code)].map(u => ({ unit: u, unitType: u.unitType })) });
   const prisma = { unit: { findMany: async () => [] }, studyPlanner: { findMany: async () => [planner(1, 'A', 'COS10002'), planner(2, 'B', 'COS10003')] } };
   const NextResponse = { json: (data, options) => ({ data, status: options?.status || 200 }) };
-  const route = new Function('samePlannerIntake','readPlannerDocument','resolvePlannerModel','questionBoundary','generalEvidenceReply','refusal','prisma', 'SecureSessionManager', 'NextResponse', 'retrievePlannerKnowledge', 'normalizePlannerPrompt', 'documentEvidence', 'validateDocument', 'assessDpaDoubleMajor', 'normalizeCode', 'replacementCandidates', 'reviewedChatDocument', 'explainSemesterDraft', 'generateReviewedPlan', 'checkDoubleMajor', 'fetch', source + '\nreturn POST;')(
-    checker.samePlannerIntake, () => null, async () => undefined, answerability.questionBoundary,answerability.generalEvidenceReply,answerability.refusal,prisma, { authenticateUser: async req => req.authorized !== false }, NextResponse, knowledge.retrievePlannerKnowledge, knowledge.normalizePlannerPrompt, dpa.documentEvidence, dpa.validateDocument, checker.assessDpaDoubleMajor, checker.normalizeCode, replacementCandidates, reviewedChatDocument, explainSemesterDraft, generateReviewedPlan, checker.checkDoubleMajor, async () => { throw new Error('Model offline'); }
+  const route = new Function('samePlannerIntake','readPlannerDocument','resolvePlannerModel','questionBoundary','generalEvidenceReply','refusal','prisma', 'SecureSessionManager', 'NextResponse', 'retrievePlannerKnowledge', 'normalizePlannerPrompt', 'documentEvidence', 'validateDocument', 'assessDpaDoubleMajor', 'normalizeCode', 'replacementCandidates', 'reviewedChatDocument', 'explainSemesterDraft', 'generateReviewedPlan', 'checkDoubleMajor', 'isStudentPortalRequest', 'fetch', source + '\nreturn POST;')(
+    checker.samePlannerIntake, () => null, async () => undefined, answerability.questionBoundary,answerability.generalEvidenceReply,answerability.refusal,prisma, { authenticateUser: async req => req.authorized !== false }, NextResponse, knowledge.retrievePlannerKnowledge, knowledge.normalizePlannerPrompt, dpa.documentEvidence, dpa.validateDocument, checker.assessDpaDoubleMajor, checker.normalizeCode, replacementCandidates, reviewedChatDocument, explainSemesterDraft, generateReviewedPlan, checker.checkDoubleMajor, isStudentPortalRequest, async () => { throw new Error('Model offline'); }
   );
   const request = body => ({ headers: new Headers(), json: async () => body });
   let result = await route(request({ question: 'explain this', document }));

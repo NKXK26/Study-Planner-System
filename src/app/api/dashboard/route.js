@@ -1,10 +1,27 @@
-import prisma from "@utils/db/db";
 import SecureSessionManager from "@utils/auth/SimpleSessionManager";
 import { NextResponse } from "next/server";
 import { TokenValidation } from "@app/api/api_helper";
+import { readOfficialCatalogue } from '@app/libs/officialCatalogue.mjs';
+import { isStudentPortalRequest } from '@app/libs/studentPortalAccess.mjs';
 
 export async function GET(req) {
 	try {
+		if (isStudentPortalRequest(req)) {
+			const catalogue = await readOfficialCatalogue();
+			const planners = catalogue.data.filter(planner => planner.courseCode === 'BA-CS');
+			const unitCodes = new Set(planners.flatMap(planner => planner.units || []).map(unit => unit.UnitCode).filter(Boolean));
+			const courseCodes = new Set(planners.map(planner => planner.courseCode).filter(Boolean));
+			return NextResponse.json({
+				success: true,
+				data: {
+					student_count: 0,
+					unit_count: unitCodes.size,
+					course_count: courseCodes.size,
+					term_count: planners.length,
+				},
+			});
+		}
+
 		// Check for DEV override
 		const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
 			process.env.NEXT_PUBLIC_MODE === 'DEV';
@@ -23,6 +40,7 @@ export async function GET(req) {
 			}
 		}
 
+		const { default: prisma } = await import('@utils/db/db');
 		const [student_count, unit_count, course_count, term_count] = await Promise.all([
 			prisma.student.count(),
 			prisma.unit.count(),
@@ -41,6 +59,12 @@ export async function GET(req) {
 
 	} catch (error) {
 		console.error('Error:', error);
+		if (isStudentPortalRequest(req)) {
+			return NextResponse.json(
+				{ success: false, message: 'The published planner catalogue is temporarily unavailable.' },
+				{ status: 503 }
+			);
+		}
 		return NextResponse.json(
 			{ error: 'Failed to process the request', details: error.message },
 			{ status: 500 }

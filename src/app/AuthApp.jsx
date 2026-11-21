@@ -5,6 +5,8 @@ import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/ms
 import { msalConfig } from './authConfig';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
 import LoadingSpinner from '@components/LoadingSpinner';
+import { isStudentClientEdition } from '@app/libs/studentPortalAccess.mjs';
+const studentWebEdition = isStudentClientEdition();
 class AuthApp extends Component {
   constructor(props) {
     super(props);
@@ -31,6 +33,10 @@ class AuthApp extends Component {
   }
 
   componentDidMount() {
+    if (studentWebEdition) {
+      this.setState({ isInitialized: true });
+      return;
+    }
     // Initialize the MSAL application when component mounts
     this.publicClientApplication.initialize().then(() => {
       // Handle redirect promise after login
@@ -115,16 +121,14 @@ class AuthApp extends Component {
   }
 
   async studentLogin() {
-    // TEMPORARY UNRESTRICTED STUDENT MODE: development-only until real student auth and permissions exist.
-    if (process.env.NEXT_PUBLIC_MODE !== 'DEV') {
-      this.setState({ error: new Error('Temporary Student Login is available only in the local development environment.') });
-      return;
-    }
+    if (this.state.isLoggingIn) return;
+    this.setState({ isLoggingIn: true, error: null });
     const profile = {
       email: 'student@temporary.local',
       roles: ['Student'],
       isAuthenticated: true,
       temporaryUnrestrictedStudent: true,
+      studentPortalSession: studentWebEdition,
       timestamp: Date.now(),
     };
     try {
@@ -136,6 +140,8 @@ class AuthApp extends Component {
       window.location.assign('/view/dashboard');
     } catch (error) {
       this.setState({ error });
+    } finally {
+      this.setState({ isLoggingIn: false });
     }
   }
 
@@ -441,7 +447,15 @@ class AuthApp extends Component {
             <h1 className="text-gray-800 mb-2 text-6xl font-light tracking-tight">WELCOME</h1>
             <div className="w-64 h-0.5 bg-[#dc2d27] mx-auto mt-3 mb-3"></div>
             <h2 className="text-[#dc2d27] mb-8 text-2xl font-semibold">Student Study Planner</h2>
-            {this.state.loginView === 'choose' ? (
+            {studentWebEdition ? (
+              <div className="space-y-4">
+                <p className="text-gray-600 text-sm">Use the published study-planner catalogue without creating an account.</p>
+                <button type="button" disabled={this.state.isLoggingIn} className="w-full rounded-lg bg-[#dc2d27] px-6 py-3.5 font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50" onClick={this.studentLogin}>
+                  {this.state.isLoggingIn ? 'Starting session...' : 'Continue to Student Portal'}
+                </button>
+                <p className="text-xs leading-5 text-gray-500">Your XLSX transcript is read in this browser. The public staging portal does not provide staff administration.</p>
+              </div>
+            ) : this.state.loginView === 'choose' ? (
               <div className="space-y-3">
                 <p className="text-gray-600 mb-5 text-sm">Choose how you want to access the system</p>
                 <button type="button" className="w-full rounded-lg border border-gray-200 p-4 text-left transition-colors hover:border-[#dc2d27] hover:bg-red-50" onClick={this.studentLogin}>

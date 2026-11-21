@@ -4,6 +4,9 @@ import styles from '@components/PlannerChat.module.css';
 import { useEffect, useRef, useState } from 'react';
 import DashboardChat from '@components/DashboardChat';
 import Auth from '@utils/auth/FrontendAuthHelper';
+import {isStudentClientEdition} from '@app/libs/studentPortalAccess.mjs';
+
+const studentWebEdition=isStudentClientEdition();
 
 const labels={checking:'Checking AI service…',ready:'AI ready',installed:'Models installed · response not tested',offline:'Ollama unavailable','no-model':'Required model missing','inference-failed':'AI response check failed',unavailable:'Status check unavailable'};
 const button='rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-900 hover:border-red-400 hover:bg-red-50 disabled:opacity-50';
@@ -18,7 +21,9 @@ export default function AIAssistantPage() {
   const [chatBusy,setChatBusy]=useState(false);
   const mounted=useRef(false),request=useRef(null);
   useEffect(()=>{
-    mounted.current=true;check(false);
+    mounted.current=true;
+    if(studentWebEdition){setHealth({status:'offline',models:[],missingModels:[]});setPlannerMode(true);}
+    else check(false);
     return()=>{mounted.current=false;request.current?.abort();};
   },[]);
   async function check(verify=true,model=selectedModel){
@@ -40,9 +45,9 @@ export default function AIAssistantPage() {
     }
   }
   const available=['ready','installed'].includes(health.status);
-  const planningOnly=plannerMode||!available;
+  const planningOnly=studentWebEdition||plannerMode||!available;
   const models=health.missingModels?.length?health.missingModels:health.models||[];
-  const aiControls=<section aria-label="AI availability" className="space-y-3 text-sm text-neutral-700">
+  const aiControls=studentWebEdition?<section aria-label="Student assistant privacy" className="space-y-3 text-sm text-neutral-700"><p className="font-medium text-neutral-950">Published catalogue assistant</p><p className="text-xs leading-5">Ask general questions about recorded planners and units. DPA and planner attachments are disabled here; use the dedicated browser-local tools for personal checks.</p></section>:<section aria-label="AI availability" className="space-y-3 text-sm text-neutral-700">
       <div role="status" aria-live="polite" className="text-xs font-medium text-neutral-700">{labels[health.status]}</div>
       <label htmlFor="chat-ai-model" className="block text-xs font-semibold text-neutral-950">Model
         <select id="chat-ai-model" value={selectedModel} disabled={checking||chatBusy} onChange={event=>{const next=event.target.value;setSelectedModel(next);setPlannerMode(false);setHealth(current=>({...current,status:'checking'}));check(true,next);}} className="mt-2 block w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-2 py-2 text-xs font-normal">

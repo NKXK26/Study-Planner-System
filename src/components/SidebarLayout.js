@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 // import { PublicClientApplication } from "@azure/msal-browser";
 // import { msalConfig } from "@app/authConfig";
 import msalInstance from "@app/msalInstance";
+import { isStudentClientEdition } from '@app/libs/studentPortalAccess.mjs';
 import RoleBubble from "./RoleBubble";
 import DataCacher from "@utils/db/DataCacher";
 //import Link from "next/link";
@@ -117,6 +118,13 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
   const handleLogout = onLogout || (async () => {
     try {
       await fetch('/api/auth/student-session', { method: 'DELETE' }).catch(() => {});
+      if (isStudentClientEdition()) {
+        let DataCacherObject = new DataCacher();
+        DataCacherObject.ClearAllCache();
+        localStorage.clear();
+        window.location.assign('/');
+        return;
+      }
       // const msalInstance = new PublicClientApplication(msalConfig);
       await msalInstance.initialize();
 

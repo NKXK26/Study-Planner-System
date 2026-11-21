@@ -32,6 +32,11 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Set up Python for the SQLite reference seed
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Verify tag matches package version
         shell: pwsh
         run: |

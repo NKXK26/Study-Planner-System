@@ -15,8 +15,10 @@ import styles from './PlannerChat.module.css';
 import {useChatSession,clearChatSession,subscribeChatRecovery} from './useChatSession';
 import {nextSuggestionContext,plannerPdfSnapshot,suggestionExportReference} from '@app/libs/plannerConversation.mjs';
 import {appendToolReply} from '@app/libs/plannerIntent.mjs';
+import {isStudentClientEdition} from '@app/libs/studentPortalAccess.mjs';
 
-const welcome = { role: 'assistant', content: 'Ask a study-planning question, or attach your DPA or a new study planner PDF.' };
+const studentWebEdition = isStudentClientEdition();
+const welcome = { role: 'assistant', content: studentWebEdition ? 'Ask a general question about the published Computer Science study planners. For personal DPA checks, use Unit Suggestions or Graduation & Double Major so your XLSX stays in this browser.' : 'Ask a study-planning question, or attach your DPA or a new study planner PDF.' };
 
 export default function DashboardChat(props) {
   if (!props.embedded) return <Link href="/view/ai-assistant" className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-red-700 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-red-800 sm:bottom-6 sm:right-6"><ChatBubbleLeftRightIcon className="h-5 w-5" />Ask AI</Link>;
@@ -31,6 +33,9 @@ function MainPlannerChat({ theme, embedded = true, planningOnly = false, aiContr
   const [error, setError] = useState('');
   const [document, setDocument, restored] = useChatSession('document',null);
   const [plannerDocument,setPlannerDocument]=useChatSession('plannerDocument',null);
+  useEffect(()=>{
+    if(studentWebEdition){setDocument(null);setPlannerDocument(null);}
+  },[setDocument,setPlannerDocument]);
   const [reading, setReading] = useState(false);
   const [planningBusy, setPlanningBusy] = useState(false);
   const [primaryPlannerId, setPrimaryPlannerId] = useState(null);
@@ -115,7 +120,7 @@ function MainPlannerChat({ theme, embedded = true, planningOnly = false, aiContr
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.current.signal,
-        body: JSON.stringify({ enableTools: true, planningOnly, aiModel, toolCall:requestedTool||undefined, workflow, workspaceContext, suggestionContext:requestContext, question, document, plannerDocument, planningContext, primaryPlannerId: selectedPlannerId, conversationHistory: currentDocumentHistory(previous) }),
+        body: JSON.stringify({ enableTools: true, planningOnly, aiModel, toolCall:requestedTool||undefined, workflow, workspaceContext, suggestionContext:requestContext, question, document:studentWebEdition?null:document, plannerDocument:studentWebEdition?null:plannerDocument, planningContext:studentWebEdition?null:planningContext, primaryPlannerId: selectedPlannerId, conversationHistory: currentDocumentHistory(previous) }),
       });
       const data = await response.json();
       if (!response.ok || !data.success || typeof data.answer !== 'string') throw new Error(data.message || 'Could not answer. Please try again.');
@@ -141,7 +146,7 @@ function MainPlannerChat({ theme, embedded = true, planningOnly = false, aiContr
       </header>
       <div className="flex justify-between border-b border-neutral-200 bg-neutral-50 px-5 py-2.5 text-sm sm:px-7">
         <Link href={embedded ? '/view/dashboard' : '/view/ai-assistant'} className="underline">{embedded ? 'Back to dashboard' : 'Full chat / AI setup'}</Link>
-        <button type="button" className={styles.workspaceToggle} aria-controls="planning-workspace-controls" aria-expanded={workspaceOpen} onClick={()=>{setWorkspaceOpen(value=>!value);setAiPanelOpen(false);}}>Tasks</button>
+        {!studentWebEdition&&<button type="button" className={styles.workspaceToggle} aria-controls="planning-workspace-controls" aria-expanded={workspaceOpen} onClick={()=>{setWorkspaceOpen(value=>!value);setAiPanelOpen(false);}}>Tasks</button>}
         <button type="button" disabled={busy || reading || planningBusy || toolsBusy} onClick={() => { clearChatSession(); setWorkspaceContext(null); setWorkspaceOpen(false); setSuggestionContext(null); setMessages([welcome]); setDocument(null); setPlannerDocument(null); setPlanningContext(null); setPrimaryPlannerId(null); setError(''); setInput(''); setWorkflow(null); setToolResult(null); setChatVersion(v=>v+1); field.current?.focus(); }} className="underline disabled:opacity-40">Clear chat</button>
       </div>
       <div className={styles.body+' '+(aiControls?styles.withAi:'')}>
@@ -152,7 +157,7 @@ function MainPlannerChat({ theme, embedded = true, planningOnly = false, aiContr
         </div>
         <div id="ai-sidebar-controls" className={styles.aiSidebarContent+' '+(aiPanelOpen?styles.aiSidebarExpanded:'')}>{aiControls}</div>
       </aside>}
-      <aside aria-label="Planning workspace" className={styles.workspace}>
+      {!studentWebEdition&&<aside aria-label="Planning workspace" className={styles.workspace}>
         <div className={styles.workspaceHeader}>
           <h3 className="font-semibold text-neutral-950">Tasks</h3>
           <button type="button" className={styles.workspaceToggle} aria-expanded={workspaceOpen} aria-controls="planning-workspace-controls" onClick={()=>{setWorkspaceOpen(value=>!value);setAiPanelOpen(false);}}>{workspaceOpen?'Hide':'Open'}</button>
@@ -163,7 +168,7 @@ function MainPlannerChat({ theme, embedded = true, planningOnly = false, aiContr
 
 
         </div>
-      </aside>
+      </aside>}
       <div className={styles.conversation}>
 
       {suggestionContext?.plannerName&&<details className={styles.planContext} aria-label="Current planning context"><summary>Current plan</summary>
@@ -188,11 +193,11 @@ function MainPlannerChat({ theme, embedded = true, planningOnly = false, aiContr
       <form onSubmit={send} className="shrink-0 border-t border-neutral-200 bg-white p-3 sm:px-7">
         {recoveryWarning&&<p role="alert" className="mb-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{recoveryWarning}</p>}
         {error && <p role="alert" className="mb-2 text-sm text-red-700">{error}</p>}
-        <div aria-label="Chat DPA attachment" className="max-h-[25dvh] overflow-y-auto"><ChatDocumentUpload compact document={document} onChange={next => { setDocument(next); setSuggestionContext(replacementDocumentContext); setToolResult(null); setPlanningContext(null); setDocumentVersion(v=>v+1); setPrimaryPlannerId(null); setMessages(current=>[...current,{role:'assistant',content:next?'DPA attached: '+next.name+'.':'DPA removed.'}]); setError(''); }} busy={busy || reading || planningBusy || toolsBusy} setReading={setReading} onError={setError} /><ChatDocumentUpload kind="planner" compact document={plannerDocument} onChange={next=>{setPlannerDocument(next);setSuggestionContext(replacementDocumentContext);setToolResult(null);setWorkspaceContext(null);setWorkflow(null);setMessages(current=>[...current,{role:'assistant',content:next?'Study planner attached: '+next.name+'. Ask me to plan three or four units per semester until you finish.':'Study planner removed.'}]);setError('');}} busy={busy||reading||planningBusy||toolsBusy} setReading={setReading} onError={setError}/>{reading && <p role="status" className="mb-2 text-sm text-neutral-600">Reading attachment...</p>}</div>
+        {studentWebEdition?<p className="mb-2 rounded-lg bg-neutral-100 p-3 text-xs leading-5 text-neutral-600">Public portal privacy: attachments are disabled in AI chat. Upload a DPA XLSX only in Unit Suggestions or Graduation &amp; Double Major, where it is read in your browser.</p>:<div aria-label="Chat DPA attachment" className="max-h-[25dvh] overflow-y-auto"><ChatDocumentUpload compact document={document} onChange={next => { setDocument(next); setSuggestionContext(replacementDocumentContext); setToolResult(null); setPlanningContext(null); setDocumentVersion(v=>v+1); setPrimaryPlannerId(null); setMessages(current=>[...current,{role:'assistant',content:next?'DPA attached: '+next.name+'.':'DPA removed.'}]); setError(''); }} busy={busy || reading || planningBusy || toolsBusy} setReading={setReading} onError={setError} /><ChatDocumentUpload kind="planner" compact document={plannerDocument} onChange={next=>{setPlannerDocument(next);setSuggestionContext(replacementDocumentContext);setToolResult(null);setWorkspaceContext(null);setWorkflow(null);setMessages(current=>[...current,{role:'assistant',content:next?'Study planner attached: '+next.name+'. Ask me to plan three or four units per semester until you finish.':'Study planner removed.'}]);setError('');}} busy={busy||reading||planningBusy||toolsBusy} setReading={setReading} onError={setError}/>{reading && <p role="status" className="mb-2 text-sm text-neutral-600">Reading attachment...</p>}</div>}
         <label htmlFor="dashboard-chat-input" className="sr-only">Your study planning question</label>
         <div className="flex gap-2">
           <input ref={field} id="dashboard-chat-input" value={input} onChange={event => setInput(event.target.value)} maxLength={2000} readOnly={busy} placeholder="Ask a planning question…" className={"min-w-0 flex-1 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-base"} />
-          <button type="submit" disabled={busy || reading || planningBusy || toolsBusy || (!input.trim() && !document && !plannerDocument)} className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-40">Send</button>
+          <button type="submit" disabled={busy || reading || planningBusy || toolsBusy || (studentWebEdition?!input.trim():!input.trim() && !document && !plannerDocument)} className="rounded-xl bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-40">Send</button>
         </div>
         <p className="mt-2 text-[11px] text-neutral-500">Confirm academic decisions with your HOD.</p>
       </form>

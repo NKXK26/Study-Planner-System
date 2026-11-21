@@ -8,6 +8,8 @@ import Auth from '@utils/auth/FrontendAuthHelper';
 import ChatDocumentUpload from '@components/ChatDocumentUpload';
 import {documentEvidence} from '@app/libs/chatDpa.mjs';
 import {compatibleSecondMajorChoices,plannerIntake} from '@app/libs/plannerIntake.mjs';
+import {doubleMajorPathway} from '@app/libs/doubleMajorPathway.mjs';
+import {adaptPublishedPlanningPool} from '@app/libs/officialPlannerAdapter.mjs';
 
 function Units({units,earned=false}){
   return <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-neutral-100"><tr><th className="p-3">Unit</th><th className="p-3">Name</th><th className="p-3">{earned?'Earned CP':'CP'}</th><th className="p-3">{earned?'Grade':'Counts toward'}</th></tr></thead><tbody>{units.map(u=><tr key={u.code} className="border-b border-neutral-200"><th scope="row" className="p-3 whitespace-nowrap">{u.code}</th><td className="p-3">{u.name||'Not provided'}</td><td className="p-3">{earned?u.earned:u.credits??'Unknown'}</td><td className="p-3">{earned?(u.grade==='EXM'?'EXM (exempted)':u.grade||'Not provided'):(u.countsToward||[]).join(' / ')}</td></tr>)}</tbody></table></div>;
@@ -27,8 +29,11 @@ export default function DoubleMajorPanel({initialDocument=null}){
     setBusy(true);setError('');setResult(null);
     const timer=setTimeout(()=>controller.abort(),45000);
     try{
-      const response=await Auth.authenticatedFetch('/api/double-major-pathway',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({document:nextDocument,term,year:Number(year),...overrides})});
-      const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Could not generate this draft.');
+      const transcript=documentEvidence(nextDocument).transcript;
+      if(!transcript)throw new Error('The DPA table cannot be verified. Upload a readable XLSX export with Course, Status and Earned columns.');
+      const response=await Auth.authenticatedFetch('/api/official-planners',{method:'GET',cache:'no-store',signal:controller.signal});
+      const payload=await response.json();if(!response.ok||!payload.success)throw new Error(payload.message||'Published planners are unavailable.');
+      const data={data:doubleMajorPathway({transcript,planners:adaptPublishedPlanningPool(payload.data),term,year:Number(year),...overrides})};
       if(version!==requestVersion.current)return;
       setResult(data.data);setPrimary(String(data.data.primary.id));setSecondary(String(data.data.secondary.id));
     }catch(e){if(version===requestVersion.current)setError(e.name==='AbortError'?'The request timed out. Your DPA is retained; please retry.':e.message);}

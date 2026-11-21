@@ -1,0 +1,31 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+
+const main=fs.readFileSync('electron/hod-main.js','utf8');
+const preload=fs.readFileSync('electron/hod-preload.js','utf8');
+const login=fs.readFileSync('electron/hod-login.html','utf8');
+const builder=fs.readFileSync('electron-builder.hod.yml','utf8');
+
+assert.match(main,/protocol !== 'https:'/);
+assert.match(main,/details\.requestHeaders/);
+assert.match(main,/urls: \[`\$\{allowedOrigin\}\/\*`\]/);
+assert.match(main,/publisherAuthorization = ''/);
+assert.match(main,/contextIsolation: true/);
+assert.match(main,/nodeIntegration: false/);
+assert.match(main,/sandbox: true/);
+assert.match(main,/setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/);
+assert.match(main,/destination\.origin !== allowedOrigin/);
+assert.doesNotMatch(main,/admin1234/i);
+assert.doesNotMatch(main,/prisma|sqlite|app\.db/i);
+assert.match(preload,/contextBridge\.exposeInMainWorld/);
+assert.match(login,/Credentials are used only for this desktop session and are not stored/);
+assert.doesNotMatch(login,/admin1234/i);
+assert.match(builder,/appId: my\.edu\.swinburne\.studyplanner\.hod/);
+assert.match(builder,/app: electron/);
+assert.match(builder,/hod-main\.js/);
+assert.match(builder,/npmRebuild: false/);
+assert.doesNotMatch(builder,/\.next|prisma|build-resources\/seed/);
+const hodPackage=JSON.parse(fs.readFileSync('electron/package.json','utf8'));
+assert.equal(hodPackage.main,'hod-main.js');
+assert.equal(hodPackage.dependencies,undefined);
+console.log('HOD desktop isolation, navigation, credential handling and package boundary passed.');

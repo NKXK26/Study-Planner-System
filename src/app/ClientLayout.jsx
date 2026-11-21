@@ -6,6 +6,9 @@ import { RoleProvider } from '@app/context/RoleContext';
 import msalInstance from '@app/msalInstance';
 import Swal from 'sweetalert2';
 import { useEffect, useState } from 'react';
+import { isStudentClientEdition } from '@app/libs/studentPortalAccess.mjs';
+
+const studentWebEdition = isStudentClientEdition();
 
 export default function ClientLayout({ children }) {
 	const pathname = usePathname();
@@ -31,7 +34,7 @@ export default function ClientLayout({ children }) {
 		// Preserve legacy window.Swal callers using the installed local package.
 		window.Swal = Swal;
 		const checkAuth = async () => {
-			if (process.env.NEXT_PUBLIC_MODE === 'DEV' || localStorage.getItem('userProfile')) {
+			if (studentWebEdition || process.env.NEXT_PUBLIC_MODE === 'DEV' || localStorage.getItem('userProfile')) {
 				setIsAuthenticated(true);
 				return;
 			}

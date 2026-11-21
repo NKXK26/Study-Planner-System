@@ -7,13 +7,14 @@ async function runDbSetup() {
   const { app } = require('electron')
 
   const isProd = app.isPackaged
-  const userData = app.getPath('userData')
+  const resourceRoot = isProd ? process.resourcesPath : path.join(__dirname, '..', 'build-resources')
+  const clientRoot = isProd ? path.join(process.resourcesPath, 'app') : path.join(__dirname, '..')
+  return setupDatabase(app.getPath('userData'), path.join(resourceRoot, 'seed', 'planner-seed.db'), clientRoot)
+}
+
+async function setupDatabase(userData, sourceDb, clientRoot) {
   const dbPath = path.join(userData, 'planner.db')
   const versionPath = path.join(userData, 'db_version.txt')
-
-  const sourceDb = isProd
-    ? path.join(process.resourcesPath, 'app', 'prisma', 'app.db')
-    : path.join(__dirname, '..', 'prisma', 'app.db')
 
   console.log('sourceDb:', sourceDb)
   console.log('sourceDb exists:', fs.existsSync(sourceDb))
@@ -32,7 +33,7 @@ async function runDbSetup() {
 
   if (dbMissing) {
     console.log('First launch — copying bundled database...')
-    fs.copyFileSync(sourceDb, dbPath)
+    fs.copyFileSync(sourceDb, dbPath, fs.constants.COPYFILE_EXCL)
     console.log('Bundled database copied.')
   } else if (schemaOutdated) {
     console.log(`Database schema revision changed (v${currentVersion} → v${SCHEMA_VERSION}); preserving local records and applying in-place upgrades.`)
@@ -45,7 +46,6 @@ async function runDbSetup() {
 
   // Existing v6 databases predate Maker's optional study-period columns.
   // Upgrade in place instead of bumping the version and replacing user data.
-  const clientRoot = isProd ? path.join(process.resourcesPath, 'app') : path.join(__dirname, '..')
   const { PrismaClient } = require(path.join(clientRoot, 'node_modules', '@prisma', 'client'))
   const { upgradePlannerSchema } = require('./planner-schema')
   const db = new PrismaClient({ datasources: { db: { url: `file:${dbPath.replace(/\\/g, '/')}` } } })
@@ -63,4 +63,4 @@ async function runDbSetup() {
   }
 }
 
-module.exports = { runDbSetup }
+module.exports = { runDbSetup, setupDatabase }

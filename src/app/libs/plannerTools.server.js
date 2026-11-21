@@ -24,8 +24,13 @@ import { reviewedChatDocument } from './reviewedChat.mjs';
 import { documentEvidence } from './chatDpa.mjs';
 import { checkDoubleMajor, assessDpaDoubleMajor, rankDpaPlanners, majorUnits } from './doubleMajorChecker.mjs';
 import { replacementCandidates } from './unitReplacement.mjs';
+import { isStudentPortalRequest } from './studentPortalAccess.mjs';
 
 export async function toolIdentity(req, action='read') {
+  if (isStudentPortalRequest(req)) {
+    if (action !== 'read') throw Object.assign(new Error('Student access is read only.'),{status:403});
+    return {key:'student@portal.local',canWrite:false,canUpdate:false};
+  }
   if (req.headers.get('x-temporary-student') === 'true') {
     if (action !== 'read') throw Object.assign(new Error('Student access is read only.'),{status:403});
     if (process.env.NEXT_PUBLIC_MODE === 'DEV') return {key:'student',canWrite:false,canUpdate:false};

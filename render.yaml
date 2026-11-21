@@ -1,5 +1,38 @@
 services:
   - type: web
+    name: study-planner-student-staging
+    runtime: node
+    region: singapore
+    plan: free
+    autoDeployTrigger: "off"
+    buildCommand: npm ci --ignore-scripts && npx prisma generate && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "24.14.1"
+      - key: NODE_ENV
+        value: production
+      - key: APP_EDITION
+        value: student-web
+      - key: NEXT_PUBLIC_APP_EDITION
+        value: student-web
+      - key: STUDENT_ACCESS_MODE
+        value: public
+      - key: PLANNER_CATALOGUE_URL
+        value: https://official-planner-catalogue-staging.onrender.com/catalogue
+      - key: PLANNER_CACHE_DIR
+        value: /tmp/study-planner-catalogue
+      - key: PLANNER_CATALOGUE_TIMEOUT_MS
+        value: "30000"
+      - key: DATABASE_URL
+        value: file:/tmp/student-portal.db
+      - key: DIRECT_URL
+        value: file:/tmp/student-portal.db
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+
+  - type: web
     name: official-planner-catalogue-staging
     runtime: node
     region: singapore

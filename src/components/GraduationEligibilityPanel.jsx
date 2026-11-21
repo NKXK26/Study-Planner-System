@@ -7,6 +7,9 @@ import ChatDocumentUpload from '@components/ChatDocumentUpload';
 import {useRole} from '@app/context/RoleContext';
 import {useLightDarkMode} from '@app/context/LightDarkMode';
 import Auth from '@utils/auth/FrontendAuthHelper';
+import {documentEvidence} from '@app/libs/chatDpa.mjs';
+import {graduationEligibilityReport} from '@app/libs/graduationEligibility.mjs';
+import {adaptPublishedPlanningPool} from '@app/libs/officialPlannerAdapter.mjs';
 import styles from '@app/view/graduation-eligibility/page.module.css';
 const labels={'eligible':'Can graduate against this planner','not-eligible':'Not ready to graduate','needs-review':'Eligibility needs review','choose-planner':'Confirm programme planner'};
 function GraduationSummary({result,detail}){
@@ -45,7 +48,15 @@ export default function GraduationEligibilityPanel({initialDocument=null}){
   if(!next)return;
   pending.current?.abort();const current=++version.current,controller=new AbortController();pending.current=controller;
   setBusy(true);setError('');setResult(null);const timer=setTimeout(()=>controller.abort(),45000);
-  try{const response=await Auth.authenticatedFetch('/api/graduation-eligibility',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({document:next,plannerId:id||null})});const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Could not check this DPA.');if(current===version.current)setResult(data.data);}
+  try{
+   const transcript=documentEvidence(next).transcript;
+   if(!transcript)throw new Error('The completed-unit table cannot be verified. Upload a readable DPA XLSX with Course, Status and Earned columns.');
+   const response=await Auth.authenticatedFetch('/api/official-planners',{method:'GET',cache:'no-store',signal:controller.signal});
+   const payload=await response.json();
+   if(!response.ok||!payload.success)throw new Error(payload.message||'Published planners are unavailable.');
+   const data=graduationEligibilityReport({transcript,planners:adaptPublishedPlanningPool(payload.data),plannerId:id||null});
+   if(current===version.current)setResult(data);
+  }
   catch(e){if(current===version.current)setError(e.name==='AbortError'?'Checking timed out. Your DPA is retained; try again.':e.message);}
   finally{clearTimeout(timer);if(current===version.current)setBusy(false);}
  }

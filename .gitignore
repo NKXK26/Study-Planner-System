@@ -16,12 +16,14 @@ node_modules/
 # next.js
 /.next/
 /.next-electron/
+/build-resources/seed/
 /.next-dev/
 /out/
 
 # production
 /build
 dist/
+/dist-hod/
 # misc
 .DS_Store
 *.pem

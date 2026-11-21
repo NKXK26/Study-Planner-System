@@ -1,6 +1,7 @@
 import Swal from 'sweetalert2';
 import msalInstance from "@app/msalInstance";
 import DataCacher from '@utils/db/DataCacher';
+import { isStudentClientEdition } from '@app/libs/studentPortalAccess.mjs';
 
 /**
  * SECURE Frontend Authentication Helper with Dev Override
@@ -93,6 +94,12 @@ export default class SecureFrontendAuthHelper {
 
                 // Handle authentication errors
                 if (response.status === 401 || response.status === 403) {
+                    if (isStudentClientEdition()) {
+                        this.DataCacherObject.ClearAllCache();
+                        localStorage.clear();
+                        window.location.assign('/');
+                        return response;
+                    }
                     await Swal.fire({
                         icon: 'warning',
                         title: 'Session Expired',

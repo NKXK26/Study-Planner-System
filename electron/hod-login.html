@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'none'; base-uri 'none'">
+  <title>HOD Study Planner Console</title>
+  <style>
+    :root{font-family:Inter,Segoe UI,sans-serif;color:#171717;background:#f5f5f5}body{min-height:100vh;margin:0;display:grid;place-items:center}.card{width:min(420px,calc(100vw - 48px));background:#fff;border:1px solid #e5e5e5;border-top:5px solid #c92127;border-radius:16px;padding:32px;box-shadow:0 18px 45px #00000012}h1{font-size:24px;margin:0 0 8px}p{color:#5f5f5f;line-height:1.55}.field{display:grid;gap:7px;margin:18px 0}label{font-weight:650}input{font:inherit;padding:11px 12px;border:1px solid #cfcfcf;border-radius:8px}button{width:100%;border:0;border-radius:8px;padding:12px;background:#c92127;color:white;font:inherit;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.error{min-height:22px;color:#a40000;font-size:14px}.note{font-size:12px;margin-top:20px}</style>
+</head>
+<body>
+  <main class="card">
+    <h1>HOD Study Planner Console</h1>
+    <p>Sign in to publish and maintain the central BA-CS study-planner catalogue.</p>
+    <form id="login">
+      <div class="field"><label for="username">Publisher username</label><input id="username" name="username" autocomplete="username" maxlength="100" required autofocus></div>
+      <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" maxlength="500" required></div>
+      <p id="error" class="error" role="alert"></p>
+      <button id="submit" type="submit">Open publishing console</button>
+    </form>
+    <p class="note">Credentials are used only for this desktop session and are not stored on this computer.</p>
+  </main>
+  <script>
+    const form=document.getElementById('login');const button=document.getElementById('submit');const error=document.getElementById('error');
+    form.addEventListener('submit',async event=>{event.preventDefault();button.disabled=true;error.textContent='';const result=await window.hodConsole.login({username:form.username.value,password:form.password.value});if(!result.ok){error.textContent=result.message;button.disabled=false;form.password.value='';form.password.focus();}});
+  </script>
+</body>
+</html>

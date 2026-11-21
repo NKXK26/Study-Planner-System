@@ -21,9 +21,14 @@
     "catalogue:start": "node central/server.mjs",
     "catalogue:import": "node central/import.mjs",
     "test:catalogue": "node central/test.mjs",
-    "electron:dev": "npm run build && electron .",
+    "db:seed:desktop": "python scripts/desktop_seed.py generate",
+    "db:validate:desktop": "python scripts/desktop_seed.py validate",
+    "test:desktop-seed": "node --test scripts/test-desktop-seed.cjs",
+    "electron:dev": "npm run db:seed:desktop && npm run build && electron .",
     "electron:build": "node scripts/build-electron.js && electron-builder --win --publish never",
     "electron:release": "npm run electron:build",
+    "hod:dev": "electron electron/hod-main.js",
+    "hod:build": "electron-builder --config electron-builder.hod.yml --win --publish never",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
