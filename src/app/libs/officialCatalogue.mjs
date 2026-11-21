@@ -2,10 +2,36 @@ import { readFile, writeFile, mkdir, rename, unlink } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
+import { setTimeout as delay } from 'node:timers/promises';
 import {adaptPublishedPlanningPool} from './officialPlannerAdapter.mjs';
 
 const maxAge = 24*60*60*1000;
 const pending = new Map();
+
+async function fetchCatalogue(endpoint, request, timeoutMs) {
+  // Share one deadline across connection attempts, backoff and body reads.
+  const signal = AbortSignal.timeout(timeoutMs);
+  const deadline = performance.now() + timeoutMs;
+  let backoff = 500;
+  for (let attempt = 1; attempt <= 18; attempt++) {
+    signal.throwIfAborted();
+    let response;
+    try {
+      response = await request(endpoint, { signal, cache: 'no-store', redirect: 'error' });
+      if (response.ok) return await response.json();
+    } catch (error) {
+      if (signal.aborted || error instanceof SyntaxError) throw error;
+    }
+    if (response && !response.ok) {
+      await response.body?.cancel();
+      if (![502, 503, 504].includes(response.status)) break;
+    }
+    if (attempt === 18 || performance.now() + backoff >= deadline) break;
+    await delay(backoff, undefined, { signal });
+    backoff = Math.min(backoff * 2, 4000);
+  }
+  throw Error('Central catalogue unavailable.');
+}
 export function readOfficialCatalogue({
   url = process.env.PLANNER_CATALOGUE_URL,
   dir = process.env.PLANNER_CACHE_DIR || path.join(os.homedir(),'.study-planner','catalogue'),
@@ -25,9 +51,7 @@ export function readOfficialCatalogue({
     let data;
     const valid = items => Array.isArray(items) && items.every(p => p.status === 'Published' && Number.isInteger(p.id) && Number.isInteger(p.version) && p.publishedAt && Array.isArray(p.units) && p.plannerTemplate?.requirements);
     try {
-      const response = await request(endpoint,{signal:AbortSignal.timeout(requestTimeout),cache:'no-store',redirect:'error'});
-      if (!response.ok) throw Error();
-      ({data} = await response.json());
+      ({data} = await fetchCatalogue(endpoint, request, requestTimeout));
       if (!valid(data)) throw Error();
     } catch {
       const cached = await readFile(key,'utf8').then(JSON.parse).catch(()=>null);

@@ -66,7 +66,9 @@ async function testUpload(warning) {
     '@/app/view/unit_suggestion/Exportstudyplannerpdf': {},
     '@/app/view/unit_suggestion/SuggestionUIComponents': {},
     '@utils/auth/FrontendAuthHelper': {
-      async authenticatedFetch() {
+      async authenticatedFetch(url, options) {
+        assert.equal(url, '/api/official-planners');
+        assert.equal(options.cache, 'no-store');
         return { ok: true, json: async () => ({ success: true, data: catalogue, warning }) };
       },
     },

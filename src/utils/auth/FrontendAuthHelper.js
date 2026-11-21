@@ -36,8 +36,10 @@ export default class SecureFrontendAuthHelper {
             const staleKeys = await this.DataCacherObject.RemoveInvalidationKey(url);
         } else if (useCache) {
             const cachedValue = await this.DataCacherObject.GetCache(url);
-            if (cachedValue != null) {
-                return CreateMockResponse(cachedValue, 200);
+            // Older entries only contain the body, so their HTTP status is unknown.
+            if (cachedValue?.httpCacheVersion === 1 && cachedValue.status >= 200 &&
+                cachedValue.status < 300 && cachedValue.body?.success !== false) {
+                return CreateMockResponse(cachedValue.body, cachedValue.status);
             }
         }
         let response;
@@ -119,10 +121,12 @@ export default class SecureFrontendAuthHelper {
             }
         }
 
-        if (useCache) {
-            const clonedResponse = response.clone();
-            const data = await clonedResponse.json();
-            this.DataCacherObject.SetCache(url, data);
+        if (useCache && response.ok) {
+            // Empty and non-JSON responses can still be consumed by the caller.
+            const body = await response.clone().json().catch(() => undefined);
+            if (body !== undefined && body?.success !== false) {
+                await this.DataCacherObject.SetCache(url, { httpCacheVersion: 1, status: response.status, body });
+            }
         }
         return response;
     }

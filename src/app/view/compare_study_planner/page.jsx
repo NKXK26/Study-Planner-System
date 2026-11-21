@@ -1414,7 +1414,7 @@ export default function CompareStudyPlannerPage() {
 			setCompletedUnits(Array.from(unitsMap.values()));
 			const totalCredits = Array.from(unitsMap.values()).reduce((s, u) => s + (u.creditPoints || 0), 0);
 			setStudentInfo({ studentId: file.name, completedUnitsCount: unitsMap.size, totalCredits, intakeTerm: transcript.intakeTerm, transcriptAttempts: transcript.attempts, completedUnitsList: Array.from(unitsMap.values()).map(u => ({ code: u.code, name: u.name, grade: u.grade, creditPoints: u.creditPoints })) });
-			const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/official-planners');
+			const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/official-planners', { cache: 'no-store' });
 			if (!res.ok) throw new Error(`Failed to fetch planners: ${res.status}`);
 			const { success, data: allPlanners, message, warning } = await res.json();
 			setCatalogueWarning(warning || "");

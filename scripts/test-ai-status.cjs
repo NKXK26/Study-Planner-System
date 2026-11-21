@@ -44,7 +44,7 @@ const assert=require('node:assert/strict');
   const fs=require('node:fs');
   const helperSource=fs.readFileSync('src/utils/auth/FrontendAuthHelper.js','utf8').replace(/^import .*;?\r?\n/gm,'').replace('export default class','class').replace(/^export /gm,'');
   let cacheReads=0,cacheWrites=0,networkReads=0;
-  class Cache {async GetCache(){cacheReads++;return {status:'old'};}async SetCache(){cacheWrites++;}}
+  class Cache {async GetCache(){cacheReads++;return {httpCacheVersion:1,status:200,body:{status:'old'}};}async SetCache(){cacheWrites++;}}
   const Helper=new Function('DataCacher','fetch',helperSource+'\nreturn SecureFrontendAuthHelper;')(Cache,async()=>{networkReads++;return new Response('{"status":"offline"}');});
   Helper.isDevMode=()=>true;
   await Helper.authenticatedFetch('/api/planner-assistant',{cache:'no-store'});
