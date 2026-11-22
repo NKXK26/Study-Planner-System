@@ -6,6 +6,17 @@
 <label>Planner definition (JSON)<br><textarea rows="25" cols="95" id="definition"></textarea></label>
 <p><button data-action="create">Create new series</button> <button data-action="save">Save draft</button> <button data-action="revise">Create revision</button> <button data-action="publish">Publish draft</button> <button data-action="archive">Archive</button></p>
 <p role="status" id="message"></p><h2>Revision history</h2><pre id="events"></pre>
+<section aria-labelledby="bulk-title">
+<h2 id="bulk-title">Bulk draft import</h2>
+<p><strong>This operation creates Draft revisions only. It does not publish planners.</strong></p>
+<label>Reviewed manifest <input id="bulk-manifest" type="file" accept=".json"></label>
+<label>Draft bundle <input id="bulk-bundle" type="file" accept=".json"></label>
+<button id="bulk-plan" disabled>Dry run</button>
+<p><label>Type IMPORT DRAFTS to confirm <input id="bulk-confirm" autocomplete="off" disabled></label>
+<button id="bulk-apply" disabled>Apply drafts</button></p>
+<pre id="bulk-summary" role="status"></pre>
+<table><thead><tr><th>Planner</th><th>Operation</th><th>Details</th></tr></thead><tbody id="bulk-rows"></tbody></table>
+</section>
 <script>
 let rows = [];
 const byId = id => document.getElementById(id);
@@ -34,7 +45,7 @@ byId('file').onchange = async event => {
     byId('message').textContent = 'Review the definition and confirm its course, major and intake before saving.';
   } catch (error) { byId('message').textContent = error.message; }
 };
-for (const button of document.querySelectorAll('button')) button.onclick = async () => {
+for (const button of document.querySelectorAll('button[data-action]')) button.onclick = async () => {
   try {
     const row = selected(), action = button.dataset.action;
     if (action === 'publish' && byId('definition').value !== JSON.stringify(row.snapshot,null,2)) throw Error('Save your edits, then review and publish the saved draft.');
@@ -49,4 +60,68 @@ for (const button of document.querySelectorAll('button')) button.onclick = async
   } catch(e) { byId('message').textContent = e.message; }
 };
 reload().catch(e=>byId('message').textContent=e.message);
+</script>
+<script>
+(() => {
+  const manifest = byId('bulk-manifest'), bundle = byId('bulk-bundle'), confirm = byId('bulk-confirm');
+  const dry = byId('bulk-plan'), apply = byId('bulk-apply'), summary = byId('bulk-summary'), rows = byId('bulk-rows');
+  let busy = false, fingerprint = null;
+  function controls() {
+    manifest.disabled = bundle.disabled = busy;
+    dry.disabled = busy || !manifest.files.length || !bundle.files.length;
+    confirm.disabled = busy || !fingerprint;
+    apply.disabled = confirm.disabled || confirm.value !== 'IMPORT DRAFTS';
+  }
+  function reset() {
+    fingerprint = null;
+    confirm.value = summary.textContent = '';
+    rows.replaceChildren();
+    controls();
+  }
+  function displayReport(report) {
+    const created = new Map(report.created?.map(r=>[r.name,r.id]));
+    rows.replaceChildren(...(report.results || []).map(r=>{
+      const tr = document.createElement('tr');
+      const details = created.has(r.name) ? 'Revision #'+created.get(r.name) :
+        r.reason || (r.revisions || []).map(v=>v.status+' v'+v.version+' (#'+v.id+')').join(', ');
+      for (const value of [r.name, created.has(r.name) ? 'created Draft' : r.operation, details]) {
+        const td = document.createElement('td');
+        td.textContent = value;
+        tr.append(td);
+      }
+      return tr;
+    }));
+    summary.textContent = [report.message, ...(report.issues || []),
+      report.counts && Object.entries(report.counts).map(([label,n])=>label+' '+n).join(', '),
+      report.bundleFingerprint && 'Bundle SHA-256 '+report.bundleFingerprint,
+      report.planFingerprint && 'Plan fingerprint '+report.planFingerprint].filter(Boolean).join('\n');
+  }
+  async function run(write) {
+    if (busy || (write ? apply.disabled : dry.disabled)) return;
+    const previous = fingerprint, confirmation = confirm.value;
+    busy = true;
+    reset();
+    try {
+      if (manifest.files[0].size + bundle.files[0].size > 4*1024*1024) throw Error('Choose files totalling under 4 MiB.');
+      const body = {manifest:await manifest.files[0].text(),bundle:await bundle.files[0].text()};
+      if (write) Object.assign(body,{confirmation,planFingerprint:previous});
+      const response = await fetch('/revisions/bulk/'+(write ? 'apply' : 'plan'),{
+        method:'POST',headers:{'Content-Type':'application/json','X-Catalogue-Write':'1'},body:JSON.stringify(body)
+      });
+      const report = await response.json();
+      displayReport(report);
+      if (response.ok && report.ok) {
+        if (!write) fingerprint = report.planFingerprint;
+        else await reload();
+      }
+    } catch {
+      summary.textContent += '\nCould not complete the request. Run a fresh dry run to check the current drafts.';
+    } finally { busy = false; controls(); }
+  }
+  manifest.onchange = bundle.onchange = reset;
+  confirm.oninput = controls;
+  dry.onclick = () => run(false);
+  apply.onclick = () => run(true);
+  controls();
+})();
 </script></html>

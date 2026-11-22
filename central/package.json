@@ -5,7 +5,9 @@
   "version": "1.0.0",
   "scripts": {
     "generate": "prisma generate",
-    "migrate:staging": "node migrate-staging.mjs"
+    "migrate:staging": "node migrate-staging.mjs",
+    "test:bulk-review": "node --test test-bulk-review.mjs",
+    "test:bulk-postgres": "node --test test-bulk-postgres.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

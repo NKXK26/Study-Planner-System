@@ -73,6 +73,53 @@ The free web service sleeps after 15 minutes without inbound traffic. The next r
 
 **Publisher authentication.** Basic authentication is for staging over HTTPS. Browsers cache credentials, and the service has per-process rate limiting with no MFA. Close the private browser session after use. Rotate the named publisher's hash in the dashboard and restart to revoke the old password. Production HOD access requires university SSO with MFA and a verified Admin/HOD role before enabling publishing.
 
+## Import a reviewed BA-CS batch as drafts
+
+Start the local catalogue as described under Local development. Open `http://127.0.0.1:4100/manage` with a named Admin or HOD publisher account. In **Bulk draft import**, select the Phase 1 manifest and its matching draft bundle, then choose **Dry run**. The table includes each excluded planner and the reason. Check the proposed creations, identical drafts, conflicts, invalid records and both fingerprints. A conflict or validation issue blocks the entire batch. Changing either file clears the confirmation.
+
+To apply a reviewed plan, type `IMPORT DRAFTS` and choose **Apply drafts**. The service creates version 1 and an audit event for each new series in one serializable PostgreSQL transaction. A sole identical Draft is an explicit skip. Different drafts, published history (including Superseded revisions), and archived revisions block the batch. A manual HOD publication review remains a separate action in the single-planner editor. Students see only Published revisions.
+
+### Local CLI dry run
+
+With the local service already running, use a second PowerShell terminal in the repository root. The password prompt uses the same publisher account as the management page. The CLI exits with 0 on success and a nonzero status on conflicts, invalid input, or request failure.
+
+```powershell
+$review = '.\output\catalogue-review\ba-cs-2024-2026-v2'
+$files = @('--url','http://127.0.0.1:4100','--manifest',"$review\manifest.json",'--bundle',"$review\ba-cs-2024-2026-drafts.json")
+$publisher = Get-Credential -Message 'Local catalogue publisher'
+try {
+  $env:CATALOGUE_PUBLISHER_USER = $publisher.UserName
+  $env:CATALOGUE_PUBLISHER_PASSWORD = $publisher.GetNetworkCredential().Password
+  node .\central\bulk-cli.mjs @files
+} finally {
+  Remove-Item Env:\CATALOGUE_PUBLISHER_PASSWORD, Env:\CATALOGUE_PUBLISHER_USER -ErrorAction SilentlyContinue
+  Remove-Variable publisher
+}
+```
+
+For an optional machine-readable report, append `--report <new-file.json>` to the Node command. The file must be new. For an authorized apply, use the same files, origin and credentials and append `--apply --expected-plan <plan-fingerprint> --confirm 'IMPORT DRAFTS'`. The CLI accepts Basic authentication over loopback HTTP or HTTPS, and refuses redirects. Keep process credentials and reports in an operator-controlled environment.
+
+### API and interrupted requests
+
+Both operations use authenticated JSON POST requests with `X-Catalogue-Write: 1`. Send `manifest` and `bundle` as UTF-8 file **text**. The request limit is 4 MiB including the JSON envelope, and each file may describe at most 100 planners. The server reads neither paths nor URLs supplied by these files.
+
+| Operation | Response |
+|---|---|
+| `/revisions/bulk/plan` | Read-only. Returns per-planner operations, counts and a SHA-256 fingerprint covering both file texts. A valid plan also receives a server-authenticated plan fingerprint covering the actor, role, file fingerprint and planned operations, including existing revision IDs, versions and edit numbers. |
+| `/revisions/bulk/apply` | Requires the same files, publisher, `planFingerprint` and `confirmation: "IMPORT DRAFTS"`. Rechecks the catalogue in the write transaction. The receipt includes the actor, time, created IDs, skipped IDs and counts. |
+
+After a timeout, disconnect, restart or concurrent edit, run **Dry run** again before retrying. A committed batch appears as identical drafts. A rolled-back batch is still ready to create. Review conflicting series in revision history before taking further action. Plan fingerprints are specific to the running service instance. A restart or request routed to another instance requires a fresh plan on the instance handling apply.
+
+The SHA-256 checks verify consistency with the supplied review files. The publisher remains responsible for obtaining both files from the approved review package. The service never downloads a PDF or verifies academic approval independently. Future yearly batches can use the same review format and BA-CS major codes.
+
+### Local verification
+
+**Self-contained review tests.** From the repository root, run `npm --prefix central run test:bulk-review`. The tests generate a deterministic manifest and 23 canonical BA-CS drafts in memory. The default run needs only the central npm dependencies and uses no database, network connection or review package.
+
+**PostgreSQL transaction tests.** Generate the central Prisma client with `npm --prefix central run generate`. Point `CATALOGUE_TEST_URL` at a newly created disposable PostgreSQL database on `127.0.0.1` named `bulk_test_<unique-suffix>`. Set `CATALOGUE_DATABASE_URL` to that same database and run `npm --prefix central run migrate:staging`, then `npm --prefix central run test:bulk-postgres`. The suite checks that both catalogue tables start empty. It uses the same synthetic planners, calls a local HTTP service, and writes temporary JSON files for the CLI checks. Discard the database after the run.
+
+**Optional V2 compatibility check.** To validate the original review package offline, set `CATALOGUE_REVIEW_DIR` to the directory containing `manifest.json` and `ba-cs-2024-2026-drafts.json`, then run `npm --prefix central run test:bulk-review` from the repository root. The real-package check reports a skip by default. An explicitly configured directory must contain both files.
+
 ## Import local planners
 
 1. Close the source app and make a consistent SQLite backup with SQLite's backup command or an equivalent backup tool. Keep this private on the source device, including when the database contains student records.

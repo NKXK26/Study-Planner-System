@@ -4,8 +4,11 @@ import { pathToFileURL } from 'node:url';
 import { verifyPassword } from './passwordHash.mjs';
 import { readConfig } from './config.mjs';
 import { change, publicPlanner, fault, CatalogueFault } from './model.mjs';
+import { createBulkImporter } from './bulk-drafts.mjs';
+import { bulkBodyLimit } from './bulk-review.mjs';
 
 export function createCatalogueServer(db, accounts) {
+  const bulkImport = createBulkImporter(db);
   const windows = new Map();
   function limit(key, max) {
     const now = Date.now();
@@ -31,7 +34,8 @@ export function createCatalogueServer(db, accounts) {
         const rows = await db.revision.findMany({where:{status:'Published'},orderBy:{id:'asc'}});
         return send(200,{data:rows.map(publicPlanner)});
       }
-      if (!['/manage','/revisions'].includes(req.url)) throw fault(404,'Unknown endpoint');
+      const bulk = ['/revisions/bulk/plan','/revisions/bulk/apply'].includes(req.url);
+      if (!bulk && !['/manage','/revisions'].includes(req.url)) throw fault(404,'Unknown endpoint');
       limit(req.socket.remoteAddress,120);
       const auth = /^Basic ([A-Za-z0-9+/=]+)$/i.exec(req.headers.authorization || '');
       const value = auth ? Buffer.from(auth[1],'base64').toString() : '';
@@ -49,20 +53,26 @@ export function createCatalogueServer(db, accounts) {
         return res.end(await readFile(new URL('./manage.html',import.meta.url)));
       }
       if (req.url === '/revisions' && req.method === 'GET') return send(200,await db.revision.findMany({orderBy:{id:'desc'},include:{events:true}}));
-      if (req.url !== '/revisions' || req.method !== 'POST') throw fault(405,'Unsupported operation');
+      if ((!bulk && req.url !== '/revisions') || req.method !== 'POST') throw fault(405,'Unsupported operation');
       // Browsers cannot send this cross-origin without a successful CORS preflight.
       if (req.headers['x-catalogue-write'] !== '1' || req.headers['content-type'] !== 'application/json') throw fault(403,'Invalid publishing request');
       limit('write:'+name,30);
       const chunks = [];
       let size = 0;
+      const maxBytes = bulk ? bulkBodyLimit : 1024*1024;
+      if (Number(req.headers['content-length']) > maxBytes) throw fault(413,'Planner request too large');
       for await (const chunk of req) {
         size += chunk.length;
-        if (size > 1024*1024) throw fault(413,'Planner too large');
+        if (size > maxBytes) throw fault(413,'Planner request too large');
         chunks.push(chunk);
       }
       let body;
       try { body = JSON.parse(Buffer.concat(chunks)); } catch { throw fault(400,'Invalid JSON'); }
       if (!body || typeof body !== 'object') throw fault(400,'Invalid request');
+      if (bulk) {
+        const result = await bulkImport({name,role:account.role},body,req.url.endsWith('/apply'));
+        return send(result.ok ? 200 : result.conflicts.length ? 409 : 422,result);
+      }
       return send(200,await change(db,{name,role:account.role},body));
     } catch (e) {
       const conflict = ['P2002','P2025','P2034'].includes(e.code);
