@@ -125,9 +125,36 @@ test('only the local main frame can sign in, remote content has no bridge or nav
     }
   }
   for (const ses of h.sessions.values()) {
+    let downloadDenied = false;
+    ses.emit('will-download', { preventDefault() { downloadDenied = true; } });
+    assert.ok(downloadDenied);
     assert.equal(ses.setPermissionCheckHandlerCallback(), false);
     assert.equal(ses.setDevicePermissionHandlerCallback(), false);
     ses.setPermissionRequestHandlerCallback(null, 'media', answer => assert.equal(answer, false));
+  }
+});
+
+test('self-contained HOD screens use the local brand and safe DOM rendering', () => {
+  const login = read('hod-login.html');
+  const manage = read('../central/manage.html');
+  const logo = readFileSync(path.join(directory, '../public/images/swinburne_logo.png')).toString('base64');
+  for (const html of [login, manage]) {
+    assert.ok(html.includes('data:image/png;base64,' + logo));
+    assert.doesNotMatch(html, /\b(?:innerHTML|outerHTML|insertAdjacentHTML|document\.write)\b|\son\w+\s*=\s*["']|<(?:link|script)[^>]+(?:src|href)\s*=/i);
+  }
+  assert.match(login, /role="alert"/);
+  assert.match(manage, /role="status"/);
+});
+
+if (process.env.HOD_VERIFY_ASAR) test('built HOD archive matches the reviewed application inputs', () => {
+  const asar = require('@electron/asar');
+  const archive = process.env.HOD_VERIFY_ASAR;
+  const names = ['hod-login.html','hod-main.js','hod-preload.js','package.json'];
+  assert.deepEqual(asar.listPackage(archive).map(name => name.slice(1)).sort(), names);
+  for (const name of names) {
+    const bytes = asar.extractFile(archive,name);
+    if (name === 'package.json') assert.deepEqual(JSON.parse(bytes), JSON.parse(read(name)));
+    else assert.deepEqual(bytes,readFileSync(path.join(directory,name)));
   }
 });
 

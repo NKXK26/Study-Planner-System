@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {randomBytes} from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { verifyPassword } from './passwordHash.mjs';
@@ -48,9 +49,11 @@ export function createCatalogueServer(db, accounts) {
       }
       if (!['Admin','HOD'].includes(account.role)) throw fault(403,'Publisher access required');
       if (req.method === 'GET' && req.url === '/manage') {
+        const nonce = randomBytes(18).toString('base64');
+        const html = await readFile(new URL('./manage.html',import.meta.url),'utf8');
         res.setHeader('Content-Type','text/html; charset=utf-8');
-        res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
-        return res.end(await readFile(new URL('./manage.html',import.meta.url)));
+        res.setHeader('Content-Security-Policy',`default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; img-src data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`);
+        return res.end(html.replace(/<(script|style)>/g,`<$1 nonce="${nonce}">`));
       }
       if (req.url === '/revisions' && req.method === 'GET') return send(200,await db.revision.findMany({orderBy:{id:'desc'},include:{events:true}}));
       if ((!bulk && req.url !== '/revisions') || req.method !== 'POST') throw fault(405,'Unsupported operation');

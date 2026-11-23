@@ -84,7 +84,7 @@ test('management page requires dry run and typed confirmation, invalidates chang
   function byId(id) { if (!nodes.has(id)) nodes.set(id,node()); return nodes.get(id); }
   const calls=[];
   vm.runInNewContext([...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].at(-1)[1],{
-    byId, document:{createElement:node},reload:async()=>{},fetch:async(url,options)=>{
+    byId, document:{createElement:node},edited:()=>false,reload:async()=>{},fetch:async(url,options)=>{
       calls.push({url,body:JSON.parse(options.body)});
       return {ok:true,json:async()=>({ok:true,planFingerprint:'abc',counts:{ready:1},results:[{name:'example',operation:'ready'}]})};
     }
