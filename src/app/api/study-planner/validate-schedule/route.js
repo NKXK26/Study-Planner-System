@@ -6,6 +6,7 @@ import { getPlannerScopedMappings, isPassingTranscriptAttempt } from '@app/libs/
 import { finalTeachingOrder, wilOrder, withinWilWindow } from '@app/libs/wilWindow.mjs';
 import { getWilQualifyingCompletedUnitCodes, isAvailableInBreakTerm } from '@app/view/unit_suggestion/plannerHelpers';
 import { isStudentPortalRequest } from '@app/libs/studentPortalAccess.mjs';
+import { plannerCoverage } from '@app/libs/studentCatalogueCoverage.mjs';
 
 const MAX_UNITS_PER_SEMESTER = 4;
 const MAX_CREDITS_PER_SEMESTER = 50;
@@ -57,7 +58,8 @@ export async function POST(req) {
     try { body = await req.json(); } catch { return NextResponse.json({ success: false, message: 'Invalid JSON body' }, { status: 400 }); }
     const schedule = Array.isArray(body.schedule) ? body.schedule : null;
     const completedUnits = Array.isArray(body.completedUnits) ? body.completedUnits : [];
-    const strictAvailability = body.strictAvailability === true;
+    const studentPortal = isStudentPortalRequest(req);
+    const strictAvailability = studentPortal || body.strictAvailability === true;
     if (!schedule || schedule.length > 24) return NextResponse.json({ success: false, message: 'Provide a schedule containing at most 24 semesters.' }, { status: 400 });
 
     const validCompletedUnits = strictAvailability ? completedUnits.filter(isPassingTranscriptAttempt) : completedUnits;
@@ -68,11 +70,18 @@ export async function POST(req) {
 
     let units;
     let plannerUnits;
-    if (process.env.PLANNER_CATALOGUE_URL && body.plannerRevisionId != null) {
+    if (studentPortal || (process.env.PLANNER_CATALOGUE_URL && body.plannerRevisionId != null)) {
+        if (studentPortal && !process.env.PLANNER_CATALOGUE_URL) return NextResponse.json({message:'Published catalogue unavailable. No recent copy is available.'},{status:503});
         let pool;
         try { pool = await publishedPlanningPool(); }
         catch { return NextResponse.json({message:'Published revision unavailable.'},{status:503}); }
-        const planner = pool.find(p => p.id === body.plannerRevisionId);
+        const coverage = studentPortal ? plannerCoverage(pool,body.enrolment) : null;
+        if (coverage?.state === 'confirm') return NextResponse.json({message:'Confirm your course, intake year, intake month and major.'},{status:422});
+        if (coverage?.state === 'review') return NextResponse.json({message:'HOD academic review required. '+coverage.message},{status:409});
+        const planner = coverage?.planner ?? pool.find(p => p.id === body.plannerRevisionId);
+        if (studentPortal && (planner.id !== body.plannerRevisionId || (body.plannerId != null && body.plannerId !== planner.id))) {
+            return NextResponse.json({message:'Select the exact published revision for your confirmed enrolment.'},{status:409});
+        }
         if (!planner) return NextResponse.json({message:'The catalogue changed. Reopen the comparison to use its current revision.'},{status:409});
         units = plannerUnits = planner.units;
     } else units = await prisma.unit.findMany({

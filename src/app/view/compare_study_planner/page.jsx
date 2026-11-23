@@ -5,6 +5,9 @@ import { useRole } from '@app/context/RoleContext';
 import AccessDenied from '@components/AccessDenied';
 import PageLoadingWrapper from '@components/PageLoadingWrapper';
 import SecureFrontendAuthHelper from '@utils/auth/FrontendAuthHelper';
+import StudentCatalogueGuard from '@components/StudentCatalogueGuard';
+import {isStudentClientEdition} from '@app/libs/studentPortalAccess.mjs';
+import {transcriptIdentity} from '@app/libs/studentCatalogueCoverage.mjs';
 import {
 	CheckCircleIcon, AcademicCapIcon, ChartBarIcon, DocumentArrowDownIcon,
 	LightBulbIcon, ArrowUpTrayIcon, CalendarIcon, ArrowPathIcon,
@@ -410,7 +413,7 @@ const AddUnitModal = ({ isOpen, onClose, availableUnits, onAddUnit }) => {
 };
 
 // ─── Inline Study Planner ─────────────────────────────────────────────────────
-const InlineStudyPlanner = ({ catalogueWarning = '', setCatalogueWarningForReceipt, allPlanners, completedUnits, studentInfo, initialPlannerId, onMappingsChange, onPlannerContextChange }) => {
+const InlineStudyPlanner = ({ catalogueWarning = '', setCatalogueWarningForReceipt, allPlanners, majorComparisonPool = allPlanners, completedUnits, studentInfo, initialPlannerId, onMappingsChange, onPlannerContextChange }) => {
 	const [recommendations, setRecommendations] = useState(null);
 	const [editableSchedule, setEditableSchedule] = useState([]);
 	const [scheduleLoading, setScheduleLoading] = useState(false);
@@ -442,7 +445,7 @@ const InlineStudyPlanner = ({ catalogueWarning = '', setCatalogueWarningForRecei
 	const mappingCategories = [...plannerCategories, { key: OTHER_MAPPING_KEY, label: 'Other', description: 'Keep as a recorded external completion; does not satisfy planner requirements' }];
 	const selectedPlannerMappings = useMemo(() => getPlannerScopedMappings(mappedExternalUnits, selectedFieldPlanner?.id), [mappedExternalUnits, selectedFieldPlanner?.id]);
 	const computePlannerScores = useCallback((planners, completed, mappings) => {
-		if (!planners.length || !completed.length) return [];
+		if (!planners.length) return [];
 		const ranked = rankTopPlannerMatches(completed, planners, studentInfo?.intakeTerm, planners.length, { mappedExternalUnits: mappings });
 		return ranked.map(result => {
 			const planner = planners.find(item => item.id === result.plannerId);
@@ -464,12 +467,12 @@ const InlineStudyPlanner = ({ catalogueWarning = '', setCatalogueWarningForRecei
 	}, [selectedFieldPlanner, selectedBcsPlan, currentGenericPlan]);
 	const selectedDoubleMajor = useMemo(() => detectCompletedBcsDoubleMajors({
 		primaryPlanner: selectedFieldPlanner,
-		planners: allPlanners,
+		planners: majorComparisonPool,
 		completedUnits,
 		studentIntake: studentInfo?.intakeTerm,
 		primaryEligible: Boolean(currentCompletion?.eligible),
 		normalizeCode: code => unitCode(getNormalizedUnitCode(code)),
-	}), [selectedFieldPlanner, allPlanners, completedUnits, studentInfo?.intakeTerm, currentCompletion]);
+	}), [selectedFieldPlanner, majorComparisonPool, completedUnits, studentInfo?.intakeTerm, currentCompletion]);
 	const completionFailureMessage = useMemo(() => {
 		if (!selectedFieldPlanner || currentCompletion?.eligible) return '';
 		const reasons = [];
@@ -778,6 +781,7 @@ const InlineStudyPlanner = ({ catalogueWarning = '', setCatalogueWarningForRecei
 				body: JSON.stringify({
 					plannerId:selectedFieldPlanner?.id,
 					plannerRevisionId:selectedFieldPlanner?.version ? selectedFieldPlanner.id : null,
+					enrolment:studentInfo?.enrolment,
 					schedule:candidate.filter(entry => !entry.isTranscriptScheduledWil),
 					wilContext:wilContext(selectedFieldPlanner, studentInfo?.transcriptAttempts || [], studentInfo?.intakeTerm, currentYear, currentSemester),
 					completedUnits, mappedExternalUnits:selectedPlannerMappings, strictAvailability:Boolean(selectedBcsPlan),
@@ -897,7 +901,7 @@ const InlineStudyPlanner = ({ catalogueWarning = '', setCatalogueWarningForRecei
 
 	// Effects
 	useEffect(() => {
-		if (!allPlanners.length || !completedUnits?.length) return;
+		if (!allPlanners.length) return;
 		const scored = computePlannerScores(allPlanners, completedUnits, mappedExternalUnits);
 		setAllPlannersWithScores(scored);
 		setTopPlanners(scored.slice(0, 5));
@@ -1330,6 +1334,26 @@ const InlineStudyPlanner = ({ catalogueWarning = '', setCatalogueWarningForRecei
 };
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
+function ExactStudyPlanner({planner, enrolment, published, studentInfo, completedUnits, exportReport}) {
+	const planners = useMemo(()=>resolveDuplicatePlannerUnitCodes([planner],completedUnits),[planner,completedUnits]);
+	const cohort = useMemo(()=>published.filter(p=>p.status==='Published' && p.courseCode===planner.courseCode &&
+		p.intakeYear===planner.intakeYear && p.intakeMonth===planner.intakeMonth),[published,planner]);
+	const info = useMemo(()=>{
+		const {intakeYear:year,intakeMonth:month}=enrolment;
+		const semester=month>=8?2:1;
+		return {...studentInfo,enrolment,intakeYear:year,intakeTerm:{year,month,semester,isTeaching:true,
+			order:year*1000+month*10+semester,raw:`${year}-${String(month).padStart(2,'0')} (student-confirmed)`}};
+	},[studentInfo,enrolment]);
+	const [context,setContext]=useState(null);
+	const [warning,setWarning]=useState('');
+	const scores=rankTopPlannerMatches(completedUnits,planners,info.intakeTerm,1,{mappedExternalUnits:context?.mappings});
+	return <>
+		<button className="mb-3 rounded border px-3 py-2" disabled={!context?.planner} onClick={()=>exportReport(scores,planners,info,context)}>Export to Excel</button>
+		<InlineStudyPlanner catalogueWarning={warning} setCatalogueWarningForReceipt={setWarning} allPlanners={planners}
+			majorComparisonPool={cohort} completedUnits={completedUnits} studentInfo={info} initialPlannerId={planner.id} onPlannerContextChange={setContext}/>
+	</>;
+}
+
 export default function CompareStudyPlannerPage() {
 	const { can, isSuperadmin } = useRole();
 	const [loading, setLoading] = useState(false);
@@ -1343,6 +1367,7 @@ export default function CompareStudyPlannerPage() {
 	const [expandedPlanners, setExpandedPlanners] = useState([]);
 	const [catalogueWarning, setCatalogueWarning] = useState('');
 	useEffect(() => {
+		if (isStudentClientEdition()) return;
 		let active = true;
 		async function refresh() {
 			try {
@@ -1359,6 +1384,7 @@ export default function CompareStudyPlannerPage() {
 	const [confirmedMappings, setConfirmedMappings] = useState({});
 	const [selectedPlannerContext, setSelectedPlannerContext] = useState(null);
 	const fileInputRef = useRef(null);
+	const uploadVersion = useRef(0);
 
 	const hasAccess = isSuperadmin() || can('planner', 'read');
 	const parseXlsxFile = (file) => new Promise((resolve, reject) => {
@@ -1367,14 +1393,15 @@ export default function CompareStudyPlannerPage() {
 			try {
 				const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
 				const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: null });
-				resolve(parseTranscriptRows(rows));
+				const transcript=parseTranscriptRows(rows);
+				resolve({...transcript,enrolment:transcriptIdentity(rows,transcript.intakeTerm)});
 			} catch (err) { reject(new Error('Failed to parse XLSX: ' + err.message)); }
 		};
 		reader.onerror = () => reject(new Error('Failed to read file'));
 		reader.readAsArrayBuffer(file);
 	});
 
-	const exportToExcel = () => {
+	const exportReport = (matchedPlanners,plannerCatalog,studentInfo,selectedPlannerContext) => {
 		if (!matchedPlanners.length || !studentInfo) return;
 		setExporting(true);
 		try {
@@ -1403,20 +1430,24 @@ export default function CompareStudyPlannerPage() {
 	const handleFileChange = async (e) => {
 		const file = e.target.files?.[0];
 		if (!file) return;
+		const version = ++uploadVersion.current;
 		setSearched(true); setFileName(file.name); setError(null);
 		setMatchedPlanners([]); setCompletedUnits([]); setStudentInfo(null); setExpandedPlanners([]); setPlannerCatalog([]); setConfirmedMappings({}); setSelectedPlannerContext(null);
 		try {
 			setLoading(true);
 			const transcript = await parseXlsxFile(file);
+			if (version !== uploadVersion.current) return;
 			const units = transcript.completed;
-			if (!units.length) { setError('No passed units found. Failed grades (N, SN, F, FAIL, NCOM, WF), blank grades, and Current, Scheduled, Future, or In Progress units do not count.'); return; }
+			if (!units.length && !(isStudentClientEdition() && transcript.attempts.length)) { setError('No passed units found. Failed grades (N, SN, F, FAIL, NCOM, WF), blank grades, and Current, Scheduled, Future, or In Progress units do not count.'); return; }
 			const unitsMap = new Map(units.map(u => [u.code.toUpperCase(), u]));
 			setCompletedUnits(Array.from(unitsMap.values()));
 			const totalCredits = Array.from(unitsMap.values()).reduce((s, u) => s + (u.creditPoints || 0), 0);
-			setStudentInfo({ studentId: file.name, completedUnitsCount: unitsMap.size, totalCredits, intakeTerm: transcript.intakeTerm, transcriptAttempts: transcript.attempts, completedUnitsList: Array.from(unitsMap.values()).map(u => ({ code: u.code, name: u.name, grade: u.grade, creditPoints: u.creditPoints })) });
+			setStudentInfo({ studentId: file.name, enrolment:transcript.enrolment, completedUnitsCount: unitsMap.size, totalCredits, intakeTerm: transcript.intakeTerm, transcriptAttempts: transcript.attempts, completedUnitsList: Array.from(unitsMap.values()).map(u => ({ code: u.code, name: u.name, grade: u.grade, creditPoints: u.creditPoints })) });
+			if (isStudentClientEdition()) return;
 			const res = await SecureFrontendAuthHelper.authenticatedFetch('/api/official-planners', { cache: 'no-store' });
 			if (!res.ok) throw new Error(`Failed to fetch planners: ${res.status}`);
 			const { success, data: allPlanners, message, warning } = await res.json();
+			if (version !== uploadVersion.current) return;
 			setCatalogueWarning(warning || "");
 			if (!success) throw new Error(message || 'Failed to fetch planners');
 			if (!allPlanners.length) { setError('No study planners found.'); return; }
@@ -1425,8 +1456,8 @@ export default function CompareStudyPlannerPage() {
 			const top5 = rankTopPlannerMatches(unitsMap, resolvedPlanners, transcript.intakeTerm);
 			if (!top5.length) setError('No matching planners found for the uploaded units.');
 			else setMatchedPlanners(top5);
-		} catch (err) { setError(err.message || 'Failed to process file'); }
-		finally { setLoading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
+		} catch (err) { if(version === uploadVersion.current) setError(err.message || 'Failed to process file'); }
+		finally { if(version === uploadVersion.current) { setLoading(false); if (fileInputRef.current) fileInputRef.current.value = ''; } }
 	};
 
 	useEffect(() => {
@@ -1454,7 +1485,7 @@ export default function CompareStudyPlannerPage() {
 								</div>
 								{matchedPlanners.length > 0 && studentInfo && (
 									<div className="flex gap-3">
-										<button onClick={exportToExcel} disabled={exporting} className="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
+										<button onClick={()=>exportReport(matchedPlanners,plannerCatalog,studentInfo,selectedPlannerContext)} disabled={exporting} className="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2">
 											<DocumentArrowDownIcon className="h-5 w-5" />{exporting ? 'Exporting…' : 'Export to Excel'}
 										</button>
 									</div>
@@ -1513,7 +1544,7 @@ export default function CompareStudyPlannerPage() {
 							)}
 
 							{/* Matched planners accordion */}
-							{searched && !error && matchedPlanners.length === 0 && studentInfo ? (
+							{!isStudentClientEdition() && searched && !error && matchedPlanners.length === 0 && studentInfo ? (
 								<div className="card-bg p-12 rounded-theme shadow-theme text-center">
 									<ChartBarIcon className="h-16 w-16 text-muted mx-auto mb-4 opacity-50" />
 									<p className="text-muted text-lg">No matching study planners found.</p>
@@ -1568,7 +1599,11 @@ export default function CompareStudyPlannerPage() {
 							)}
 						</div>
 
-						{/* Inline study planner */}
+						{isStudentClientEdition() && studentInfo && <StudentCatalogueGuard key={uploadVersion.current} initial={studentInfo.enrolment}>
+                            {(planner,enrolment,published)=><ExactStudyPlanner key={planner.id} planner={planner} enrolment={enrolment}
+                                published={published} studentInfo={studentInfo} completedUnits={completedUnits} exportReport={exportReport}/>}
+                        </StudentCatalogueGuard>}
+                        {/* Inline study planner */}
 						{showStudyPlanner && (
 							<div className="mt-8">
 								<InlineStudyPlanner

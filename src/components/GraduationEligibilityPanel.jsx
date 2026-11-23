@@ -39,7 +39,7 @@ function GraduationSummary({result,detail}){
  </section>;
 }
 function UnitTable({units}){return <div className={styles.scroll}><table><thead><tr><th>Unit</th><th>Name</th><th>Earned CP</th></tr></thead><tbody>{units.map(u=><tr key={u.code}><th scope="row">{u.code}</th><td>{u.name||'Not provided'}</td><td>{u.earned??u.credits??'Unknown'}</td></tr>)}</tbody></table></div>;}
-export default function GraduationEligibilityPanel({initialDocument=null}){
+export default function GraduationEligibilityPanel({initialDocument=null,exactPlanner=null}){
  const {can,isSuperadmin}=useRole(),{theme}=useLightDarkMode();const hasAccess=isSuperadmin()||can('planner','read');
  const [document,setDocument]=useState(initialDocument),[result,setResult]=useState(null),[reading,setReading]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[plannerId,setPlannerId]=useState(''),[search,setSearch]=useState('');
  const version=useRef(0),pending=useRef(null);
@@ -51,10 +51,14 @@ export default function GraduationEligibilityPanel({initialDocument=null}){
   try{
    const transcript=documentEvidence(next).transcript;
    if(!transcript)throw new Error('The completed-unit table cannot be verified. Upload a readable DPA XLSX with Course, Status and Earned columns.');
-   const response=await Auth.authenticatedFetch('/api/official-planners',{method:'GET',cache:'no-store',signal:controller.signal});
-   const payload=await response.json();
-   if(!response.ok||!payload.success)throw new Error(payload.message||'Published planners are unavailable.');
-   const data=graduationEligibilityReport({transcript,planners:adaptPublishedPlanningPool(payload.data),plannerId:id||null});
+   let planners=[exactPlanner];
+   if(!exactPlanner){
+    const response=await Auth.authenticatedFetch('/api/official-planners',{method:'GET',cache:'no-store',signal:controller.signal});
+    const payload=await response.json();
+    if(!response.ok||!payload.success)throw new Error(payload.message||'Published planners are unavailable.');
+    planners=payload.data;
+   }
+   const data=graduationEligibilityReport({transcript,planners:adaptPublishedPlanningPool(planners),plannerId:exactPlanner?.id||id||null});
    if(current===version.current)setResult(data);
   }
   catch(e){if(current===version.current)setError(e.name==='AbortError'?'Checking timed out. Your DPA is retained; try again.':e.message);}

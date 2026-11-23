@@ -37,7 +37,7 @@ function findElement(element, predicate) {
     .map(child => findElement(child, predicate)).find(Boolean);
 }
 
-async function testUpload(warning) {
+async function testUpload(warning, studentWeb=false) {
   // Keep parent state across the simulated file change, then use React to render
   // the resulting tree, including the real InlineStudyPlanner and its hooks.
   const state = [];
@@ -60,6 +60,7 @@ async function testUpload(warning) {
     '@components/helper': { ConditionalRequireAuth: passThrough },
     '@app/context/RoleContext': { useRole: () => ({ can: () => true, isSuperadmin: () => false }) },
     '@components/PageLoadingWrapper': passThrough,
+    '@app/libs/studentPortalAccess.mjs': {isStudentClientEdition:()=>studentWeb},
     '@components/AccessDenied': () => null,
     '@/app/view/unit_suggestion/ReplacementWorkspace': () => null,
     '@/app/view/unit_suggestion/UnitPoolToolbox': () => null,
@@ -80,6 +81,12 @@ async function testUpload(warning) {
     if (id.startsWith('@app/')) return require(resolve(root, 'src/app', id.slice(5)));
     return require(id);
   };
+  const guardModule={exports:{}};
+  const guardSource=ts.transpileModule(readFileSync(resolve(root,'src/components/StudentCatalogueGuard.jsx'),'utf8'),{
+    compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}
+  }).outputText;
+  new Function('require','module','exports',guardSource)(load,guardModule,guardModule.exports);
+  imports['@components/StudentCatalogueGuard']=guardModule.exports;
   class TranscriptReader {
     readAsArrayBuffer() { this.onload({ target: { result: transcript } }); }
   }
@@ -95,6 +102,13 @@ async function testUpload(warning) {
   await upload.props.onChange({ target: { files: [{ name: 'transcript.xlsx' }] } });
   const result = evaluatePage();
   const html = renderToStaticMarkup(result);
+  if(studentWeb){
+    assert.match(html,/Confirm your enrolment/);
+    assert.match(html,/transcript.xlsx/);
+    assert.match(html,/COS10003/);
+    assert.doesNotMatch(html,/Study Planner Recommendation|Export to Excel|HOD academic review required/);
+    return;
+  }
   assert.match(html, /Study Planner Recommendation/);
   if (warning) {
     assert.match(html, /<p role="status"[^>]*>Catalogue is using a cached revision\.<\/p>/);
@@ -109,6 +123,7 @@ async function testUpload(warning) {
 (async () => {
   await testUpload();
   await testUpload('Catalogue is using a cached revision.');
+  await testUpload(undefined,true);
   console.log('Transcript upload renders the inline planner with or without a catalogue warning.');
 })().catch(error => {
   console.error(error);
