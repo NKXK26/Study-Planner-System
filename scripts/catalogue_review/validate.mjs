@@ -10,10 +10,11 @@ export function validateDraft(p) {
     CSIOT:'Internet of Things', CSSD:'Software Development'};
   const month = {2:'Feb', 3:'Mar', 9:'Sep'}[p.intakeMonth];
   const suffix = Object.keys(majors).find(key => majors[key] === p.major);
-  assert.ok(suffix && month && [2024,2025,2026].includes(p.intakeYear));
+  assert.ok(suffix && month && [2023,2024,2025,2026].includes(p.intakeYear));
+  if (p.intakeYear === 2023) assert.ok([2,9].includes(p.intakeMonth));
   assert.equal(p.name, [p.intakeYear % 100,month,suffix].join('-'));
   assert.equal(p.courseCode, 'BA-CS');
-  const mandatory = p.intakeYear > 2024 || p.intakeMonth === 9;
+  const mandatory = p.intakeYear > 2024 || (p.intakeYear === 2024 && p.intakeMonth >= 9);
   const required = {Core:8, Major:8, Elective:mandatory ? 6 : 8, 'WIL Placement':Number(mandatory)};
   assert.equal(p.plannerTemplate.requirements.length,4);
   assert.deepEqual(Object.fromEntries(p.plannerTemplate.requirements.map(r=>[r.unitType.Name,r.requiredCount])),required);
@@ -72,6 +73,11 @@ export function validateDraft(p) {
     assert.ok(!eligible([...academic.slice(1),wil]));
   }
   assert.ok(!eligible(academic));
+  if (p.intakeYear === 2023) {
+    assert.ok(eligible([...academic,...electives.slice(6,8).map(u=>u.UnitCode)]));
+    assert.ok(!eligible([...academic,electives[6].UnitCode]));
+    assert.ok(!eligible([...academic.slice(0,-1),...p.wilEquivalents]));
+  }
   assert.equal(eligible([...academic,...electives.map(u=>u.UnitCode)]),!mandatory);
   return p;
 }

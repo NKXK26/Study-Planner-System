@@ -21,7 +21,7 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def discover(document):
+def discover(document, years=(2024, 2025, 2026)):
     tree = html.fromstring(document)
     rows = []
     for row in tree.xpath("//tr[normalize-space(td[1])='BA-CS']"):
@@ -30,8 +30,8 @@ def discover(document):
         for href in row.xpath("td//a/@href"):
             url = urljoin(INDEX, href)
             filename = urlsplit(url).path.split("/")[-1]
-            year = re.search(r"20(24|25|26)", " ".join(section))
-            if not year:
+            year = re.search(r"\b20(\d{2})\b", " ".join(section))
+            if not year or int(year[0]) not in years:
                 continue
             major = next((k for k, v in MAJORS.items() if v in labels), None)
             month = next((k for k,v in {"Feb":"February","Mar":"March","Sep":"September"}.items()

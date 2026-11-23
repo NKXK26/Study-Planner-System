@@ -50,8 +50,11 @@ def parse_page(page, source):
     errors = []
     year, month, _ = source["name"].split("-")
     intake = {"Mar":r"(?:Feb/)?Mar(?:ch)?", "Feb":r"Feb(?:ruary|/Mar)?", "Sep":r"(?:Aug/)?Sep(?:t(?:ember)?)?"}[month]
+    intake_pattern = rf"Intake\s*:\s*{intake}\s+20{year}\b"
+    if year == "23":
+        intake_pattern = rf"Semester {1 if month == 'Feb' else 2} \| 2023$"
     if major.replace(" ", "").lower() not in title.replace(" ", "").lower() or "BA-CS" not in title.replace(" ", "") or not re.search(
-            rf"Intake\s*:\s*{intake}\s+20{year}\b", title, re.I):
+            intake_pattern, title, re.I):
         errors.append("PDF title, major or intake disagrees with official index: " + title)
     legend, colours = {}, {}
     for word in words:
@@ -84,10 +87,14 @@ def parse_page(page, source):
             academic_year = year_headings.index(line.replace(" ", ""))+1
         if token == "Semester":
             semester = line
+        if year == "23" and token in ("Winter", "Summer") and "Term |" in line:
+            semester = line
         if token == "Recommended" and "Elective" in line or "Minor" in line and x < 40:
             section = line
         if token.startswith("MPU") or not re.search(r"\d{4,}", token):
             continue
+        if year == "23" and token == "ICT20016*":
+            token = "ICT20016"
         if not CODE.fullmatch(token):
             errors.append("Unrecognized first-column code " + token)
             continue

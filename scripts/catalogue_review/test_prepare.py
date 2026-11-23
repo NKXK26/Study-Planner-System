@@ -13,6 +13,7 @@ from audit import classify
 from normalize import ALIASES, LEGACY, PASSED_ONLY, normalize, requirements, isolated_year_typo
 from prepare import bundle_of, central_check, select_source, promote
 from sources import MAJORS, ROOT, digest, discover
+from prepare_2023 import EXPECTED, review_questions, sources_for
 
 
 def fixture(later):
@@ -194,6 +195,49 @@ class Preparation(unittest.TestCase):
                               cwd=ROOT,capture_output=True,text=True)
         self.assertEqual(result.returncode,2)
         self.assertIn("unrecognized arguments",result.stderr)
+
+
+class Historical2023(unittest.TestCase):
+    def test_historical_requirements_wil_and_printed_title(self):
+        for month, date in [("Feb","Feb/Mar"),("Sep","Aug/Sept")]:
+            with self.subTest(month=month):
+                evidence, ids = fixture(False)
+                historical = "Computing Technology Inquiry Project"
+                evidence["rows"][0]["cells"][1] = historical
+                for row in evidence["rows"]:
+                    row["term"] = f"Semester 1 | {date} 2023"
+                planner, errors, _ = normalize("23-"+month+"-CSDS",evidence,ids,{"units":[]})
+                self.assertEqual(errors,[])
+                self.assertEqual(planner["units"][0]["Name"],historical)
+                self.assertEqual([r["requiredCount"] for r in planner["plannerTemplate"]["requirements"]],[8,8,8,0])
+                central_check(planner)  # Eight electives alone, six plus either WIL, both aliases count once.
+
+    def test_2023_index_membership_and_isolation(self):
+        rows = []
+        for name in EXPECTED:
+            _, month, major = name.split("-")
+            label = "February" if month=="Feb" else "September"
+            rows.append(f"<tr><td>BA-CS</td><td><em>{MAJORS[major]}</em><em>{label} intake</em></td>"
+                        f"<td><a href='/{name}.pdf'>Download</a></td></tr>")
+        def document(body):
+            return ("<h3>Study Planner 2023</h3><table>"+body+"</table>").encode()
+        page = document("".join(rows))
+        self.assertEqual([r["name"] for r in sources_for(page)],EXPECTED)
+        self.assertEqual(discover(page),[])  # The 2024–2026 collector keeps its original scope.
+        for bad in (document("".join(rows[1:])),document("".join(rows+rows[:1])),
+                    page.replace(b"February intake",b"March intake",1)):
+            with self.assertRaises(ValueError):
+                sources_for(bad)
+
+    def test_ambiguities_block_2023_review(self):
+        evidence, ids = fixture(False)
+        row = evidence["rows"][0]
+        evidence["rows"].append(dict(row,section="Minor",year=None))
+        self.assertIn(row["code"],review_questions(evidence)[0])
+        self.assertIn("Minor",review_questions(evidence)[0])
+        evidence["rows"] = [dict(row,code="ICT20016",year=2,term="Winter Term | Jun/Jul 2025",
+                                 cells=["ICT20016* Optional","May be taken in Year Three"])]
+        self.assertIn("Year Two",review_questions(evidence)[0])
 
 
 class ConfirmedDecisions(unittest.TestCase):

@@ -113,7 +113,7 @@ def normalize(name, evidence, ids, pilot):
     if re.search(r"including current semester", " ".join(evidence["sidebar"].split()), re.I):
         warnings.append(PASSED_ONLY)
     rows = evidence["rows"]
-    corrected_dates = isolated_year_typo(rows, year, month)
+    corrected_dates = {} if year == 2023 else isolated_year_typo(rows, year, month)
     slot_labels = [s[2] for s in evidence["slots"]]
     if len(set(slot_labels)) != len(slot_labels):
         warnings.append("The sequence repeats an elective position label. Each printed position is reported separately.")
@@ -130,7 +130,8 @@ def normalize(name, evidence, ids, pilot):
                 warnings.append("WIL instructions appear under Year Two and specify placement during Year Three.")
             if code in units:
                 errors.append("Duplicate WIL row "+code)
-            if (len(cells)!=2 or "Work-Integrated Learning Internship" not in cells[1]
+            placement_title = "Work-Integrated Learning (Internship)" if year == 2023 else "Work-Integrated Learning Internship"
+            if (len(cells)!=2 or placement_title not in cells[1]
                     or "12 units" not in cells[1] or "Year Three" not in cells[1]):
                 errors.append("Unrecognized WIL instructions")
             if not re.search(r"Winter\s*/\s*Summer", evidence["sidebar"], re.I):
