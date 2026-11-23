@@ -11,18 +11,36 @@
 <body>
   <main class="card">
     <h1>HOD Study Planner Console</h1>
-    <p>Sign in to publish and maintain the central BA-CS study-planner catalogue.</p>
-    <form id="login">
-      <div class="field"><label for="username">Publisher username</label><input id="username" name="username" autocomplete="username" maxlength="100" required autofocus></div>
-      <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" maxlength="500" required></div>
+    <p>Sign in to manage the central official BA-CS study-planner catalogue.</p>
+    <form id="login" autocomplete="off">
+      <div class="field"><label for="username">Publisher username</label><input id="username" name="username" maxlength="100" required autofocus></div>
+      <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" maxlength="500" required></div>
       <p id="error" class="error" role="alert"></p>
       <button id="submit" type="submit">Open publishing console</button>
     </form>
     <p class="note">Credentials are used only for this desktop session and are not stored on this computer.</p>
   </main>
   <script>
-    const form=document.getElementById('login');const button=document.getElementById('submit');const error=document.getElementById('error');
-    form.addEventListener('submit',async event=>{event.preventDefault();button.disabled=true;error.textContent='';const result=await window.hodConsole.login({username:form.username.value,password:form.password.value});if(!result.ok){error.textContent=result.message;button.disabled=false;form.password.value='';form.password.focus();}});
+    const form = document.getElementById('login');
+    const button = document.getElementById('submit');
+    const error = document.getElementById('error');
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      button.disabled = true;
+      error.textContent = '';
+      try {
+        const pending = window.hodConsole.login({ username: form.username.value, password: form.password.value });
+        form.password.value = '';
+        const result = await pending;
+        if (result.ok) form.reset();
+        else error.textContent = result.message;
+      } catch {
+        error.textContent = 'Please reopen the console and sign in again.';
+      } finally {
+        form.password.value = '';
+        button.disabled = false;
+      }
+    });
   </script>
 </body>
 </html>

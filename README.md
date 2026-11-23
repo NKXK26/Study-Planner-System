@@ -84,6 +84,31 @@ The installer is not code-signed by this project yet. Windows may display SmartS
 
 MSIX, Microsoft Store, and Winget distribution are possible future options; they are not part of the current release process.
 
+## HOD Study Planner Console for Windows staging
+
+The separate HOD installer opens a publisher sign-in window. Enter your named central catalogue credentials to open the official planner management page. Use **Sign out** in the window menu to end the session and return to sign-in. Closing the management window also signs you out. The console keeps authorization in memory for the active session.
+
+From a Windows x64 development checkout with the root dependencies installed, run:
+
+```powershell
+node scripts/test-hod-desktop.cjs
+npm run hod:build
+Get-FileHash -Algorithm SHA256 -LiteralPath .\dist-hod\HOD-Study-Planner-Console-1.1.0-x64.exe
+```
+
+Compare the hash with the SHA-256 supplied by the staging distributor for that exact build. Run the matching installer and open **HOD Study Planner Console** from the Start menu. This staging build targets `https://official-planner-catalogue-staging.onrender.com/manage`. Distribute new versions manually.
+
+To exercise the real Electron windows with a disposable local service and temporary credentials, run `npx --no-install electron scripts/smoke-hod-electron.cjs`.
+
+To test against a running local catalogue, set the address in the same PowerShell session before starting Electron:
+
+```powershell
+$env:HOD_CATALOGUE_MANAGE_URL = 'http://127.0.0.1:4100/manage'
+npm run hod:dev
+```
+
+The installed console always uses the endpoint built into `electron/hod-main.js`. For a future production build, change `stagingEndpoint` there to the approved HTTPS management URL, test it, and rebuild. Publisher accounts and password verification are managed by the target catalogue service independently of the installer.
+
 ## Features
 
 - Upload study planners and student transcripts for unit matching.
