@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from extract import parse_pdf
+from decisions import DECISIONS, confirmed_evidence
 from audit import classify
 from normalize import ALIASES, LEGACY, PASSED_ONLY, normalize, requirements, isolated_year_typo
 from prepare import bundle_of, central_check, select_source, promote
@@ -193,6 +194,57 @@ class Preparation(unittest.TestCase):
                               cwd=ROOT,capture_output=True,text=True)
         self.assertEqual(result.returncode,2)
         self.assertIn("unrecognized arguments",result.stderr)
+
+
+class ConfirmedDecisions(unittest.TestCase):
+    def test_blank_exception_is_limited_to_one_unit(self):
+        decision = next(d for d in DECISIONS if d["planner"] == "24-Sep-CSCS")
+        name, checksum = decision["planner"], decision["sourceSha256"]
+        evidence, ids = fixture(True)
+        target, other = evidence["rows"][:2]
+        ids["TNE10006"] = ids.pop(target["code"])
+        target["code"] = target["cells"][0] = "TNE10006"
+        target["cells"][2] = other["cells"][2] = ""
+        approved = confirmed_evidence("BA-CS", name, checksum, evidence)
+        self.assertEqual(target["cells"][2], "")
+        self.assertEqual(approved["rows"][0]["cells"][2], "Nil")
+        errors = normalize(name, approved, ids, {"units":[]})[1]
+        self.assertEqual(len(errors), 1)
+        self.assertIn(other["code"], errors[0])
+        self.assertIn("requisite", errors[0])
+        self.assertIs(confirmed_evidence("BA-CS", "25-Sep-CSCS", checksum, evidence), evidence)
+
+    def test_prescribed_exception_is_scoped_and_preserves_printed_fields(self):
+        names = {"25-Sep-CSAI", "26-Mar-CSAI", "26-Sep-CSAI"}
+        for d in (entry for entry in DECISIONS if entry["planner"] in names):
+            with self.subTest(planner=d["planner"]):
+                row = dict(code="COS10022", category="Elective", year=2, term="Semester 1",
+                           cells=["COS10022","Printed title","COS10003"])
+                other = dict(code="COS30017", category="Elective", cells=["COS30017","Other","Nil"])
+                evidence = {"rows":[row,other]}
+                name, checksum = d["planner"], d["sourceSha256"]
+                result = confirmed_evidence("BA-CS", name, checksum, evidence)
+                self.assertEqual(result["rows"], [dict(row,cells=["COS10022","Printed title*","COS10003"]),other])
+                self.assertEqual(row["cells"][1], "Printed title")
+                for course, planner in [("BA-OTHER",name),("BA-CS","24-Sep-CSAI"),
+                                        ("BA-CS","25-Mar-CSAI"),("BA-CS","26-Sep-CSSD")]:
+                    self.assertIs(confirmed_evidence(course, planner, checksum, evidence), evidence)
+                for rows in ([other], [row,row], [dict(row,category="Major")]):
+                    with self.assertRaises(ValueError):
+                        confirmed_evidence("BA-CS",name,checksum,{"rows":rows})
+                with self.assertRaises(ValueError):
+                    confirmed_evidence("BA-CS",name,"0"*64,evidence)
+
+    def test_locked_decision_excludes_even_a_mislabelled_valid_record(self):
+        name = "26-Sep-CSDS"
+        d = next(entry for entry in DECISIONS if entry["planner"] == name)
+        self.assertIs(d["allowDraft"], False)
+        with self.assertRaisesRegex(ValueError,"locked"):
+            confirmed_evidence("BA-CS",name,d["sourceSha256"],{"rows":[]})
+        record = dict(name=name, status="blocked", alreadyPresent=False)
+        self.assertEqual(bundle_of([record],{}), [])
+        with self.assertRaisesRegex(ValueError,"locks"):
+            bundle_of([dict(record,status="valid")],{name:dict(name=name,courseCode="BA-CS")})
 
 
 if __name__=="__main__":

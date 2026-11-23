@@ -7,6 +7,7 @@ from uuid import uuid4
 from collections import Counter
 from pathlib import Path
 from audit import V1, reports
+from decisions import DECISIONS
 
 from extract import parse_pdf
 from normalize import PILOT, normalize, registry_for, requirements
@@ -57,6 +58,9 @@ def bundle_of(records, drafts):
         if record["status"]!="valid" or record["alreadyPresent"] is True or record["name"]==PILOT:
             continue
         s = drafts[record["name"]]
+        if any(d["allowDraft"] is False and d["courseCode"] == s["courseCode"] and
+               d["planner"] in (record["name"], s["name"]) for d in DECISIONS):
+            raise ValueError("Academic decision locks series: "+s["name"])
         key = (s["courseCode"], s["major"].lower(), s["intakeYear"], s["intakeMonth"])
         if key in seen or key == ("BA-CS","cybersecurity",2025,3):
             raise ValueError("Duplicate or protected series: "+s["name"])

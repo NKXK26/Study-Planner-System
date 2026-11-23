@@ -1,0 +1,64 @@
+[
+  {
+    "courseCode": "BA-CS",
+    "planner": "24-Sep-CSCS",
+    "sourceSha256": "42d4ef3cc06ff49e62d159fb3f4b78f2bf90759e0ed6cacd77e6589e740fbd37",
+    "unitCode": "TNE10006",
+    "decisionType": "prerequisite",
+    "confirmedValue": "Nil",
+    "confirmationDate": "2026-11-23",
+    "provenance": "manual academic confirmation supplied for staging review",
+    "allowDraft": true
+  },
+  {
+    "courseCode": "BA-CS",
+    "planner": "25-Sep-CSAI",
+    "sourceSha256": "9d89438736a79275d831f08a15f57435917cd3d1c8a7d917045fc7f729f07621",
+    "unitCode": "COS10022",
+    "decisionType": "prescribedElective",
+    "confirmedValue": true,
+    "confirmationDate": "2026-11-23",
+    "provenance": "manual academic confirmation supplied for staging review",
+    "allowDraft": true
+  },
+  {
+    "courseCode": "BA-CS",
+    "planner": "26-Mar-CSAI",
+    "sourceSha256": "686e45c49df3bb902714ca0e1f6b24e0a5aba382a3b0d2f8f31cf2381705b462",
+    "unitCode": "COS10022",
+    "decisionType": "prescribedElective",
+    "confirmedValue": true,
+    "confirmationDate": "2026-11-23",
+    "provenance": "manual academic confirmation supplied for staging review",
+    "allowDraft": true
+  },
+  {
+    "courseCode": "BA-CS",
+    "planner": "26-Sep-CSAI",
+    "sourceSha256": "30cb21e3e3ba4c45835261cec05815bdb081e307aa591f404f32ca0b1cc208f6",
+    "unitCode": "COS10022",
+    "decisionType": "prescribedElective",
+    "confirmedValue": true,
+    "confirmationDate": "2026-11-23",
+    "provenance": "manual academic confirmation supplied for staging review",
+    "allowDraft": true
+  },
+  {
+    "courseCode": "BA-CS",
+    "planner": "26-Sep-CSDS",
+    "sourceSha256": "00ba513536a28f186732165f16369ba0f470a6916dae0054bbbd29832e71a68f",
+    "unitCode": "STA10003",
+    "decisionType": "locked",
+    "confirmedValue": {
+      "countOnce": true,
+      "allowedPeriods": [
+        "Y1 Semester 2 | Feb/Mar 2027",
+        "Y2 Semester 1 | Aug/Sept 2027"
+      ],
+      "fourthRecommendedElective": null
+    },
+    "confirmationDate": "2026-11-23",
+    "provenance": "manual academic confirmation supplied for staging review",
+    "allowDraft": false
+  }
+]
