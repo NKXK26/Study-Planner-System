@@ -13,6 +13,7 @@ WIL = "ICT20016"
 ALIASES = [WIL, "ICT20026"]
 LEGACY = "Official planner legend uses the legacy elective/WIL totals; canonical requirements follow the confirmed September 2024+ institutional policy."
 PASSED_ONLY = "The PDF includes the current semester. Institutional policy requires 12 distinct completed and passed qualifying units."
+MARCH_AI_ALIAS = "COS10022 uses the unit catalogue title Data Science Principles and the prescribed marker from the scheduled row."
 
 
 def category(name):
@@ -167,9 +168,20 @@ def normalize(name, evidence, ids, pilot):
                     errors.append(f"Year {r['year']} calendar mismatch: {r['term']}")
             if code in units:
                 prior = units[code]
-                if (r["year"] or prior["Name"].rstrip("*")!=title.rstrip("*") or
+                # The March AI sequence and Big Data Analytics minor use two official
+                # titles for COS10022 (swinburne.edu.au/course/unit/c/cos10022/).
+                # The scheduled row determines prescribed status.
+                title_alias = (name == "25-Mar-CSAI" and code == "COS10022" and
+                               prior["Name"] == "Introduction to Data Science*" and
+                               prior.get("plannedYear") == 1 and prior.get("plannedSemester") == "Semester 2" and
+                               r["section"] == "Minor | Big Data Analytics" and
+                               cat == "Elective" and title == "Data Science Principles")
+                if (r["year"] or (not title_alias and prior["Name"].rstrip("*")!=title.rstrip("*")) or
                     prior["unitTypeId"]!=u["unitTypeId"] or prior["requisites"]!=u["requisites"]):
                     raise ValueError("Conflicting repeated code, title, category, semester or requisites")
+                if title_alias:
+                    prior["Name"] = title + "*"
+                    warnings.append(MARCH_AI_ALIAS)
                 prior["offeredTerms"] = sorted(set(prior["offeredTerms"]+u["offeredTerms"]))
                 warnings.append(code+" also appears in "+r["section"]+"; counted once")
             else:

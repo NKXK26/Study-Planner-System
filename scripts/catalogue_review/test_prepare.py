@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from extract import parse_pdf
+from audit import classify
 from normalize import ALIASES, LEGACY, PASSED_ONLY, normalize, requirements, isolated_year_typo
 from prepare import bundle_of, central_check, select_source, promote
 from sources import MAJORS, ROOT, digest, discover
@@ -89,6 +90,49 @@ class Preparation(unittest.TestCase):
         self.assertTrue(any("counted once" in w for w in warnings))
         pool["cells"][1]="Conflicting title"
         self.assertTrue(any("Conflicting repeated" in m for m in normalize("24-Sep-CSAI",e,ids,{"units":[]})[1]))
+
+    def test_march_ai_prescribed_title_and_minor_alias(self):
+        e, ids = fixture(True)
+        scheduled = next(r for r in e["rows"] if r["category"]=="Elective")
+        scheduled.update(code="COS10022", cells=["COS10022","Introduction to Data Science*","Nil"],
+                         term="Semester 2 | Aug/Sept 2025")
+        ids["COS10022"] = ids.pop("ELE00000")
+        for row in e["rows"]:
+            if row is not scheduled and row.get("term"):
+                row["term"] = "Semester 1 | Feb/Mar 2025"
+        pool = dict(scheduled, year=None, term=None, section="Minor | Big Data Analytics",
+                    cells=["COS10022","Data Science Principles","NIL","Feb/Mar & Aug/Sept"])
+        e["rows"].append(pool)
+        s, errors, warnings = normalize("25-Mar-CSAI",e,ids,{"units":[]})
+        self.assertEqual(errors,[])
+        issue = "COS10022 (page 1): Conflicting repeated code, title, category, semester or requisites"
+        self.assertFalse(classify(issue, {"warnings":warnings,"errors":errors}, e)[3])
+        units = [u for u in s["units"] if u["UnitCode"]=="COS10022"]
+        self.assertEqual(len(units),1)
+        self.assertEqual(units[0]["Name"],"Data Science Principles*")
+        self.assertEqual(units[0]["plannedSemester"],"Semester 2")
+        self.assertEqual(units[0]["offeredTerms"],["Semester 1","Semester 2"])
+        for key,value in [("category","Major"),("year",2),
+                          ("cells",["COS10022","Data Science Principles","COR00000","Feb/Mar"]),
+                          ("cells",["COS10022","Unconfirmed title","Nil","Feb/Mar"])]:
+            with self.subTest(key=key), patch.dict(pool,{key:value}):
+                self.assertTrue(normalize("25-Mar-CSAI",e,ids,{"units":[]})[1])
+
+    def test_unresolved_academic_evidence_blocks_export(self):
+        for case in ("blank prerequisite","one prescribed","duplicate semester"):
+            with self.subTest(case=case):
+                e, ids = fixture(True)
+                if case=="blank prerequisite":
+                    e["rows"][0]["cells"][2] = ""
+                    expected = "Missing, invalid or self-referential requisite"
+                elif case=="one prescribed":
+                    e["rows"][-6]["cells"][1] = "Unstarred elective"
+                    expected = "Expected two prescribed electives"
+                else:
+                    e["rows"][-2] = dict(e["rows"][-3])
+                    expected = "Too few distinct eligible elective choices"
+                errors = normalize("24-Sep-CSAI",e,ids,{"units":[]})[1]
+                self.assertTrue(any(expected in error for error in errors),errors)
 
     def test_promotion(self):
         with tempfile.TemporaryDirectory() as tmp:

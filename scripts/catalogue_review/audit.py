@@ -2,7 +2,7 @@
 import json
 from collections import defaultdict
 
-from normalize import LEGACY, PASSED_ONLY
+from normalize import LEGACY, PASSED_ONLY, MARCH_AI_ALIAS
 from sources import ROOT, digest
 
 V1 = ROOT/"output/catalogue-review/ba-cs-2024-2026"
@@ -44,6 +44,8 @@ def classify(issue, row, evidence):
                 "Rendered PDF and extracted unit cells, page 1", True)
     if "repeated code" in issue:
         code = issue.split(" ")[0]
+        if code=="COS10022" and MARCH_AI_ALIAS in warnings and issue not in row["errors"]:
+            return ("normalization defect", MARCH_AI_ALIAS, "March 2025 AI PDF and official COS10022 unit listing", False)
         definitions = [f"{r['cells'][1]} ({r['term'] or r['section']})" for r in evidence["rows"] if r["code"]==code]
         return ("duplicate/pool interpretation", "Confirm the intended title or replacement unit for "+code+": "+" / ".join(definitions),
                 "Two printed rows on page 1", True)
