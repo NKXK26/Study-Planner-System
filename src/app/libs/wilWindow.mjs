@@ -42,8 +42,16 @@ export function finalTeachingOrder(schedule, context) {
     return context.academicsComplete ? context.currentOrder : 5;
 }
 
-export function withinWilWindow(entry, context, finalOrder, recorded = false) {
+export function isWinter2025Transition(unit) {
+    return unit?.UnitCode === 'ICT20016' && unit.plannedDates === 'Winter Term | Jun/Jul 2025';
+}
+
+export function withinWilWindow(entry, context, finalOrder, recorded = false, unit) {
     const order = wilOrder(entry, context);
-    return [1,2].includes(context.firstSemester) && Number(entry.year) === 3 && ['winter','summer'].includes(String(entry.term ?? entry.breakTerm).toLowerCase())
+    const term = String(entry.term ?? entry.breakTerm).toLowerCase();
+    const allowed = isWinter2025Transition(unit)
+        ? context.intake?.year === 2023 && context.firstSemester === 2 && Number(entry.year) === 2 && term === 'winter'
+        : Number(entry.year) === 3 && ['winter','summer'].includes(term);
+    return [1,2].includes(context.firstSemester) && allowed
         && (recorded || order > context.currentOrder) && order < finalOrder;
 }

@@ -121,8 +121,8 @@ export async function POST(req) {
             seen.add(code);
             if (breakTerm && !isWilUnit(unit)) errors.push(`${code} cannot be placed in a Winter/Summer break entry.`);
             if (!breakTerm && isWilUnit(unit)) errors.push(`${code} is a WIL placement and must be scheduled in a dedicated Winter/Summer break entry.`);
-            if (breakTerm && isWilUnit(unit) && (semester.semester != null || !withinWilWindow(semester, context, finalOrder))) {
-                errors.push(`${code} requires a Year Three break before the final teaching semester. Academic review is required.`);
+            if (breakTerm && isWilUnit(unit) && (semester.semester != null || !withinWilWindow(semester, context, finalOrder, false, unit))) {
+                errors.push(`${code} requires an eligible break before the final teaching semester. Academic review is required.`);
             }
             if (unit.CreditPoints == null) errors.push(`${code} has no stored credit value and cannot be workload-validated.`);
             else semesterCredits += unit.CreditPoints;

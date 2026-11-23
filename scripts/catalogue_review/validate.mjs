@@ -36,7 +36,9 @@ export function validateDraft(p) {
       assert.equal(u.UnitCode,p.wilCode);
       assert.equal(u.plannedYear,3);
       assert.ok(!u.plannedSemester);
-      assert.deepEqual([...u.offeredTerms].sort(), ['Summer','Winter']);
+      if (p.intakeYear === 2023 && p.intakeMonth === 9 && u.plannedDates === 'Winter Term | Jun/Jul 2025') {
+        assert.deepEqual(u.offeredTerms,['Winter']);
+      } else assert.deepEqual([...u.offeredTerms].sort(), ['Summer','Winter']);
     } else {
       assert.ok(u.offeredTerms.length && u.offeredTerms.every(t=>['Semester 1','Semester 2'].includes(t)));
       if (u.plannedYear || u.plannedSemester) {
@@ -77,6 +79,7 @@ export function validateDraft(p) {
     assert.ok(eligible([...academic,...electives.slice(6,8).map(u=>u.UnitCode)]));
     assert.ok(!eligible([...academic,electives[6].UnitCode]));
     assert.ok(!eligible([...academic.slice(0,-1),...p.wilEquivalents]));
+    assert.ok(!eligible([...academic,electives[6].UnitCode,'MPU3193']));
   }
   assert.equal(eligible([...academic,...electives.map(u=>u.UnitCode)]),!mandatory);
   return p;

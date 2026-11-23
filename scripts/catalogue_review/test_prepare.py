@@ -1,5 +1,6 @@
 """Offline tests. Run with python -B scripts/catalogue_review/test_prepare.py."""
 import subprocess
+import json
 import sys
 import tempfile
 import unittest
@@ -14,6 +15,8 @@ from normalize import ALIASES, LEGACY, PASSED_ONLY, normalize, requirements, iso
 from prepare import bundle_of, central_check, select_source, promote
 from sources import MAJORS, ROOT, digest, discover
 from prepare_2023 import EXPECTED, review_questions, sources_for
+from prepare_2023 import CACHE as CACHE_2023, build as build_2023
+from resolve_2023 import resolve
 
 
 def fixture(later):
@@ -238,6 +241,52 @@ class Historical2023(unittest.TestCase):
         evidence["rows"] = [dict(row,code="ICT20016",year=2,term="Winter Term | Jun/Jul 2025",
                                  cells=["ICT20016* Optional","May be taken in Year Three"])]
         self.assertIn("Year Two",review_questions(evidence)[0])
+
+
+class Resolved2023(unittest.TestCase):
+    def test_title_alias_and_pool_duplicates(self):
+        def row(code,title,year,pool=None):
+            cells = [code,title,"Nil"]
+            if pool:
+                cells.append(pool)
+            return dict(code=code,cells=cells,year=year,y=100,category="Elective",
+                        term="Semester 2 | Aug/Sept 2023" if year else None,
+                        section="Recommended sequence" if year else "Minor | Big Data Analytics")
+        scheduled = row("COS10022","Introduction to Data Science*",1)
+        minor = row("COS10022","Data Science Principles",None,"Feb/Mar & Aug/Sept")
+        option = row("COS20083","Advanced Data Analytics",None,"Feb/Mar only")
+        evidence = dict(rows=[scheduled,minor,dict(option,section="Recommended Elective Units"),option],slots=[])
+        result, offers, audit, errors = resolve("23-Feb-CSAI",evidence)
+        self.assertEqual(errors,[])
+        self.assertEqual(len(result["rows"]),2)
+        self.assertEqual(result["rows"][0],dict(scheduled,cells=["COS10022","Data Science Principles*","Nil"]))
+        self.assertEqual(offers,{"COS10022":["Semester 1","Semester 2"],"COS20083":["Semester 1"]})
+        self.assertEqual(audit[0]["printed"],[scheduled,minor])
+        self.assertEqual(len(audit[1]["printed"]),2)
+        minor["cells"][2] = "COS10009"
+        self.assertTrue(resolve("23-Feb-CSAI",evidence)[3])
+
+    @unittest.skipUnless((CACHE_2023/"index.html").exists(),"requires cached official review inputs")
+    def test_two_clean_packages_and_calendar(self):
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            paths = [Path(a),Path(b)]
+            def contents(directory):
+                return {p.relative_to(directory):digest(p.read_bytes()) for p in directory.rglob("*") if p.is_file()}
+            for directory in paths:
+                summary = build_2023(directory,resolved=True)
+                self.assertEqual((summary["bundled"],summary["blocked"]),(10,0))
+            self.assertEqual(contents(paths[0]),contents(paths[1]))
+            bundle = json.loads((paths[0]/"resolved-drafts.json").read_bytes())
+            self.assertEqual([p["name"] for p in bundle],EXPECTED)
+            for p in bundle:
+                units = {u["UnitCode"]:u for u in p["units"]}
+                if p["intakeMonth"]==9:
+                    self.assertEqual(units["ICT20016"]["offeredTerms"],["Winter"])
+                    self.assertEqual(units["ICT20016"]["plannedDates"],"Winter Term | Jun/Jul 2025")
+                if p["name"]=="23-Sep-CSCS":
+                    self.assertEqual(units["COS40006"]["plannedDates"],"Feb/Mar 2026")
+                if p["name"]=="23-Sep-CSIOT":
+                    self.assertEqual((units["COS40005"]["plannedYear"],units["COS40006"]["plannedYear"]),(3,3))
 
 
 class ConfirmedDecisions(unittest.TestCase):

@@ -2,10 +2,12 @@
 
 Cache index.html and its PDF links under tmp/ba-cs-2023-sources before running.
 """
+import argparse
 import json
 import re
 import subprocess
 from collections import Counter, defaultdict
+from pathlib import Path
 
 import pdfplumber
 
@@ -13,9 +15,11 @@ from extract import parse_page
 from normalize import PILOT, normalize, offerings
 from prepare import DEFAULT, REVIEW, bundle_of, central_check, promote
 from sources import INDEX, MAJORS, MONTHS, ROOT, digest, discover
+from resolve_2023 import WINTER, resolve
 
 CACHE = ROOT / "tmp/ba-cs-2023-sources"
 OUTPUT = REVIEW / "ba-cs-2023-v1"
+RESOLVED = REVIEW / "ba-cs-2023-resolved-v1"
 EXPECTED = sorted(f"23-{month}-{major}" for month in ("Feb", "Sep") for major in MAJORS)
 POLICY = ("8 Core, 8 Major and 8 Elective slots at 12.5 CP per slot (300 CP). "
           "A passed ICT20016 or ICT20026 satisfies two elective slots once. WIL is optional. "
@@ -59,7 +63,7 @@ def review_questions(evidence):
     return questions
 
 
-def verify_units(snapshot, evidence):
+def verify_units(snapshot, evidence, merged=None):
     """Cross-check canonical academic cells against printed rows before emitting a file."""
     by_code = {u["UnitCode"]:u for u in snapshot["units"] if u["unitTypeId"] != 17}
     academic = [r for r in evidence["rows"] if r["category"] != "WIL Placement"]
@@ -77,7 +81,7 @@ def verify_units(snapshot, evidence):
             if (unit["plannedYear"],unit["plannedSemester"],unit["plannedDates"]) != (row["year"],semester,date):
                 raise ValueError(f"{code}: printed calendar changed")
             terms = offerings(date)
-        if unit["offeredTerms"] != terms:
+        if unit["offeredTerms"] != (merged or {}).get(code, terms):
             raise ValueError(f"{code}: offered terms changed")
         rules = unit["requisites"]
         tokens = re.findall(r"[A-Z]{3}\d{5}|\d+cp", raw, re.I)
@@ -92,9 +96,12 @@ def verify_units(snapshot, evidence):
     central_check(snapshot)
 
 
-def build(directory):
+def build(directory, resolved=False):
     document = (CACHE/"index.html").read_bytes()
     sources = sources_for(document)
+    if resolved:
+        register = json.loads((OUTPUT/"source-index.json").read_bytes())
+        checksums = {s["name"]:s["sha256"] for s in register}
     registry = json.loads((DEFAULT/"unit-id-registry.json").read_bytes())
     # Only numeric identities and the external anti-requisite reference are reused.
     previous = json.loads((DEFAULT/"manifest.json").read_bytes())
@@ -107,6 +114,8 @@ def build(directory):
         _, month, major = name.split("-")
         path = CACHE/src["filename"]
         src.update(sha256=digest(path.read_bytes()),major=MAJORS[major],intakeMonth=MONTHS[month],intakeYear=2023)
+        if resolved and src["sha256"] != checksums[name]:
+            raise ValueError(f"{name}: PDF differs from the reviewed revision")
         folder = directory/name
         artifacts = folder/"evidence"
         artifacts.mkdir(parents=True)
@@ -127,8 +136,19 @@ def build(directory):
             if identifier in registry.values():
                 raise ValueError("Offline unit ID collision for "+code)
             registry[code] = identifier
+        merged = {}
+        if resolved:
+            evidence, merged, audit, questions = resolve(name,evidence)
+            write(artifacts/"normalizations.json",audit)
+        else:
+            questions = review_questions(evidence)
         snapshot, errors, warnings = normalize(name,evidence,registry,pilot)
-        questions = review_questions(evidence)
+        if resolved:
+            for unit in snapshot["units"]:
+                if unit["UnitCode"] in merged:
+                    unit["offeredTerms"] = merged[unit["UnitCode"]]
+                if month=="Sep" and unit["UnitCode"]=="ICT20016":
+                    unit.update(plannedDates=WINTER,offeredTerms=["Winter"])
         for error in errors:
             rows = [r for r in evidence["rows"] if r["term"] and
                     error == f"Year {r['year']} calendar mismatch: {r['term']}"]
@@ -144,17 +164,21 @@ def build(directory):
                       recommended=[u["UnitCode"] for u in snapshot["units"] if u["unitTypeId"]==1 and not u["Name"].endswith("*")],
                       status="blocked" if questions else "valid",schemaValidation="not submitted")
         if not questions:
-            verify_units(snapshot,evidence)
+            verify_units(snapshot,evidence,merged)
             file = folder/(name+".json")
             write(file,snapshot)
             record.update(schemaValidation="passed",canonicalFile=file.relative_to(directory).as_posix(),
                           canonicalSha256=digest(file.read_bytes()))
             drafts[name]=snapshot
+            if resolved and name=="23-Feb-CSDS" and file.read_bytes()!=(OUTPUT/name/file.name).read_bytes():
+                raise ValueError("Previously validated February Data Science definition differs")
         report = [f"# {name}", POLICY, f"Status: {record['status']}. Central schema and BCS validation: {record['schemaValidation']}.",
                   "Prescribed as printed: "+", ".join(record["prescribed"]), "Unstarred elective options: "+", ".join(record["recommended"]),
                   f"[Source PDF]({src['url']}) · {src['sourceUpdate']} · SHA-256 {src['sha256']}",
                   "[Page 1](../evidence/page-1.png) · [Extracted cells](../evidence/source-rows.json)",
                   *questions,*warnings]
+        if resolved:
+            report.append("[Confirmed normalizations and original cells](../evidence/normalizations.json)")
         write(folder/"validation"/"report.md","\n\n".join(report))
         records.append(record)
     bundle = bundle_of(records,drafts)
@@ -190,10 +214,20 @@ assert.deepEqual(result.results.map(r => [r.name,r.operation]),expected);
           "February PDFs omit WIL; the optional substitution comes from the historical cohort policy. "
           "Historical prescribed markers are retained. The existing legacy completion engine counts elective totals. "
           "The live publication inventory was outside this offline review.")
+    if resolved:
+        with (directory/"verification.md").open("ab") as report:
+            report.write(b"\nReproduce from the repository root with the review virtual environment: "
+                         b"`python -B scripts/catalogue_review/prepare_2023.py --resolved`. "
+                         b"Use a fresh output directory. The generator refuses to replace an existing package. "
+                         b"See each planner's evidence/normalizations.json for confirmed exceptions.\n")
     write(directory/"SHA256SUMS","\n".join(
         f"{digest(f.read_bytes())}  {f.relative_to(directory).as_posix()}" for f in sorted(directory.rglob("*")) if f.is_file()))
     return manifest["summary"]
 
 
 if __name__=="__main__":
-    print(promote(OUTPUT,build))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--resolved",action="store_true",help="Apply the confirmed historical decisions")
+    parser.add_argument("--output",type=Path,help="Fresh directory for an independent regeneration")
+    args = parser.parse_args()
+    print(promote(args.output or (RESOLVED if args.resolved else OUTPUT), lambda folder: build(folder,args.resolved)))

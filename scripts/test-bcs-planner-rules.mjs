@@ -245,6 +245,14 @@ const recommend = (context, units=[wilUnit], count=12, schedule=[]) => scheduleW
   wilUnits:units, completedAcademicUnits:count, context, schedule,
 });
 assert.equal(march.currentOrder,2);
+const transition = {...wilUnit, UnitCode:'ICT20016', plannedDates:'Winter Term | Jun/Jul 2025', offeredTerms:['Winter']};
+const beforeTransition = {intake:{year:2023,semester:2}, firstSemester:2, currentOrder:3, labelOffset:-4};
+assert.equal(recommend(beforeTransition,[transition],11).placement,null);
+const winter2025 = recommend(beforeTransition,[transition],12).placement;
+assert.deepEqual([winter2025.year,winter2025.term,winter2025.semester,winter2025.totalCredits],[2,'Winter',null,25]);
+assert.equal(recommend({...beforeTransition,currentOrder:4},[transition],12).placement,null);
+assert.equal(withinWilWindow({year:3,term:'Winter'},beforeTransition,6,true,transition),false);
+assert.equal(withinWilWindow({year:2,term:'Winter'},beforeTransition,5,true,transition),true);
 assert.equal(recommend(march,[wilUnit],11).placement,null);
 const deferred = recommend(march,[wilUnit],mar25WilQualifying.size);
 assert.equal(deferred.placement.year,3);

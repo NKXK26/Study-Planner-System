@@ -1,5 +1,5 @@
 import { isPassingTranscriptAttempt, isWilUnit } from '../../libs/bcsPlannerRules.mjs';
-import { finalTeachingOrder, transcriptWilOrder, withinWilWindow } from '../../libs/wilWindow.mjs';
+import { finalTeachingOrder, isWinter2025Transition, transcriptWilOrder, withinWilWindow } from '../../libs/wilWindow.mjs';
 
 // ========================= CONSTANTS =========================
 export const REQUIRED_CORE = 8;
@@ -188,13 +188,15 @@ export const scheduleWilBreakPlacement = ({ wilUnits = [], completedAcademicUnit
     if (!context.firstSemester) return {placement:null, warning:'WIL remains outstanding. The intake calendar is unknown. Academic review is required.'};
     const finalOrder = finalTeachingOrder(schedule, context);
     const candidates = (context.firstSemester === 2 ? ['Summer','Winter'] : ['Winter','Summer'])
-        .map(term => ({year:3,term})).filter(entry => withinWilWindow(entry, context, finalOrder));
-    if (!candidates.length) return {placement:null, warning:'WIL remains outstanding. No Year Three break remains before the final teaching semester. Academic review is required.'};
+        .map(term => ({year:3,term}));
+    if (wilUnits.some(isWinter2025Transition)) candidates.unshift({year:2,term:'Winter'});
+    const inWindow = (entry, unit) => withinWilWindow(entry, context, finalOrder, false, unit);
+    if (!candidates.some(entry => wilUnits.some(unit => inWindow(entry, unit)))) return {placement:null, warning:'WIL remains outstanding. No eligible break remains before the final teaching semester. Academic review is required.'};
     if (completedAcademicUnits < 12) {
         return { placement: null, warning: 'WIL remains outstanding: at least 12 distinct passed academic units are required before WIL can be scheduled.' };
     }
     for (const candidate of candidates) {
-        const available = wilUnits.find(unit => isAvailableInBreakTerm(unit, candidate.term));
+        const available = wilUnits.find(unit => inWindow(candidate, unit) && isAvailableInBreakTerm(unit, candidate.term));
         if (!available) continue;
         const offeredTerms = available.offeredTerms || available.OfferedTerms || [];
         const hasBreakAvailabilityMetadata = Array.isArray(offeredTerms) && offeredTerms.some(term => /winter|summer/i.test(String(term)));
@@ -225,7 +227,7 @@ export function recordedWilAttempts({ attempts, wilUnits, equivalents, context, 
         const term = attempt.term?.breakTerm;
         const prior = attempts.filter(a => a.passing && a.term?.order < attempt.term?.order);
         const count = getWilQualifyingCompletedUnitCodes({ plannerUnits, completedUnits:prior, mappedExternalUnits }).size;
-        const valid = term && withinWilWindow({year,term}, context, finalTeachingOrder(schedule,context), true)
+        const valid = term && withinWilWindow({year,term}, context, finalTeachingOrder(schedule,context), true, unit)
             && isAvailableInBreakTerm(unit, term) && count >= 12;
         records.push({code:attempt.code, status:attempt.status, grade:attempt.grade, raw:attempt.term?.raw || attempt.rawTerm,
             year, term, unit, active:/^(current|scheduled|in[- ]progress)$/i.test(attempt.status),
