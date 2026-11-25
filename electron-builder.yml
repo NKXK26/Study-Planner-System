@@ -10,13 +10,7 @@ publish:
 
 files:
   - "electron/**/*"
-  - ".next/standalone/**/*"
-  - ".next/static/**/*"
-  - "public/**/*"
-  - "prisma/**/*"
   - "package.json"
-  - "next.config.*"
-  - "!.next/cache/**"
   - "!.env*"
   - "!**/.env*"
   - "!*.md"
@@ -50,9 +44,5 @@ extraResources:
     filter:
       - "**/*"
       - "!**/.env*"
-  - from: .next/static
-    to: app/.next/static
-  - from: public
-    to: app/public
   - from: prisma/app.db
     to: app/prisma/app.db
