@@ -3,6 +3,11 @@ const path = require('path')
 const { startNextServer, stopNextServer } = require('./server')
 const { initUpdater } = require('./updater')
 const { runDbSetup } = require('./setup-db')
+const log = require('electron-log')
+
+// Keep startup and bundled-server errors available outside a terminal.
+console.log = log.log
+console.error = log.error
 
 let mainWindow
 
@@ -32,10 +37,10 @@ async function createWindow() {
     await runDbSetup()
 
     console.log('Starting Next.js server...')
-    await startNextServer()
+    const appUrl = await startNextServer()
 
     console.log('Loading app...')
-    await mainWindow.loadURL('http://localhost:3000')
+    await mainWindow.loadURL(appUrl)
   } catch (err) {
     console.error('Startup failed:', err)
     dialog.showErrorBox(

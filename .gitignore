@@ -60,3 +60,4 @@ src/app/secrets.js/page.js
 /artifacts/
 /output/
 /tmp/
+/public/pdfjs/

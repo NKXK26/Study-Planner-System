@@ -1,0 +1,10 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const moduleRoot = path.dirname(require.resolve('pdfjs-dist/package.json'));
+const version = require(path.join(moduleRoot, 'package.json')).version;
+const destination = path.join(root, 'public', 'pdfjs', version);
+fs.mkdirSync(destination, { recursive: true });
+fs.copyFileSync(path.join(moduleRoot, 'build', 'pdf.worker.min.js'), path.join(destination, 'pdf.worker.min.js'));
+for (const folder of ['cmaps', 'standard_fonts']) fs.cpSync(path.join(moduleRoot, folder), path.join(destination, folder), { recursive: true });
+console.log(`Local PDF worker and fonts prepared (${version}).`);

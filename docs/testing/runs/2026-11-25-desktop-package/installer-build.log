@@ -1,0 +1,7 @@
+  • electron-builder  version=24.13.3 os=10.0.26300
+  • loaded configuration  file=B:\electronapp\sp\electron-builder.yml
+  • @electron/rebuild not required if you use electron-builder, please consider to remove excess dependency from devDependencies
+
+To ensure your native dependencies are always matched electron version, simply add script `"postinstall": "electron-builder install-app-deps" to your `package.json`
+  • building        target=nsis file=artifacts\desktop-fixed\Student Study Planner Setup 1.1.0.exe archs=x64 oneClick=false perMachine=false
+  • building block map  blockMapFile=artifacts\desktop-fixed\Student Study Planner Setup 1.1.0.exe.blockmap

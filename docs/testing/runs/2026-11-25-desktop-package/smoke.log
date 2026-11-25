@@ -1,0 +1,3 @@
+Browser passed: offline colour mapping, local worker, extraction of both pages, same-origin requests and no uncaught page errors.
+Packaged resources passed: pages and JS, local PDF worker/fonts, catalogue/database APIs, offline AI fallback, authentication, PDF colours on both pages, invalid uploads and DPA text extraction.
+Disposable test evidence: B:\electronapp\sp\tmp\packaged-smoke-FD0MIm

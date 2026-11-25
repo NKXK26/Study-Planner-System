@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
@@ -651,7 +651,7 @@ const UploadPlannerPage = () => {
       const formData = new FormData();
       formData.append('file', file);
       const res = await fetch('/api/pdf-debug', { method: 'POST', body: formData });
-      if (!res.ok) throw new Error('Failed to extract colours');
+      if (!res.ok) { const problem = await res.json().catch(() => ({})); throw new Error(problem.error || 'Failed to extract colours'); }
       const blocks = await res.json();
       setExtractedBlocks(blocks);
       const colorMap = new Map();
@@ -669,7 +669,7 @@ const UploadPlannerPage = () => {
 
   async function enrichUnitsWithDatabase(units) {
     try {
-      const unitsRes = await SecureFrontendAuthHelper.authenticatedFetch('/api/units');
+      const unitsRes = await SecureFrontendAuthHelper.authenticatedFetch('/api/unit');
       if (!unitsRes.ok) throw new Error('Failed to fetch units from database');
       const unitsData = await unitsRes.json();
       const allUnits = unitsData.data || unitsData;
@@ -712,9 +712,8 @@ const UploadPlannerPage = () => {
     setExtractProgress('Extracting text from PDF…');
     try {
       const arrayBuffer = await pdfFile.arrayBuffer();
-      const pdfjs = await import('pdfjs-dist');
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
-      const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer), disableWorker: true }).promise;
+      const { loadBrowserPdf } = await import('@app/libs/browserPdf.mjs');
+      const pdf = await loadBrowserPdf(arrayBuffer);
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
@@ -722,6 +721,7 @@ const UploadPlannerPage = () => {
         const pageText = content.items.map(item => item.str || '').join('\n');
         fullText += pageText + '\n\n--- page break ---\n\n';
       }
+      await pdf.destroy();
       let normalized = fullText.replace(/\r\n?/g, '\n');
       normalized = normalized.replace(/([A-Z]{2,4})\s+(\d{4,5})/gi, '$1$2');
       setRawPdfText(normalized);

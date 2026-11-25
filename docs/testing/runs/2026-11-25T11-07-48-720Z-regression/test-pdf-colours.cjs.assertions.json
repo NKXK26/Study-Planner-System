@@ -1,0 +1,12 @@
+{
+  "executed": 17,
+  "passed": 17,
+  "failed": 0,
+  "pending": 0,
+  "byMethod": {
+    "assert": 8,
+    "equal": 6,
+    "deepEqual": 1,
+    "rejects": 2
+  }
+}

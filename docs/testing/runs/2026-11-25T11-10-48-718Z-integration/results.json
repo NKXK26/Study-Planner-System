@@ -1,0 +1,41 @@
+{
+  "executedAt": "2026-11-25T11:11:38.007Z",
+  "commit": "dd221fef9a645e5ff2caa890e28affdfc37443da",
+  "workingTree": "M .gitignore\n M electron/main.js\n M electron/server.js\n M next.config.js\n M package-lock.json\n M package.json\n M src/app/api/pdf-debug/route.js\n M src/app/view/upload_planner/page.jsx\n?? docs/testing/runs/2026-11-25T11-07-48-720Z-regression/\n?? docs/testing/runs/2026-11-25T11-10-48-718Z-integration/\n?? scripts/prepare-desktop.cjs\n?? scripts/prepare-pdf-assets.cjs\n?? scripts/smoke-desktop-package.cjs\n?? scripts/test-desktop-runtime.cjs\n?? scripts/test-pdf-colours.cjs\n?? src/app/api/desktop-health/\n?? src/app/libs/browserPdf.mjs\n?? src/app/libs/pdfColours.server.mjs",
+  "node": "v22.16.0",
+  "platform": "win32",
+  "arch": "x64",
+  "mode": "Built HTTP APIs, disposable database, mock LLM",
+  "passed": 1,
+  "failed": 0,
+  "results": [
+    {
+      "suite": "test-planner-tools.cjs",
+      "status": "PASS",
+      "assertions": {
+        "executed": 391,
+        "passed": 391,
+        "failed": 0,
+        "pending": 0,
+        "byMethod": {
+          "deepEqual": 15,
+          "equal": 234,
+          "throws": 5,
+          "rejects": 2,
+          "assert": 96,
+          "match": 38,
+          "notEqual": 1
+        }
+      },
+      "seconds": 49.28,
+      "exitCode": 0,
+      "signal": null
+    }
+  ],
+  "assertions": {
+    "executed": 391,
+    "passed": 391,
+    "failed": 0,
+    "pending": 0
+  }
+}
