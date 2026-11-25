@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import prisma from "@utils/db/db";
 import { NextResponse } from "next/server";
 import { TokenValidation } from "@app/api/api_helper";
@@ -232,8 +233,7 @@ async function checkEligibility(studentId) {
 export async function GET(req) {
   try {
     const isDevOverride =
-      req.headers.get("x-dev-override") === "true" &&
-      process.env.NEXT_PUBLIC_MODE === "DEV";
+      canUseLocalPlanner(req);
 
     if (!isDevOverride) {
       const authHeader = req.headers.get("Authorization");
@@ -280,8 +280,7 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const isDevOverride =
-      req.headers.get("x-dev-override") === "true" &&
-      process.env.NEXT_PUBLIC_MODE === "DEV";
+      canUseLocalPlanner(req);
 
     if (!isDevOverride) {
       const authHeader = req.headers.get("Authorization");

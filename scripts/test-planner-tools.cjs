@@ -34,7 +34,7 @@ const {spawn,spawnSync} = require('node:child_process');
   assert.throws(()=>validateToolCall({name:'check_double_major',arguments:{plannerA:'1',plannerB:'2'}}));
   const toolSource=fs.readFileSync('src/app/libs/plannerTools.server.js','utf8').trimStart().replace(/^import .*;\r?\n/gm,'').replace(/export async function/g,'async function');
   const profile={IsActive:true,UserRoles:[{Role:{Name:'Lecturer',IsActive:true,RolePermissions:[{Granted:true,Permission:{IsActive:true,Resource:'study_plans',Action:'read'}}]}}]};
-  const identity=new Function('prisma','SecureSessionManager',toolSource+'\nreturn toolIdentity;')({userProfile:{findUnique:async()=>profile}},{ValidateSession:token=>({success:token==='signed',session:{email:'test@example.test'}}),authenticateUser:async()=>({id:1,profileId:1})});
+  const identity=new Function('canUseLocalPlanner','prisma','SecureSessionManager',toolSource+'\nreturn toolIdentity;')(require('../src/utils/auth/localPlanner.mjs').canUseLocalPlanner,{userProfile:{findUnique:async()=>profile}},{ValidateSession:token=>({success:token==='signed',session:{email:'test@example.test'}}),authenticateUser:async()=>({id:1,profileId:1})});
   const signed=new Request('http://localhost',{headers:{authorization:'Bearer signed','x-session-email':'test@example.test'}});
   assert.equal((await identity(signed)).canWrite,false);
   await assert.rejects(identity(signed,'update'),e=>e.status===403);

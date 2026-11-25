@@ -15,7 +15,23 @@ const RoleContext = createContext({
     isSuperadmin: () => false, // Check if current role is Superadmin
 });
 
-export const RoleProvider = ({ children }) => {
+const localRoleContext = {
+    roles: [],
+    selectedRoleName: '',
+    permissions: [],
+    loading: false,
+    userActualRoles: [],
+    canSwitchRoles: false,
+    can: (resource) => !['role', 'roles', 'user', 'users', 'student', 'student_info', 'search_students'].includes(resource),
+    isSuperadmin: () => false,
+    localPlanner: true,
+};
+
+export const RoleProvider = ({ children, localPlanner }) => localPlanner
+    ? <RoleContext.Provider value={localRoleContext}>{children}</RoleContext.Provider>
+    : <AccountRoleProvider>{children}</AccountRoleProvider>;
+
+const AccountRoleProvider = ({ children }) => {
     const [roles, setRoles] = useState([]);
     const [selectedRoleName, setSelectedRoleName] = useState('');
     const [permissions, setPermissions] = useState([]);

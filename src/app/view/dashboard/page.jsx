@@ -107,7 +107,7 @@ const StatCard = ({ label, value, icon: Icon, gradient, colorClasses, theme, isL
 		<div className="relative p-6">
 			<div className="flex items-center justify-between">
 				<div className="space-y-2">
-					<p className={`text-sm font-semibold tracking-wide uppercase ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+					<p className={`text-sm font-bold tracking-wide uppercase ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
 						{label}
 					</p>
 					{isLoading ? (
@@ -132,7 +132,7 @@ const StatCard = ({ label, value, icon: Icon, gradient, colorClasses, theme, isL
 );
 
 const Dashboard = () => {
-	const { can, isSuperadmin, role } = useRole();
+	const { can, isSuperadmin, role, localPlanner } = useRole();
 	const { theme } = useLightDarkMode();
 	const [stats, setStats] = useState({
 		totalStudents: 0,
@@ -404,12 +404,12 @@ const statCards = [
 										<HomeIcon className="h-7 w-7 text-white" />
 									</div>
 								</div>
-								<div className="flex items-center gap-3">
+								{!localPlanner && <div className="flex items-center gap-3">
 									<span className="px-3 py-1.5 rounded-full text-xs font-medium bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm shadow-sm border border-gray-200 dark:border-gray-700">
 										<ShieldCheckIcon className="h-4 w-4 inline mr-1" />
 										{isSuperadmin() ? 'Super Administrator' : 'Administrator'}
 									</span>
-								</div>
+								</div>}
 							</div>
 						</div>
 
@@ -417,8 +417,8 @@ const statCards = [
 						{isLoading ? (
 							<StatsSkeleton theme={theme} />
 						) : (
-							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-								{statCards.map((card, idx) => (
+							<div className={`grid grid-cols-1 sm:grid-cols-2 ${localPlanner ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-6 mb-12`}>
+								{statCards.filter(card => !localPlanner || card.label !== 'Total Students').map((card, idx) => (
 									<StatCard
 										key={idx}
 										label={card.label}
@@ -470,7 +470,7 @@ const statCards = [
 													</div>
 													<div className="flex-1">
 														<div className="flex items-center gap-2 flex-wrap">
-															<h3 className={`text-xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+															<h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
 																{module.title}
 															</h3>
 															{module.isNew && (
@@ -495,7 +495,7 @@ const statCards = [
 															<Link
 																key={linkIndex}
 																href={link.href}
-																className={`group/link flex items-center justify-between text-sm ${theme === 'dark' ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'} hover:translate-x-1 transition-all duration-100 py-1.5 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50`}
+																className={`group/link flex items-center justify-between text-sm font-bold ${theme === 'dark' ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'} hover:translate-x-1 transition-all duration-100 py-1.5 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50`}
 															>
 																<div className="flex items-center gap-2.5">
 																	<span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${module.gradient} opacity-60 group-hover/link:opacity-100 transition-all`} />

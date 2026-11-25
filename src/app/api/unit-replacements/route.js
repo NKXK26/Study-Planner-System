@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import { NextResponse } from 'next/server';
 import prisma from '@utils/db/db';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -5,7 +6,7 @@ import { replacementCandidates } from '@app/libs/unitReplacement.mjs';
 
 export async function POST(req) {
   try {
-    const dev = req.headers.get('x-dev-override') === 'true' && process.env.NEXT_PUBLIC_MODE === 'DEV';
+    const dev = canUseLocalPlanner(req);
     if (!dev && !await SecureSessionManager.authenticateUser(req)) return NextResponse.json({success:false,message:'Please sign in.'},{status:401});
     const input = await req.json();
     if (typeof input.code !== 'string' || !input.code.trim() || input.code.length > 40 || (input.name != null && (typeof input.name !== 'string' || input.name.length > 200))) return NextResponse.json({success:false,message:'Enter a unit code and a name of up to 200 characters.'},{status:400});

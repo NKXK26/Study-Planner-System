@@ -1,15 +1,23 @@
 const assert=require('node:assert/strict');
-module.exports=async function browserCheck(base,temp,bytes){
+module.exports=async function browserCheck(base,temp,bytes,token){
   const {chromium}=require(process.env.DESKTOP_PLAYWRIGHT_MODULE||'playwright');
   const browser=await chromium.launch({headless:true,channel:'msedge'});
   const failures=[],requests=[];let active;
   try{
     const context=await browser.newContext({viewport:{width:1440,height:1000}});
-    await context.route('**/*',route=>{const u=route.request().url();if(/^https?:/.test(u)&&!u.startsWith(base+'/'))return route.abort();return route.continue();});
+    await context.route('**/*',route=>{const request=route.request(),u=request.url();if(/^https?:/.test(u)&&!u.startsWith(base+'/'))return route.abort();return route.continue({headers:{...request.headers(),'x-desktop-token':token}});});
     const page=await context.newPage();active=page;page.on('pageerror',e=>failures.push(e.message));page.on('request',r=>requests.push(r.url()));
-    await page.goto(base+'/view/upload_planner',{waitUntil:'networkidle'});
-    const dev=page.getByRole('combobox').first();
-    if(await dev.locator('option').filter({hasText:'Superadmin'}).count())await dev.selectOption({label:'Superadmin'});
+    await page.goto(base+'/',{waitUntil:'networkidle'});
+    assert.equal(new URL(page.url()).pathname,'/view/dashboard');
+    await page.getByRole('link',{name:'Graduation Eligibility & Double Major'}).waitFor();
+    await page.getByRole('button',{name:'Toggle menu'}).click();
+    assert.equal(await page.getByText('DEV Role:',{exact:true}).count(),0);
+    assert.equal(await page.getByRole('combobox',{name:'View as role'}).count(),0);
+    assert.equal(await page.getByText('Logout',{exact:true}).count(),0);
+    assert.equal(await page.getByText('Student Management',{exact:true}).count(),0);
+    assert.equal(await page.getByText('User Management',{exact:true}).count(),0);
+    await page.getByRole('button',{name:'Toggle menu'}).click();
+    await page.getByRole('link',{name:'Upload Study Planner'}).click();
     await page.locator('input[type=file]').first().setInputFiles({name:'offline-colours.pdf',mimeType:'application/pdf',buffer:bytes});
     await page.getByRole('heading',{name:'Map Colours → Unit Types',exact:true}).waitFor();
     const mappings=page.locator('select').filter({has:page.locator('option').filter({hasText:'— ignore —'})});

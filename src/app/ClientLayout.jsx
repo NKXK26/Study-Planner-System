@@ -7,7 +7,7 @@ import msalInstance from '@app/msalInstance';
 import Swal from 'sweetalert2';
 import { useEffect, useState } from 'react';
 
-export default function ClientLayout({ children }) {
+export default function ClientLayout({ children, localPlanner }) {
 	const pathname = usePathname();
 	const isLoginPage = pathname === '/';
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -15,6 +15,7 @@ export default function ClientLayout({ children }) {
 	useEffect(() => {
 		// Preserve legacy window.Swal callers using the installed local package.
 		window.Swal = Swal;
+		if (localPlanner) return;
 		const checkAuth = async () => {
 			if (process.env.NEXT_PUBLIC_MODE === 'DEV' || localStorage.getItem('userProfile')) {
 				setIsAuthenticated(true);
@@ -25,15 +26,15 @@ export default function ClientLayout({ children }) {
 			setIsAuthenticated(accounts.length > 0 || localStorage.getItem('userProfile'));
 		};
 		checkAuth().catch(error => console.warn('Could not initialise account display:', error));
-	}, []);
+	}, [localPlanner]);
 	return isLoginPage ? (
 		<>
 			{children}
 			{/* <LightDarkMode /> */}
 		</>
 	) : (
-		<RoleProvider>
-			<SidebarLayout isAuthenticated={isAuthenticated}>
+		<RoleProvider localPlanner={localPlanner}>
+			<SidebarLayout isAuthenticated={isAuthenticated || localPlanner} localPlanner={localPlanner}>
 				{children}
 			</SidebarLayout>
 			{/* <LightDarkMode /> */}

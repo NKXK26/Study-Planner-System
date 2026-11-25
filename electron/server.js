@@ -62,14 +62,14 @@ async function startNextServer() {
     const dbPath = path.join(app.getPath('userData'), 'planner.db').replace(/\\/g, '/')
     const env = { ...process.env, NODE_ENV: 'production', PORT: String(port), HOSTNAME: '127.0.0.1',
       ELECTRON_RUN_AS_NODE: '1', DESKTOP_SERVER_TOKEN: token, NEXT_PUBLIC_SERVER_URL: url,
-      DATABASE_URL: `file:${dbPath}`, DIRECT_URL: `file:${dbPath}`, NEXT_PUBLIC_MODE: 'DEV',
+      DATABASE_URL: `file:${dbPath}`, DIRECT_URL: `file:${dbPath}`,
       SESSION_SECRET: process.env.SESSION_SECRET || 'local-desktop-secret-32-chars-xx', WHITELIST_MODE: 'false',
       DEFAULT_USER_GROUP_ID: '1', DEFAULT_USER_ROLE: 'Viewer' }
     const child = nextProcess = spawn(nodeBin, [serverEntry], { cwd: appCwd, env, stdio: ['ignore','pipe','pipe'], windowsHide: true })
     child.stdout.on('data', d => console.log('[next]', d.toString().trim()))
     child.stderr.on('data', d => console.error('[next:err]', d.toString().trim()))
     try { await waitForServer(url, child, token) } catch (error) { child.kill(); nextProcess = null; throw error }
-    return url
+    return { url, token }
   })()
   try { return await starting } catch (error) { starting = null; throw error }
 }

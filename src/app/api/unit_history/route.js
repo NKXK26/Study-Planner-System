@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { TokenValidation } from "@app/api/api_helper";
@@ -7,8 +8,7 @@ const prisma = new PrismaClient();
 export async function GET(request) {
   try {
     // Check for DEV override
-    const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-      process.env.NEXT_PUBLIC_MODE === 'DEV';
+    const isDevOverride = canUseLocalPlanner(req);
 
     if (!isDevOverride) {
       const authHeader = req.headers.get('Authorization');
@@ -103,8 +103,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     // Check for DEV override
-    const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-      process.env.NEXT_PUBLIC_MODE === 'DEV';
+    const isDevOverride = canUseLocalPlanner(req);
 
     if (!isDevOverride) {
       const authHeader = req.headers.get('Authorization');

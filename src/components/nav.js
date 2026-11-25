@@ -13,7 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useRole } from '@app/context/RoleContext';
 
-const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
+const Nav = ({ onLinkClick, onLogout, can, localPlanner }) => {
   // Get isSuperadmin to check if user is Superadmin
   const { isSuperadmin } = useRole();
   // State to track open/close status of each dropdown
@@ -123,7 +123,7 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
         const accessibleSubLinks = link.sub_links.filter(subLink => {
           // Special case: Audit Logs only for Superadmin
           if (subLink.link === '/view/audit_logs') {
-            return isSuperadmin();
+            return localPlanner ? can('audit_logs', 'read') : isSuperadmin();
           }
           const subPermission = getPermissionForLink(subLink.link);
           return !subPermission || can(subPermission.split(':')[0], subPermission.split(':')[1]);
@@ -140,7 +140,7 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
         const accessibleSubLinks = link.sub_links.filter(subLink => {
           // Special case: Audit Logs only for Superadmin
           if (subLink.link === '/view/audit_logs') {
-            return isSuperadmin();
+            return localPlanner ? can('audit_logs', 'read') : isSuperadmin();
           }
           const subPermission = getPermissionForLink(subLink.link);
           return !subPermission || can(subPermission.split(':')[0], subPermission.split(':')[1]);
@@ -216,7 +216,7 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
         ))}
       </ul>
       {/* Logout at bottom */}
-      <div className="p-4">
+      {!localPlanner && <div className="p-4">
         <button
           onClick={typeof onLogout === 'function' ? onLogout : undefined}
           className="text-[#dc2d27] text-xl font-medium bg-transparent cursor-pointer outline-none"
@@ -224,7 +224,7 @@ const Nav = ({ onLinkClick, onLogout, can, pathname }) => {
         >
           Logout
         </button>
-      </div>
+      </div>}
     </nav>
   );
 };

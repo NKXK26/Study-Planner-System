@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import { unitPlanningInclude } from '@app/libs/unitPlanningProperties.mjs';
 import { NextResponse } from 'next/server';
 import prisma from '@utils/db/db';
@@ -6,7 +7,7 @@ import { validateDocument } from '@app/libs/chatDpa.mjs';
 import { reviewDpa, semesterPlan } from '@app/libs/academicPlanning.mjs';
 
 async function authorized(req) {
-  return (req.headers.get('x-dev-override')==='true' && process.env.NEXT_PUBLIC_MODE==='DEV') || await SecureSessionManager.authenticateUser(req);
+  return (canUseLocalPlanner(req)) || await SecureSessionManager.authenticateUser(req);
 }
 export async function GET(req) {
   if (!await authorized(req)) return NextResponse.json({success:false,message:'Please sign in.'},{status:401});

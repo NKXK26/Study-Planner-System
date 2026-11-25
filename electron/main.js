@@ -37,10 +37,17 @@ async function createWindow() {
     await runDbSetup()
 
     console.log('Starting Next.js server...')
-    const appUrl = await startNextServer()
+    const { url, token } = await startNextServer()
+    const windowId = mainWindow.webContents.id
+    mainWindow.webContents.session.webRequest.onBeforeSendHeaders({ urls: [`${url}/*`] }, (details, callback) => {
+      if (details.webContentsId === windowId && new URL(details.url).pathname !== '/api/desktop-health') {
+        details.requestHeaders['x-desktop-token'] = token
+      }
+      callback({ requestHeaders: details.requestHeaders })
+    })
 
     console.log('Loading app...')
-    await mainWindow.loadURL(appUrl)
+    await mainWindow.loadURL(url)
   } catch (err) {
     console.error('Startup failed:', err)
     dialog.showErrorBox(

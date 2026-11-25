@@ -13,7 +13,7 @@ import RoleBubble from "./RoleBubble";
 import DataCacher from "@utils/db/DataCacher";
 //import Link from "next/link";
 
-const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
+const SidebarLayout = ({ children, onLogout, isAuthenticated, localPlanner }) => {
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -199,7 +199,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
           )}
 
           {/* Account Icon - visible to all authenticated users */}
-          {(isAuthenticated || process.env.NEXT_PUBLIC_MODE == "DEV") && (
+          {!localPlanner && (isAuthenticated || process.env.NEXT_PUBLIC_MODE == "DEV") && (
             <a
               href="/view/account"
               className="p-2 rounded-full hover:bg-gray-700/50 transition-colors duration-200"
@@ -223,7 +223,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
           )}
 
           {/* Role selection - visible only to Superadmin users, in DEV mode, or when explicitly in role override mode */}
-          {(
+          {!localPlanner && (
             (isAuthenticated && canUserSwitchRoles) ||
             (typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1') ||
             (process.env.NEXT_PUBLIC_MODE === 'DEV')
@@ -271,7 +271,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
         </div>
       </header>
 
-      {!isChatPage && <RoleBubble
+      {!localPlanner && !isChatPage && <RoleBubble
         allRoles={allRoles}
         selectedRoleName={selectedRoleName}
         setSelectedRoleByName={setSelectedRoleByName}
@@ -300,7 +300,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
         >
           {mounted && (
             <div className="w-full h-full">
-              <Nav onLinkClick={() => setSidebarOpen(false)} onLogout={handleLogout} can={can} pathname={pathname} />
+              <Nav onLinkClick={() => setSidebarOpen(false)} onLogout={handleLogout} can={can} localPlanner={localPlanner} />
             </div>
           )}
         </div>
@@ -309,7 +309,7 @@ const SidebarLayout = ({ children, onLogout, isAuthenticated }) => {
         <div className={isChatPage ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden' : 'flex-1 overflow-auto'}>
           <main className={isChatPage ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'p-4'}>
             {/* Show role override warning for superadmin */}
-            {typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1' && (
+            {!localPlanner && typeof window !== 'undefined' && localStorage.getItem('devRoleOverride') === '1' && (
               <div className={`bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4 ${isChatPage ? 'shrink-0' : ''}`}>
                 <div className="flex">
                   <div className="flex-shrink-0">

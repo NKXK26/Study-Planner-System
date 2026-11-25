@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import { NextResponse } from 'next/server';
 import prisma from "@utils/db/db";
 import { TokenValidation } from "@app/api/api_helper";
@@ -42,8 +43,7 @@ function validateCourseData(course) {
 export async function POST(req) {
     try {
         // Check for DEV override
-        const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-            process.env.NEXT_PUBLIC_MODE === 'DEV';
+        const isDevOverride = canUseLocalPlanner(req);
 
         if (!isDevOverride) {
             // Validate authentication token

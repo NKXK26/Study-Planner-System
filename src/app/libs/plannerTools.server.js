@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import {planUploadedDocument} from './uploadedPlannerPlan.server.mjs';
 import {readPlannerDocument} from './uploadedPlanner.server.mjs';
 import {normalizeRecordReference,resolvePlannerReference,formatPlannerUnits,plannerReferences,plannerListRequest} from './plannerRecordRequests.mjs';
@@ -25,7 +26,7 @@ import { checkDoubleMajor, assessDpaDoubleMajor, rankDpaPlanners, majorUnits } f
 import { replacementCandidates } from './unitReplacement.mjs';
 
 export async function toolIdentity(req, action='read') {
-  const dev=req.headers.get('x-dev-override')==='true'&&process.env.NEXT_PUBLIC_MODE==='DEV';
+  const dev=canUseLocalPlanner(req);
   if(dev)return {key:'dev',canWrite:true,canUpdate:true};
   const token=req.headers.get('authorization')?.replace(/^Bearer\s+/i,'');
   const session=token&&SecureSessionManager.ValidateSession(token);

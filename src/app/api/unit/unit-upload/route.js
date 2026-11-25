@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import prisma from "@utils/db/db";
 import { NextResponse } from "next/server";
 import AuditLogger from "@app/class/Audit/AuditLogger";
@@ -69,8 +70,7 @@ function logOperation(operation, details) {
 export async function POST(req) {
     try {
         // ─── Authentication & Dev Override ─────────────────────────
-        const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-            process.env.NEXT_PUBLIC_MODE === 'DEV';
+        const isDevOverride = canUseLocalPlanner(req);
 
         if (!isDevOverride) {
             const authHeader = req.headers.get('Authorization');

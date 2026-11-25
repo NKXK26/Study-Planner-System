@@ -1,4 +1,5 @@
 // app/api/planner-templates/route.js
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import { NextResponse } from 'next/server';
 import prisma from '@utils/db/db';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -7,7 +8,7 @@ import SecureSessionManager from '@utils/auth/SimpleSessionManager';
  * Validate authenticated request (same as study-planner route)
  */
 async function validateAuthenticatedRequest(req) {
-    const isDevOverride = req.headers.get('x-dev-override') === 'true' && process.env.NEXT_PUBLIC_MODE === 'DEV';
+    const isDevOverride = canUseLocalPlanner(req);
     if (isDevOverride) {
         return {
             user: {

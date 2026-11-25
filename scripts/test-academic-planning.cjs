@@ -32,7 +32,7 @@
  assert.equal(unitPlanningInclude.UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit.include.Unit_UnitRequisiteRelationship_RequisiteUnitIDToUnit.select.CreditPoints,true);
  const storedPlanner={id:1,name:'Test planner',plannerTemplate:planner.plannerTemplate,studyPlannerUnits:units.map(unit=>({unit:{...unit,UnitRequisiteRelationship_UnitRequisiteRelationship_UnitIDToUnit:base.relations.filter(r=>r.UnitID===unit.ID)},unitType:unit.unitType}))};
  const db={courseIntake:{findUnique:async()=>intake},studyPlanner:{findUnique:async()=>storedPlanner},unitRequisiteRelationship:{findMany:async()=>base.relations}};
- const api=new Function('NextResponse','prisma','SecureSessionManager','validateDocument','reviewDpa','semesterPlan','unitPlanningInclude',source+'\nreturn POST;')({json:(data,options)=>({data,status:options?.status||200})},db,{authenticateUser:async req=>req.allow!==false},validateDocument,reviewDpa,semesterPlan,unitPlanningInclude);
+ const api=new Function('canUseLocalPlanner','NextResponse','prisma','SecureSessionManager','validateDocument','reviewDpa','semesterPlan','unitPlanningInclude',source+'\nreturn POST;')(require('../src/utils/auth/localPlanner.mjs').canUseLocalPlanner,{json:(data,options)=>({data,status:options?.status||200})},db,{authenticateUser:async req=>req.allow!==false},validateDocument,reviewDpa,semesterPlan,unitPlanningInclude);
  const body={document,corrections:[],dpaConfirmed:true,programmeConfirmed:true,intakeId:1,plannerId:1,year:2027,term:base.term,maxCredits:25,maxUnits:2};
  const req=(body,allow=true)=>({allow,headers:new Headers(),json:async()=>body});
  assert.equal((await api(req(body,false))).status,401);

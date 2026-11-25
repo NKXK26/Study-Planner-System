@@ -1,5 +1,7 @@
 import '../styles/globals.css'
 import ClientLayout from './ClientLayout';
+import { headers } from 'next/headers';
+import { isLocalPlannerRequest } from '@utils/auth/localPlanner.mjs';
 import { LightDarkModeProvider } from './context/LightDarkMode'; //added lightdarkmode into the layout
 
 export const metadata = {
@@ -10,7 +12,8 @@ export const metadata = {
 	},
 }
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+	const localPlanner = isLocalPlannerRequest(await headers());
 	return (
 		<html lang='en' suppressHydrationWarning>
 			<head>
@@ -33,9 +36,9 @@ export default function RootLayout({ children }) {
 					}}
 				/>
 			</head>
-			<body>
+			<body data-local-planner={localPlanner ? 'true' : undefined}>
 				<LightDarkModeProvider>
-					<ClientLayout>
+					<ClientLayout localPlanner={localPlanner}>
 						{children}
 					</ClientLayout>
 				</LightDarkModeProvider>

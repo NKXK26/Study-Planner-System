@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import prisma from "@utils/db/db";
 import { NextResponse } from "next/server";
 import SemesterInStudyPlannerYear from "@app/class/SemesterInStudyPlannerYear/SemesterInStudyPlannerYear";
@@ -7,8 +8,7 @@ import { TokenValidation } from "@app/api/api_helper";
 //GET MASTER STUDY PLANNER
 export async function GET(req) {
 	try {
-		const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+		const isDevOverride = canUseLocalPlanner(req);
 
 		if (!isDevOverride) {
 			const authHeader = req.headers.get('Authorization');

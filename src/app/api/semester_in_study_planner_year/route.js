@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import prisma from "@utils/db/db";
 import { NextResponse } from "next/server";
 import { TokenValidation } from "@app/api/api_helper";
@@ -6,8 +7,7 @@ import { TokenValidation } from "@app/api/api_helper";
 export async function GET(req) {
 	try {
 		// Check for DEV override
-		const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+		const isDevOverride = canUseLocalPlanner(req);
 
 		if (!isDevOverride) {
 			const authHeader = req.headers.get('Authorization');
@@ -153,8 +153,7 @@ export async function GET(req) {
 //ADD SEMESTER IN STUDY PLANNER YEAR
 export async function POST(req) {
 	try {
-		const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+		const isDevOverride = canUseLocalPlanner(req);
 
 		if (!isDevOverride) {
 			const authHeader = req.headers.get('Authorization');
@@ -293,8 +292,7 @@ export async function POST(req) {
 //UPDATE SEMESTER IN STUDY PLANNER YEAR
 export async function PUT(req) {
 	try {
-		const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+		const isDevOverride = canUseLocalPlanner(req);
 
 		if (!isDevOverride) {
 			const authHeader = req.headers.get('Authorization');
@@ -426,8 +424,7 @@ export async function PUT(req) {
 //DELETE SEMESTER IN STUDY PLANNER YEAR
 export async function DELETE(req) {
 	try {
-		const isDevOverride = req.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+		const isDevOverride = canUseLocalPlanner(req);
 
 		if (!isDevOverride) {
 			const authHeader = req.headers.get('Authorization');

@@ -40,7 +40,12 @@ export default class SecureFrontendAuthHelper {
             }
         }
         let response;
-        if (this.isDevMode()) {
+        if (typeof document !== 'undefined' && document.body.dataset.localPlanner === 'true') {
+            response = await fetch(url, {
+                ...options,
+                headers: { 'Content-Type': 'application/json', ...options.headers },
+            });
+        } else if (this.isDevMode()) {
             const headers = {
                 'Content-Type': 'application/json',
                 'x-dev-override': 'true',

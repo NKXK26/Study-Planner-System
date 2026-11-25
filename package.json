@@ -1,6 +1,6 @@
 {
   "name": "student-study-planner-system",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "postbuild": "node scripts/prepare-desktop.cjs",
     "test": "node scripts/test-new-modules.cjs",
     "test:integration": "node scripts/test-new-modules.cjs --integration",
-    "dev": "next dev",
+    "dev": "node scripts/start-local-dev.cjs",
     "build": "node --max-old-space-size=8196 node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "next lint",

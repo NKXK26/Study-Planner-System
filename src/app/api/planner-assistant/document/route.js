@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import {extractUploadedPlanner,signPlannerDocument} from '@app/libs/uploadedPlanner.server.mjs';
 import { NextResponse } from 'next/server';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -5,7 +6,7 @@ import { MAX_DOCUMENT_TEXT } from '@app/libs/chatDpa.mjs';
 
 export const runtime = 'nodejs';
 export async function POST(req) {
-  const dev = req.headers.get('x-dev-override') === 'true' && process.env.NEXT_PUBLIC_MODE === 'DEV';
+  const dev = canUseLocalPlanner(req);
   if (!dev && !await SecureSessionManager.authenticateUser(req)) return NextResponse.json({ success: false, message: 'Please sign in.' }, { status: 401 });
   try {
     if (Number(req.headers.get('content-length')) > 7500000) throw new Error('Choose a PDF up to 5 MB.');

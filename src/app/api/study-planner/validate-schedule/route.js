@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import prisma from '@utils/db/db';
 import { NextResponse } from 'next/server';
 import SecureSessionManager from '@utils/auth/SimpleSessionManager';
@@ -7,7 +8,7 @@ const MAX_UNITS_PER_SEMESTER = 4;
 const MAX_CREDITS_PER_SEMESTER = 50;
 
 async function authenticate(req) {
-    const dev = req.headers.get('x-dev-override') === 'true' && process.env.NEXT_PUBLIC_MODE === 'DEV';
+    const dev = canUseLocalPlanner(req);
     if (dev) return { user: { email: 'developer@dev.local' } };
     if (!req.headers.get('x-session-email')) return { error: NextResponse.json({ success: false, message: 'Missing authentication header x-session-email' }, { status: 401 }) };
     const user = await SecureSessionManager.authenticateUser(req);

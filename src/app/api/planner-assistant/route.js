@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import {readPlannerDocument} from '@app/libs/uploadedPlanner.server.mjs';
 import {executePlannerTasks} from '@app/libs/plannerTaskRunner.mjs';
 import {questionBoundary,generalEvidenceReply,refusal} from '@app/libs/plannerAnswerability.mjs';
@@ -18,7 +19,7 @@ import { plannerAiStatus, resolvePlannerModel } from '@app/libs/plannerAiStatus.
 export async function GET(req) {
   const verify=new URL(req.url).searchParams.get('verify')==='1';
   if(verify){
-    const dev=req.headers.get('x-dev-override')==='true'&&process.env.NEXT_PUBLIC_MODE==='DEV';
+    const dev=canUseLocalPlanner(req);
     if(!dev&&!await SecureSessionManager.authenticateUser(req))return NextResponse.json({message:'Please sign in to test AI.'},{status:401});
   }
   try{return NextResponse.json(await plannerAiStatus({verify,model:new URL(req.url).searchParams.get('model')}),{headers:{'Cache-Control':'no-store'}});}
@@ -27,7 +28,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
-    const dev = req.headers.get('x-dev-override') === 'true' && process.env.NEXT_PUBLIC_MODE === 'DEV';
+    const dev = canUseLocalPlanner(req);
     if (!dev && !await SecureSessionManager.authenticateUser(req)) return NextResponse.json({ success: false, message: 'Please sign in.' }, { status: 401 });
     let body, document;
     try {

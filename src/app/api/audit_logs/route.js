@@ -1,3 +1,4 @@
+import { canUseLocalPlanner } from '@utils/auth/localPlanner.mjs';
 import { NextResponse } from 'next/server';
 import AuditLogger from '@app/class/Audit/AuditLogger';
 import SecureAuthHelper from '@utils/auth/FrontendAuthHelper';
@@ -11,8 +12,7 @@ import { TokenValidation } from "@app/api/api_helper";
  */
 export async function GET(request) {
 	try {
-		const isDevOverride = request.headers.get('x-dev-override') === 'true' &&
-			process.env.NEXT_PUBLIC_MODE === 'DEV';
+		const isDevOverride = canUseLocalPlanner(request);
 
 		if (!isDevOverride) {
 			const authHeader = request.headers.get('Authorization');
